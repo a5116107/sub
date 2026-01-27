@@ -68,6 +68,8 @@ func (s *OpsService) GetAccountAvailabilityStats(ctx context.Context, platformFi
 		isAvailable := acc.Status == StatusActive && acc.Schedulable && !isRateLimited && !isOverloaded && !isTempUnsched
 		scopeRateLimits := acc.GetAntigravityScopeRateLimits()
 
+		scopeRateLimits := acc.GetAntigravityScopeRateLimits()
+
 		if acc.Platform != "" {
 			if _, ok := platform[acc.Platform]; !ok {
 				platform[acc.Platform] = &PlatformAvailability{
