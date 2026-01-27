@@ -45,6 +45,7 @@ type CreateGroupRequest struct {
 	ModelRouting             map[string][]int64 `json:"model_routing"`
 	ModelRoutingEnabled      bool               `json:"model_routing_enabled"`
 	CopyAccountsFromGroupIDs []int64            `json:"copy_accounts_from_group_ids"`
+	MCPXMLInject             *bool              `json:"mcp_xml_inject"`
 }
 
 // UpdateGroupRequest represents update group request
@@ -70,6 +71,7 @@ type UpdateGroupRequest struct {
 	ModelRouting             map[string][]int64 `json:"model_routing"`
 	ModelRoutingEnabled      *bool              `json:"model_routing_enabled"`
 	CopyAccountsFromGroupIDs []int64            `json:"copy_accounts_from_group_ids"`
+	MCPXMLInject             *bool              `json:"mcp_xml_inject"`
 }
 
 // List handles listing all groups with pagination
@@ -177,6 +179,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		ModelRouting:             req.ModelRouting,
 		ModelRoutingEnabled:      req.ModelRoutingEnabled,
 		CopyAccountsFromGroupIDs: req.CopyAccountsFromGroupIDs,
+		MCPXMLInject:             req.MCPXMLInject,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -221,6 +224,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		ModelRouting:             req.ModelRouting,
 		ModelRoutingEnabled:      req.ModelRoutingEnabled,
 		CopyAccountsFromGroupIDs: req.CopyAccountsFromGroupIDs,
+		MCPXMLInject:             req.MCPXMLInject,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)

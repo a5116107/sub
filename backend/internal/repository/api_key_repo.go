@@ -160,6 +160,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldFallbackGroupID,
 				group.FieldModelRoutingEnabled,
 				group.FieldModelRouting,
+				group.FieldMcpXMLInject,
 			)
 		}).
 		Only(ctx)
@@ -474,6 +475,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		FallbackGroupID:     g.FallbackGroupID,
 		ModelRouting:        g.ModelRouting,
 		ModelRoutingEnabled: g.ModelRoutingEnabled,
+		MCPXMLInject:        g.McpXMLInject,
 		CreatedAt:           g.CreatedAt,
 		UpdatedAt:           g.UpdatedAt,
 	}

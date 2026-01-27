@@ -248,6 +248,7 @@ func (s *APIKeyService) snapshotFromAPIKey(apiKey *APIKey) *APIKeyAuthSnapshot {
 			FallbackGroupID:     apiKey.Group.FallbackGroupID,
 			ModelRouting:        apiKey.Group.ModelRouting,
 			ModelRoutingEnabled: apiKey.Group.ModelRoutingEnabled,
+			MCPXMLInject:                    apiKey.Group.MCPXMLInject,
 		}
 	}
 	return snapshot
@@ -301,6 +302,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			FallbackGroupID:     snapshot.Group.FallbackGroupID,
 			ModelRouting:        snapshot.Group.ModelRouting,
 			ModelRoutingEnabled: snapshot.Group.ModelRoutingEnabled,
+			MCPXMLInject:                    snapshot.Group.MCPXMLInject,
 		}
 	}
 	return apiKey

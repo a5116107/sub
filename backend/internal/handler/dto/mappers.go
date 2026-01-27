@@ -147,6 +147,7 @@ func groupFromServiceBase(g *service.Group) Group {
 		ImagePrice4K:     g.ImagePrice4K,
 		ClaudeCodeOnly:   g.ClaudeCodeOnly,
 		FallbackGroupID:  g.FallbackGroupID,
+		MCPXMLInject:     g.MCPXMLInject,
 		CreatedAt:        g.CreatedAt,
 		UpdatedAt:        g.UpdatedAt,
 	}

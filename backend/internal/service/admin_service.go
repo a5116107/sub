@@ -120,6 +120,7 @@ type CreateGroupInput struct {
 	// 模型路由配置（仅 anthropic 平台使用）
 	ModelRouting        map[string][]int64
 	ModelRoutingEnabled bool // 是否启用模型路由
+	MCPXMLInject        *bool
 }
 
 type UpdateGroupInput struct {
@@ -145,6 +146,7 @@ type UpdateGroupInput struct {
 	// 模型路由配置（仅 anthropic 平台使用）
 	ModelRouting        map[string][]int64
 	ModelRoutingEnabled *bool // 是否启用模型路由
+	MCPXMLInject        *bool
 }
 
 type CreateAccountInput struct {
@@ -668,6 +670,12 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		}
 	}
 
+	// MCPXMLInject：默认为 true，仅当显式传入 false 时关闭
+	mcpXMLInject := true
+	if input.MCPXMLInject != nil {
+		mcpXMLInject = *input.MCPXMLInject
+	}
+
 	group := &Group{
 		Name:             input.Name,
 		Description:      input.Description,
@@ -686,6 +694,8 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		ClaudeCodeOnly:   input.ClaudeCodeOnly,
 		FallbackGroupID:  input.FallbackGroupID,
 		ModelRouting:     input.ModelRouting,
+		ModelRoutingEnabled: input.ModelRoutingEnabled,
+		MCPXMLInject:     mcpXMLInject,
 	}
 	if err := s.groupRepo.Create(ctx, group); err != nil {
 		return nil, err
@@ -837,6 +847,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.ModelRoutingEnabled != nil {
 		group.ModelRoutingEnabled = *input.ModelRoutingEnabled
+	}
+	if input.MCPXMLInject != nil {
+		group.MCPXMLInject = *input.MCPXMLInject
 	}
 
 	if err := s.groupRepo.Update(ctx, group); err != nil {

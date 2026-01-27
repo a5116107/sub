@@ -362,6 +362,7 @@ export interface Group {
   // Claude Code 客户端限制
   claude_code_only: boolean
   fallback_group_id: number | null
+  mcp_xml_inject: boolean
   created_at: string
   updated_at: string
 }
@@ -440,6 +441,7 @@ export interface CreateGroupRequest {
   claude_code_only?: boolean
   fallback_group_id?: number | null
   copy_accounts_from_group_ids?: number[]
+  mcp_xml_inject?: boolean
 }
 
 export interface UpdateGroupRequest {
@@ -460,6 +462,7 @@ export interface UpdateGroupRequest {
   claude_code_only?: boolean
   fallback_group_id?: number | null
   copy_accounts_from_group_ids?: number[]
+  mcp_xml_inject?: boolean
 }
 
 // ==================== Account & Proxy Types ====================
