@@ -3368,6 +3368,9 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 			applyClaudeCodeMimicHeaders(req, reqStream)
 
 			incomingBeta := req.Header.Get("anthropic-beta")
+			// Match real Claude CLI traffic (per mitmproxy reports):
+			// messages requests typically use only oauth + interleaved-thinking.
+			// Also drop claude-code beta if a downstream client added it.
 			requiredBetas := []string{claude.BetaOAuth, claude.BetaInterleavedThinking}
 			drop := map[string]struct{}{claude.BetaClaudeCode: {}}
 			req.Header.Set("anthropic-beta", mergeAnthropicBetaDropping(requiredBetas, incomingBeta, drop))
@@ -3490,7 +3493,6 @@ func mergeAnthropicBetaDropping(required []string, incoming string, drop map[str
 	if merged == "" || len(drop) == 0 {
 		return merged
 	}
-
 	out := make([]string, 0, 8)
 	for _, p := range strings.Split(merged, ",") {
 		p = strings.TrimSpace(p)
@@ -3521,7 +3523,6 @@ func applyClaudeOAuthHeaderDefaults(req *http.Request, isStream bool) {
 		req.Header.Set("x-stainless-helper-method", "stream")
 	}
 }
-
 func applyClaudeCodeMimicHeaders(req *http.Request, isStream bool) {
 	if req == nil {
 		return
