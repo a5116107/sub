@@ -47,6 +47,10 @@ const (
 	maxCacheControlBlocks  = 4 // Anthropic API 允许的最大 cache_control 块数量
 )
 
+const (
+	claudeMimicDebugInfoKey = "claude_mimic_debug_info"
+)
+
 func (s *GatewayService) debugModelRoutingEnabled() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("SUB2API_DEBUG_MODEL_ROUTING")))
 	return v == "1" || v == "true" || v == "yes" || v == "on"
@@ -132,6 +136,137 @@ func shortSessionHash(sessionHash string) string {
 	return sessionHash[:8]
 }
 
+func redactAuthHeaderValue(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+	// Keep scheme for debugging, redact secret.
+	if strings.HasPrefix(strings.ToLower(v), "bearer ") {
+		return "Bearer [redacted]"
+	}
+	return "[redacted]"
+}
+
+func safeHeaderValueForLog(key string, v string) string {
+	key = strings.ToLower(strings.TrimSpace(key))
+	switch key {
+	case "authorization", "x-api-key":
+		return redactAuthHeaderValue(v)
+	default:
+		return strings.TrimSpace(v)
+	}
+}
+
+func extractSystemPreviewFromBody(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	sys := gjson.GetBytes(body, "system")
+	if !sys.Exists() {
+		return ""
+	}
+
+	switch {
+	case sys.IsArray():
+		for _, item := range sys.Array() {
+			if !item.IsObject() {
+				continue
+			}
+			if strings.EqualFold(item.Get("type").String(), "text") {
+				if t := item.Get("text").String(); strings.TrimSpace(t) != "" {
+					return t
+				}
+			}
+		}
+		return ""
+	case sys.Type == gjson.String:
+		return sys.String()
+	default:
+		return ""
+	}
+}
+
+func buildClaudeMimicDebugLine(req *http.Request, body []byte, account *Account, tokenType string, mimicClaudeCode bool) string {
+	if req == nil {
+		return ""
+	}
+
+	// Only log a minimal fingerprint to avoid leaking user content.
+	interesting := []string{
+		"user-agent",
+		"x-app",
+		"anthropic-dangerous-direct-browser-access",
+		"anthropic-version",
+		"anthropic-beta",
+		"x-stainless-lang",
+		"x-stainless-package-version",
+		"x-stainless-os",
+		"x-stainless-arch",
+		"x-stainless-runtime",
+		"x-stainless-runtime-version",
+		"x-stainless-retry-count",
+		"x-stainless-timeout",
+		"authorization",
+		"x-api-key",
+		"content-type",
+		"accept",
+		"x-stainless-helper-method",
+	}
+
+	h := make([]string, 0, len(interesting))
+	for _, k := range interesting {
+		if v := req.Header.Get(k); v != "" {
+			h = append(h, fmt.Sprintf("%s=%q", k, safeHeaderValueForLog(k, v)))
+		}
+	}
+
+	metaUserID := strings.TrimSpace(gjson.GetBytes(body, "metadata.user_id").String())
+	sysPreview := strings.TrimSpace(extractSystemPreviewFromBody(body))
+
+	// Truncate preview to keep logs sane.
+	if len(sysPreview) > 300 {
+		sysPreview = sysPreview[:300] + "..."
+	}
+	sysPreview = strings.ReplaceAll(sysPreview, "\n", "\\n")
+	sysPreview = strings.ReplaceAll(sysPreview, "\r", "\\r")
+
+	aid := int64(0)
+	aname := ""
+	if account != nil {
+		aid = account.ID
+		aname = account.Name
+	}
+
+	return fmt.Sprintf(
+		"url=%s account=%d(%s) tokenType=%s mimic=%t meta.user_id=%q system.preview=%q headers={%s}",
+		req.URL.String(),
+		aid,
+		aname,
+		tokenType,
+		mimicClaudeCode,
+		metaUserID,
+		sysPreview,
+		strings.Join(h, " "),
+	)
+}
+
+func logClaudeMimicDebug(req *http.Request, body []byte, account *Account, tokenType string, mimicClaudeCode bool) {
+	line := buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode)
+	if line == "" {
+		return
+	}
+	log.Printf("[ClaudeMimicDebug] %s", line)
+}
+
+func isClaudeCodeCredentialScopeError(msg string) bool {
+	m := strings.ToLower(strings.TrimSpace(msg))
+	if m == "" {
+		return false
+	}
+	return strings.Contains(m, "only authorized for use with claude code") &&
+		strings.Contains(m, "cannot be used for other api requests")
+}
 // sseDataRe matches SSE data lines with optional whitespace after colon.
 // Some upstream APIs return non-standard "data:" without space (should be "data: ").
 var (
@@ -3248,6 +3383,14 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		}
 	}
 
+	// Always capture a compact fingerprint line for later error diagnostics.
+	// We only print it when needed (or when the explicit debug flag is enabled).
+	if c != nil && tokenType == "oauth" {
+		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
+	}
+	if s.debugClaudeMimicEnabled() {
+		logClaudeMimicDebug(req, body, account, tokenType, mimicClaudeCode)
+	}
 	return req, nil
 }
 
@@ -3616,6 +3759,20 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 
+	// Print a compact upstream request fingerprint when we hit the Claude Code OAuth
+	// credential scope error. This avoids requiring env-var tweaks in a fixed deploy.
+	if isClaudeCodeCredentialScopeError(upstreamMsg) && c != nil {
+		if v, ok := c.Get(claudeMimicDebugInfoKey); ok {
+			if line, ok := v.(string); ok && strings.TrimSpace(line) != "" {
+				log.Printf("[ClaudeMimicDebugOnError] status=%d request_id=%s %s",
+					resp.StatusCode,
+					resp.Header.Get("x-request-id"),
+					line,
+				)
+			}
+		}
+	}
+
 	// Enrich Ops error logs with upstream status + message, and optionally a truncated body snippet.
 	upstreamDetail := ""
 	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
@@ -3771,6 +3928,19 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+
+	if isClaudeCodeCredentialScopeError(upstreamMsg) && c != nil {
+		if v, ok := c.Get(claudeMimicDebugInfoKey); ok {
+			if line, ok := v.(string); ok && strings.TrimSpace(line) != "" {
+				log.Printf("[ClaudeMimicDebugOnError] status=%d request_id=%s %s",
+					resp.StatusCode,
+					resp.Header.Get("x-request-id"),
+					line,
+				)
+			}
+		}
+	}
+
 	upstreamDetail := ""
 	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
 		maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
@@ -4907,6 +5077,12 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		}
 	}
 
+	if c != nil && tokenType == "oauth" {
+		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
+	}
+	if s.debugClaudeMimicEnabled() {
+		logClaudeMimicDebug(req, body, account, tokenType, mimicClaudeCode)
+	}
 	return req, nil
 }
 
