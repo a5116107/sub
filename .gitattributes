@@ -2,6 +2,11 @@
 # The migrations checksum is computed from file content, so CRLF vs LF must not vary.
 backend/migrations/*.sql text eol=lf
 
+# Keep Go source line endings stable across platforms (gofmt/golangci-lint expect LF).
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+
 # Keep repo config files line endings stable across platforms.
 .gitattributes text eol=lf
 .gitignore text eol=lf
