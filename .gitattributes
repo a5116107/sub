@@ -1,0 +1,11 @@
+# Keep database migrations line endings stable across platforms.
+# The migrations checksum is computed from file content, so CRLF vs LF must not vary.
+backend/migrations/*.sql text eol=lf
+
+# Keep repo config files line endings stable across platforms.
+.gitattributes text eol=lf
+.gitignore text eol=lf
+Makefile text eol=lf
+frontend/.npmrc text eol=lf
+frontend/package.json text eol=lf
+tools/*.ps1 text eol=lf

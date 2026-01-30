@@ -15,9 +15,85 @@ import (
 )
 
 var (
-	ErrRegistrationDisabled = infraerrors.Forbidden("REGISTRATION_DISABLED", "registration is currently disabled")
-	ErrSettingNotFound      = infraerrors.NotFound("SETTING_NOT_FOUND", "setting not found")
+	ErrRegistrationDisabled  = infraerrors.Forbidden("REGISTRATION_DISABLED", "registration is currently disabled")
+	ErrSubscriptionsDisabled = infraerrors.Forbidden("SUBSCRIPTIONS_DISABLED", "subscriptions are currently disabled")
+	ErrSettingNotFound       = infraerrors.NotFound("SETTING_NOT_FOUND", "setting not found")
 )
+
+const defaultLandingPricingConfigV1 = `{
+  "version": 1,
+  "currency": "CNY",
+  "default_tab": "subscription",
+  "subscription": {
+    "title": "订阅套餐",
+    "subtitle": "周付 / 月付，适配不同团队节奏。企业版支持定制与 SLA。",
+    "default_period": "month",
+    "periods": [
+      { "key": "week", "label": "周付" },
+      { "key": "month", "label": "月付" },
+      { "key": "custom", "label": "自定义" }
+    ],
+    "plans": [
+      {
+        "id": "trial",
+        "name": "体验版",
+        "badge": "Free",
+        "description": "快速验证与 PoC",
+        "price": { "week": 0, "month": 0 },
+        "features": ["共享基础算力池", "标准路由与日志", "社区支持"]
+      },
+      {
+        "id": "starter",
+        "name": "入门版",
+        "badge": "Starter",
+        "description": "个人/小项目稳定起步",
+        "price": { "week": 29, "month": 79 },
+        "features": ["更高并发与速率", "基础监控面板", "邮件工单支持"]
+      },
+      {
+        "id": "standard",
+        "name": "标准版",
+        "badge": "Standard",
+        "description": "小团队协作与权限",
+        "price": { "week": 49, "month": 129 },
+        "features": ["多 API Key 管理", "分组/配额策略", "更丰富的审计日志"]
+      },
+      {
+        "id": "pro",
+        "name": "专业版",
+        "badge": "Recommended",
+        "description": "生产环境优先保障",
+        "highlighted": true,
+        "price": { "week": 79, "month": 199 },
+        "features": ["优先路由与稳定性策略", "更细粒度用量分析", "专属支持通道"]
+      },
+      {
+        "id": "team",
+        "name": "团队版",
+        "badge": "Team",
+        "description": "更强的管理与协同",
+        "price": { "week": 129, "month": 329 },
+        "features": ["团队成员与角色权限", "多环境配置/隔离", "更高并发与限流配额"]
+      },
+      {
+        "id": "enterprise",
+        "name": "企业版",
+        "badge": "Enterprise",
+        "description": "安全合规与定制化",
+        "price": { "custom": "联系销售" },
+        "features": ["SLA / 专属支持", "专属实例 / 私有部署", "SSO/审计/合规支持", "定制接入与迁移服务"]
+      }
+    ]
+  },
+  "payg": {
+    "title": "按量计费",
+    "subtitle": "按使用量扣费，适合弹性负载与不确定需求。",
+    "cta_label": "充值 / 兑换码",
+    "features": ["按实际用量扣费，随用随充", "支持兑换码与管理员充值", "可与订阅模式并存（按后台规则）"],
+    "note": "此处为展示示例，价格与口径以后台配置与实际扣费规则为准。"
+  },
+  "note": "示例套餐可在后台“系统设置 → Landing / Pricing”中修改。"
+}`
 
 type SettingRepository interface {
 	Get(ctx context.Context, key string) (*Setting, error)
@@ -72,6 +148,9 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyContactInfo,
 		SettingKeyDocURL,
 		SettingKeyHomeContent,
+		SettingKeyLandingPricingEnabled,
+		SettingKeyLandingPricingConfig,
+		SettingKeySubscriptionsEnabled,
 		SettingKeyHideCcsImportButton,
 		SettingKeyPurchaseSubscriptionEnabled,
 		SettingKeyPurchaseSubscriptionURL,
@@ -94,22 +173,33 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	emailVerifyEnabled := settings[SettingKeyEmailVerifyEnabled] == "true"
 	passwordResetEnabled := emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true"
 
+	landingPricingEnabled := !isFalseSettingValue(settings[SettingKeyLandingPricingEnabled])
+	subscriptionsEnabled := !isFalseSettingValue(settings[SettingKeySubscriptionsEnabled])
+
+	landingPricingConfig := s.getStringOrDefault(settings, SettingKeyLandingPricingConfig, defaultLandingPricingConfigV1)
+	if !landingPricingEnabled {
+		landingPricingConfig = ""
+	}
+
 	return &PublicSettings{
-		RegistrationEnabled:         settings[SettingKeyRegistrationEnabled] == "true",
-		EmailVerifyEnabled:          emailVerifyEnabled,
-		PromoCodeEnabled:            settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
-		PasswordResetEnabled:        passwordResetEnabled,
-		TotpEnabled:                 settings[SettingKeyTotpEnabled] == "true",
-		TurnstileEnabled:            settings[SettingKeyTurnstileEnabled] == "true",
-		TurnstileSiteKey:            settings[SettingKeyTurnstileSiteKey],
-		SiteName:                    s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
-		SiteLogo:                    settings[SettingKeySiteLogo],
-		SiteSubtitle:                s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
-		APIBaseURL:                  settings[SettingKeyAPIBaseURL],
-		ContactInfo:                 settings[SettingKeyContactInfo],
-		DocURL:                      settings[SettingKeyDocURL],
-		HomeContent:                 settings[SettingKeyHomeContent],
-		HideCcsImportButton:         settings[SettingKeyHideCcsImportButton] == "true",
+		RegistrationEnabled:   settings[SettingKeyRegistrationEnabled] == "true",
+		EmailVerifyEnabled:    emailVerifyEnabled,
+		PromoCodeEnabled:      settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
+		PasswordResetEnabled:  passwordResetEnabled,
+		TotpEnabled:           settings[SettingKeyTotpEnabled] == "true",
+		TurnstileEnabled:      settings[SettingKeyTurnstileEnabled] == "true",
+		TurnstileSiteKey:      settings[SettingKeyTurnstileSiteKey],
+		SiteName:              s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
+		SiteLogo:              settings[SettingKeySiteLogo],
+		SiteSubtitle:          s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
+		APIBaseURL:            settings[SettingKeyAPIBaseURL],
+		ContactInfo:           settings[SettingKeyContactInfo],
+		DocURL:                settings[SettingKeyDocURL],
+		HomeContent:           settings[SettingKeyHomeContent],
+		LandingPricingEnabled: landingPricingEnabled,
+		LandingPricingConfig:  landingPricingConfig,
+		SubscriptionsEnabled:  subscriptionsEnabled,
+		HideCcsImportButton:   settings[SettingKeyHideCcsImportButton] == "true",
 		PurchaseSubscriptionEnabled: settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:     strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
 		LinuxDoOAuthEnabled:         linuxDoEnabled,
@@ -151,6 +241,9 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		ContactInfo                 string `json:"contact_info,omitempty"`
 		DocURL                      string `json:"doc_url,omitempty"`
 		HomeContent                 string `json:"home_content,omitempty"`
+		LandingPricingEnabled       bool   `json:"landing_pricing_enabled"`
+		LandingPricingConfig        string `json:"landing_pricing_config,omitempty"`
+		SubscriptionsEnabled        bool   `json:"subscriptions_enabled"`
 		HideCcsImportButton         bool   `json:"hide_ccs_import_button"`
 		PurchaseSubscriptionEnabled bool   `json:"purchase_subscription_enabled"`
 		PurchaseSubscriptionURL     string `json:"purchase_subscription_url,omitempty"`
@@ -171,6 +264,9 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		ContactInfo:                 settings.ContactInfo,
 		DocURL:                      settings.DocURL,
 		HomeContent:                 settings.HomeContent,
+		LandingPricingEnabled:       settings.LandingPricingEnabled,
+		LandingPricingConfig:        settings.LandingPricingConfig,
+		SubscriptionsEnabled:        settings.SubscriptionsEnabled,
 		HideCcsImportButton:         settings.HideCcsImportButton,
 		PurchaseSubscriptionEnabled: settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:     settings.PurchaseSubscriptionURL,
@@ -189,6 +285,11 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyPromoCodeEnabled] = strconv.FormatBool(settings.PromoCodeEnabled)
 	updates[SettingKeyPasswordResetEnabled] = strconv.FormatBool(settings.PasswordResetEnabled)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
+
+	// Referral settings
+	updates[SettingKeyReferralInviterBonus] = strconv.FormatFloat(settings.ReferralInviterBonus, 'f', 8, 64)
+	updates[SettingKeyReferralInviteeBonus] = strconv.FormatFloat(settings.ReferralInviteeBonus, 'f', 8, 64)
+	updates[SettingKeyReferralCommissionRate] = strconv.FormatFloat(settings.ReferralCommissionRate, 'f', 8, 64)
 
 	// 邮件服务设置（只有非空才更新密码）
 	updates[SettingKeySMTPHost] = settings.SMTPHost
@@ -224,6 +325,9 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyContactInfo] = settings.ContactInfo
 	updates[SettingKeyDocURL] = settings.DocURL
 	updates[SettingKeyHomeContent] = settings.HomeContent
+	updates[SettingKeyLandingPricingEnabled] = strconv.FormatBool(settings.LandingPricingEnabled)
+	updates[SettingKeyLandingPricingConfig] = settings.LandingPricingConfig
+	updates[SettingKeySubscriptionsEnabled] = strconv.FormatBool(settings.SubscriptionsEnabled)
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
@@ -348,6 +452,52 @@ func (s *SettingService) GetDefaultBalance(ctx context.Context) float64 {
 	return s.cfg.Default.UserBalance
 }
 
+// GetReferralInviterBonus returns the inviter signup bonus balance amount.
+// Default: 0 (disabled).
+func (s *SettingService) GetReferralInviterBonus(ctx context.Context) float64 {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyReferralInviterBonus)
+	if err != nil {
+		return 0
+	}
+	if v, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil && v >= 0 {
+		return v
+	}
+	return 0
+}
+
+// GetReferralInviteeBonus returns the invitee signup bonus balance amount.
+// Default: 0 (disabled).
+func (s *SettingService) GetReferralInviteeBonus(ctx context.Context) float64 {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyReferralInviteeBonus)
+	if err != nil {
+		return 0
+	}
+	if v, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil && v >= 0 {
+		return v
+	}
+	return 0
+}
+
+// GetReferralCommissionRate returns the inviter rebate rate for invitee usage.
+// Expected range: 0-1. Default: 0 (disabled).
+func (s *SettingService) GetReferralCommissionRate(ctx context.Context) float64 {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyReferralCommissionRate)
+	if err != nil {
+		return 0
+	}
+	v, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil {
+		return 0
+	}
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
 // InitializeDefaultSettings 初始化默认设置
 func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	// 检查是否已有设置
@@ -362,17 +512,20 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 
 	// 初始化默认设置
 	defaults := map[string]string{
-		SettingKeyRegistrationEnabled:         "true",
-		SettingKeyEmailVerifyEnabled:          "false",
-		SettingKeyPromoCodeEnabled:            "true", // 默认启用优惠码功能
-		SettingKeySiteName:                    "Sub2API",
-		SettingKeySiteLogo:                    "",
+		SettingKeyRegistrationEnabled:    "true",
+		SettingKeyEmailVerifyEnabled:     "false",
+		SettingKeyPromoCodeEnabled:       "true", // 默认启用优惠码功能
+		SettingKeySiteName:               "Sub2API",
+		SettingKeySiteLogo:               "",
+		SettingKeyReferralInviterBonus:   "0",
+		SettingKeyReferralInviteeBonus:   "0",
+		SettingKeyReferralCommissionRate: "0",
 		SettingKeyPurchaseSubscriptionEnabled: "false",
 		SettingKeyPurchaseSubscriptionURL:     "",
-		SettingKeyDefaultConcurrency:          strconv.Itoa(s.cfg.Default.UserConcurrency),
-		SettingKeyDefaultBalance:              strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
-		SettingKeySMTPPort:                    "587",
-		SettingKeySMTPUseTLS:                  "false",
+		SettingKeyDefaultConcurrency:     strconv.Itoa(s.cfg.Default.UserConcurrency),
+		SettingKeyDefaultBalance:         strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
+		SettingKeySMTPPort:               "587",
+		SettingKeySMTPUseTLS:             "false",
 		// Model fallback defaults
 		SettingKeyEnableModelFallback:      "false",
 		SettingKeyFallbackModelAnthropic:   "claude-3-5-sonnet-20241022",
@@ -388,6 +541,11 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyOpsRealtimeMonitoringEnabled: "true",
 		SettingKeyOpsQueryModeDefault:          "auto",
 		SettingKeyOpsMetricsIntervalSeconds:    "60",
+
+		// Landing pricing defaults (JSON)
+		SettingKeyLandingPricingEnabled: "true",
+		SettingKeyLandingPricingConfig:  defaultLandingPricingConfigV1,
+		SettingKeySubscriptionsEnabled:  "true",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)
@@ -418,6 +576,9 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		ContactInfo:                  settings[SettingKeyContactInfo],
 		DocURL:                       settings[SettingKeyDocURL],
 		HomeContent:                  settings[SettingKeyHomeContent],
+		LandingPricingConfig:         s.getStringOrDefault(settings, SettingKeyLandingPricingConfig, defaultLandingPricingConfigV1),
+		LandingPricingEnabled:        !isFalseSettingValue(settings[SettingKeyLandingPricingEnabled]),
+		SubscriptionsEnabled:         !isFalseSettingValue(settings[SettingKeySubscriptionsEnabled]),
 		HideCcsImportButton:          settings[SettingKeyHideCcsImportButton] == "true",
 		PurchaseSubscriptionEnabled:  settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:      strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
@@ -444,6 +605,29 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 
 	// 敏感信息直接返回，方便测试连接时使用
+	// Referral settings (defaults: 0 / disabled).
+	if raw := strings.TrimSpace(settings[SettingKeyReferralInviterBonus]); raw != "" {
+		if v, err := strconv.ParseFloat(raw, 64); err == nil && v >= 0 {
+			result.ReferralInviterBonus = v
+		}
+	}
+	if raw := strings.TrimSpace(settings[SettingKeyReferralInviteeBonus]); raw != "" {
+		if v, err := strconv.ParseFloat(raw, 64); err == nil && v >= 0 {
+			result.ReferralInviteeBonus = v
+		}
+	}
+	if raw := strings.TrimSpace(settings[SettingKeyReferralCommissionRate]); raw != "" {
+		if v, err := strconv.ParseFloat(raw, 64); err == nil {
+			if v < 0 {
+				v = 0
+			}
+			if v > 1 {
+				v = 1
+			}
+			result.ReferralCommissionRate = v
+		}
+	}
+
 	result.SMTPPassword = settings[SettingKeySMTPPassword]
 	result.TurnstileSecretKey = settings[SettingKeyTurnstileSecretKey]
 
@@ -838,4 +1022,24 @@ func (s *SettingService) SetStreamTimeoutSettings(ctx context.Context, settings 
 	}
 
 	return s.settingRepo.Set(ctx, SettingKeyStreamTimeoutSettings, string(data))
+}
+
+// IsSubscriptionsEnabled checks whether subscription-related features and APIs are enabled.
+// Default: enabled (for backwards compatibility).
+func (s *SettingService) IsSubscriptionsEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeySubscriptionsEnabled)
+	if err != nil {
+		return true
+	}
+	return !isFalseSettingValue(value)
+}
+
+// IsLandingPricingEnabled checks whether Landing / Pricing (subscription plans display) is enabled.
+// Default: enabled (for backwards compatibility).
+func (s *SettingService) IsLandingPricingEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyLandingPricingEnabled)
+	if err != nil {
+		return true
+	}
+	return !isFalseSettingValue(value)
 }

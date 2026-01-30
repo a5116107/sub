@@ -45,6 +45,31 @@ docker-compose logs -f sub2api
 # http://localhost:8080
 ```
 
+---
+
+## Docker Development (Frontend + Backend)
+
+Run frontend (Vite) and backend (Go) as separate containers for local development.
+
+```bash
+cd deploy
+cp .env.example .env
+# Edit .env (set POSTGRES_PASSWORD at least)
+
+docker compose -f docker-compose.dev.yml up -d --build
+docker compose -f docker-compose.dev.yml ps
+docker compose -f docker-compose.dev.yml logs -f
+```
+
+Access:
+- Frontend: `http://localhost:${FRONTEND_PORT:-3000}`
+- Backend: `http://localhost:${SERVER_PORT:-8080}`
+
+Stop:
+```bash
+docker compose -f docker-compose.dev.yml down
+```
+
 ### How Auto-Setup Works
 
 When using Docker Compose with `AUTO_SETUP=true`:

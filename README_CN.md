@@ -99,13 +99,17 @@ sudo systemctl start sub2api
 # 2. 设置开机自启
 sudo systemctl enable sub2api
 
-# 3. 在浏览器中打开设置向导
-# http://你的服务器IP:8080
-```
+ # 3. 在浏览器中打开设置向导
+ # http://你的服务器IP:8080
+ ```
 
-设置向导将引导你完成：
-- 数据库配置
-- Redis 配置
+安全提示（首次安装）：
+- 设置向导写接口（`/setup/install`、`/setup/test-db`、`/setup/test-redis`）默认仅允许本机访问；如需远程访问，请在服务端配置 `SETUP_TOKEN`。
+- 配置了 `SETUP_TOKEN` 后，请在设置向导中输入该令牌（或请求头携带 `X-Setup-Token: <token>`）。
+
+ 设置向导将引导你完成：
+ - 数据库配置
+ - Redis 配置
 - 管理员账号创建
 
 #### 升级
@@ -205,6 +209,15 @@ docker-compose logs -f sub2api
 #### 访问
 
 在浏览器中打开 `http://你的服务器IP:8080`
+
+#### 开发模式（Docker 启动前后端）
+
+如需在本地开发时使用 Docker 分别启动前端（Vite）和后端（Go），可使用：
+
+```bash
+cd deploy
+docker compose -f docker-compose.dev.yml up -d --build
+```
 
 #### 升级
 

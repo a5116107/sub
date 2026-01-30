@@ -177,14 +177,26 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/purchase',
-    name: 'PurchaseSubscription',
-    component: () => import('@/views/user/PurchaseSubscriptionView.vue'),
+    name: 'Purchase',
+    component: () => import('@/views/user/PurchaseView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'Purchase Subscription',
+      title: 'Purchase',
       titleKey: 'purchase.title',
       descriptionKey: 'purchase.description'
+    }
+  },
+  {
+    path: '/billing',
+    name: 'Billing',
+    component: () => import('@/views/user/BillingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Billing',
+      titleKey: 'billing.title',
+      descriptionKey: 'billing.description'
     }
   },
 

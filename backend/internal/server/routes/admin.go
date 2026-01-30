@@ -32,6 +32,9 @@ func RegisterAdminRoutes(
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
 
+		// Qwen OAuth
+		registerQwenOAuthRoutes(admin, h)
+
 		// Gemini OAuth
 		registerGeminiOAuthRoutes(admin, h)
 
@@ -237,6 +240,17 @@ func registerOpenAIOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		openai.POST("/refresh-token", h.Admin.OpenAIOAuth.RefreshToken)
 		openai.POST("/accounts/:id/refresh", h.Admin.OpenAIOAuth.RefreshAccountToken)
 		openai.POST("/create-from-oauth", h.Admin.OpenAIOAuth.CreateAccountFromOAuth)
+	}
+}
+
+func registerQwenOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	qwen := admin.Group("/qwen")
+	{
+		qwen.POST("/device/start", h.Admin.QwenOAuth.StartDeviceFlow)
+		qwen.POST("/device/poll", h.Admin.QwenOAuth.PollDeviceFlowToken)
+		qwen.POST("/refresh-token", h.Admin.QwenOAuth.RefreshToken)
+		qwen.POST("/accounts/:id/refresh", h.Admin.QwenOAuth.RefreshAccountToken)
+		qwen.POST("/create-from-device", h.Admin.QwenOAuth.CreateAccountFromDeviceFlow)
 	}
 }
 

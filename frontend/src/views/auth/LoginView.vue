@@ -155,7 +155,7 @@
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.dontHaveAccount') }}
         <router-link
-          to="/register"
+          :to="registerLinkTo"
           class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signUp') }}
@@ -176,8 +176,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
@@ -187,14 +187,27 @@ import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import { getPublicSettings, isTotp2FARequired } from '@/api/auth'
 import type { TotpLoginResponse } from '@/types'
+import { sanitizeUrl } from '@/utils/url'
 
 const { t } = useI18n()
 
 // ==================== Router & Stores ====================
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const appStore = useAppStore()
+
+const redirectParam = () => {
+  const raw = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  return sanitizeUrl(raw, { allowRelative: true })
+}
+
+const registerLinkTo = computed(() => {
+  const redirect = redirectParam()
+  if (!redirect) return '/register'
+  return { path: '/register', query: { redirect } }
+})
 
 // ==================== State ====================
 
@@ -340,7 +353,8 @@ async function handleLogin(): Promise<void> {
     appStore.showSuccess(t('auth.loginSuccess'))
 
     // Redirect to dashboard or intended route
-    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
+    const rawRedirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    const redirectTo = sanitizeUrl(rawRedirect, { allowRelative: true }) || '/dashboard'
     await router.push(redirectTo)
   } catch (error: unknown) {
     // Reset Turnstile on error

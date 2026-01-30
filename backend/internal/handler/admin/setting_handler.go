@@ -22,6 +22,23 @@ type SettingHandler struct {
 	opsService       *service.OpsService
 }
 
+func requireAdminJWT(c *gin.Context, purpose string) bool {
+	if c == nil {
+		return false
+	}
+	method, ok := c.Get("auth_method")
+	if !ok {
+		response.Forbidden(c, purpose+" requires JWT admin authentication")
+		return false
+	}
+	m, _ := method.(string)
+	if m != "jwt" {
+		response.Forbidden(c, purpose+" requires JWT admin authentication")
+		return false
+	}
+	return true
+}
+
 // NewSettingHandler 创建系统设置处理器
 func NewSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, opsService *service.OpsService) *SettingHandler {
 	return &SettingHandler{
@@ -51,6 +68,9 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PasswordResetEnabled:                 settings.PasswordResetEnabled,
 		TotpEnabled:                          settings.TotpEnabled,
 		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
+		ReferralInviterBonus:                 settings.ReferralInviterBonus,
+		ReferralInviteeBonus:                 settings.ReferralInviteeBonus,
+		ReferralCommissionRate:               settings.ReferralCommissionRate,
 		SMTPHost:                             settings.SMTPHost,
 		SMTPPort:                             settings.SMTPPort,
 		SMTPUsername:                         settings.SMTPUsername,
@@ -72,6 +92,9 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		ContactInfo:                          settings.ContactInfo,
 		DocURL:                               settings.DocURL,
 		HomeContent:                          settings.HomeContent,
+		LandingPricingEnabled:                settings.LandingPricingEnabled,
+		LandingPricingConfig:                 settings.LandingPricingConfig,
+		SubscriptionsEnabled:                 settings.SubscriptionsEnabled,
 		HideCcsImportButton:                  settings.HideCcsImportButton,
 		PurchaseSubscriptionEnabled:          settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:              settings.PurchaseSubscriptionURL,
@@ -100,6 +123,10 @@ type UpdateSettingsRequest struct {
 	PasswordResetEnabled bool `json:"password_reset_enabled"`
 	TotpEnabled          bool `json:"totp_enabled"` // TOTP 双因素认证
 
+	ReferralInviterBonus   float64 `json:"referral_inviter_bonus"`
+	ReferralInviteeBonus   float64 `json:"referral_invitee_bonus"`
+	ReferralCommissionRate float64 `json:"referral_commission_rate"`
+
 	// 邮件服务设置
 	SMTPHost     string `json:"smtp_host"`
 	SMTPPort     int    `json:"smtp_port"`
@@ -121,14 +148,17 @@ type UpdateSettingsRequest struct {
 	LinuxDoConnectRedirectURL  string `json:"linuxdo_connect_redirect_url"`
 
 	// OEM设置
-	SiteName                    string  `json:"site_name"`
-	SiteLogo                    string  `json:"site_logo"`
-	SiteSubtitle                string  `json:"site_subtitle"`
-	APIBaseURL                  string  `json:"api_base_url"`
-	ContactInfo                 string  `json:"contact_info"`
-	DocURL                      string  `json:"doc_url"`
-	HomeContent                 string  `json:"home_content"`
-	HideCcsImportButton         bool    `json:"hide_ccs_import_button"`
+	SiteName              string `json:"site_name"`
+	SiteLogo              string `json:"site_logo"`
+	SiteSubtitle          string `json:"site_subtitle"`
+	APIBaseURL            string `json:"api_base_url"`
+	ContactInfo           string `json:"contact_info"`
+	DocURL                string `json:"doc_url"`
+	HomeContent           string `json:"home_content"`
+	LandingPricingEnabled bool   `json:"landing_pricing_enabled"`
+	LandingPricingConfig  string `json:"landing_pricing_config"`
+	SubscriptionsEnabled  bool   `json:"subscriptions_enabled"`
+	HideCcsImportButton   bool   `json:"hide_ccs_import_button"`
 	PurchaseSubscriptionEnabled *bool   `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     *string `json:"purchase_subscription_url"`
 
@@ -178,6 +208,20 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 	if req.SMTPPort <= 0 {
 		req.SMTPPort = 587
+	}
+
+	// Referral 参数验证
+	if req.ReferralInviterBonus < 0 {
+		req.ReferralInviterBonus = 0
+	}
+	if req.ReferralInviteeBonus < 0 {
+		req.ReferralInviteeBonus = 0
+	}
+	if req.ReferralCommissionRate < 0 {
+		req.ReferralCommissionRate = 0
+	}
+	if req.ReferralCommissionRate > 1 {
+		req.ReferralCommissionRate = 1
 	}
 
 	// Turnstile 参数验证
@@ -287,33 +331,39 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	settings := &service.SystemSettings{
-		RegistrationEnabled:         req.RegistrationEnabled,
-		EmailVerifyEnabled:          req.EmailVerifyEnabled,
-		PromoCodeEnabled:            req.PromoCodeEnabled,
-		PasswordResetEnabled:        req.PasswordResetEnabled,
-		TotpEnabled:                 req.TotpEnabled,
-		SMTPHost:                    req.SMTPHost,
-		SMTPPort:                    req.SMTPPort,
-		SMTPUsername:                req.SMTPUsername,
-		SMTPPassword:                req.SMTPPassword,
-		SMTPFrom:                    req.SMTPFrom,
-		SMTPFromName:                req.SMTPFromName,
-		SMTPUseTLS:                  req.SMTPUseTLS,
-		TurnstileEnabled:            req.TurnstileEnabled,
-		TurnstileSiteKey:            req.TurnstileSiteKey,
-		TurnstileSecretKey:          req.TurnstileSecretKey,
-		LinuxDoConnectEnabled:       req.LinuxDoConnectEnabled,
-		LinuxDoConnectClientID:      req.LinuxDoConnectClientID,
-		LinuxDoConnectClientSecret:  req.LinuxDoConnectClientSecret,
-		LinuxDoConnectRedirectURL:   req.LinuxDoConnectRedirectURL,
-		SiteName:                    req.SiteName,
-		SiteLogo:                    req.SiteLogo,
-		SiteSubtitle:                req.SiteSubtitle,
-		APIBaseURL:                  req.APIBaseURL,
-		ContactInfo:                 req.ContactInfo,
-		DocURL:                      req.DocURL,
-		HomeContent:                 req.HomeContent,
-		HideCcsImportButton:         req.HideCcsImportButton,
+		RegistrationEnabled:    req.RegistrationEnabled,
+		EmailVerifyEnabled:     req.EmailVerifyEnabled,
+		PromoCodeEnabled:       req.PromoCodeEnabled,
+		PasswordResetEnabled:   req.PasswordResetEnabled,
+		TotpEnabled:            req.TotpEnabled,
+		ReferralInviterBonus:   req.ReferralInviterBonus,
+		ReferralInviteeBonus:   req.ReferralInviteeBonus,
+		ReferralCommissionRate: req.ReferralCommissionRate,
+		SMTPHost:               req.SMTPHost,
+		SMTPPort:               req.SMTPPort,
+		SMTPUsername:           req.SMTPUsername,
+		SMTPPassword:           req.SMTPPassword,
+		SMTPFrom:               req.SMTPFrom,
+		SMTPFromName:           req.SMTPFromName,
+		SMTPUseTLS:             req.SMTPUseTLS,
+		TurnstileEnabled:       req.TurnstileEnabled,
+		TurnstileSiteKey:       req.TurnstileSiteKey,
+		TurnstileSecretKey:     req.TurnstileSecretKey,
+		LinuxDoConnectEnabled:  req.LinuxDoConnectEnabled,
+		LinuxDoConnectClientID: req.LinuxDoConnectClientID,
+		LinuxDoConnectClientSecret: req.LinuxDoConnectClientSecret,
+		LinuxDoConnectRedirectURL:  req.LinuxDoConnectRedirectURL,
+		SiteName:                   req.SiteName,
+		SiteLogo:                   req.SiteLogo,
+		SiteSubtitle:               req.SiteSubtitle,
+		APIBaseURL:                 req.APIBaseURL,
+		ContactInfo:                req.ContactInfo,
+		DocURL:                     req.DocURL,
+		HomeContent:                req.HomeContent,
+		LandingPricingEnabled:      req.LandingPricingEnabled,
+		LandingPricingConfig:       req.LandingPricingConfig,
+		SubscriptionsEnabled:       req.SubscriptionsEnabled,
+		HideCcsImportButton:        req.HideCcsImportButton,
 		PurchaseSubscriptionEnabled: purchaseEnabled,
 		PurchaseSubscriptionURL:     purchaseURL,
 		DefaultConcurrency:          req.DefaultConcurrency,
@@ -372,6 +422,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PasswordResetEnabled:                 updatedSettings.PasswordResetEnabled,
 		TotpEnabled:                          updatedSettings.TotpEnabled,
 		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
+		ReferralInviterBonus:                 updatedSettings.ReferralInviterBonus,
+		ReferralInviteeBonus:                 updatedSettings.ReferralInviteeBonus,
+		ReferralCommissionRate:               updatedSettings.ReferralCommissionRate,
 		SMTPHost:                             updatedSettings.SMTPHost,
 		SMTPPort:                             updatedSettings.SMTPPort,
 		SMTPUsername:                         updatedSettings.SMTPUsername,
@@ -393,6 +446,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		ContactInfo:                          updatedSettings.ContactInfo,
 		DocURL:                               updatedSettings.DocURL,
 		HomeContent:                          updatedSettings.HomeContent,
+		LandingPricingEnabled:                updatedSettings.LandingPricingEnabled,
+		LandingPricingConfig:                 updatedSettings.LandingPricingConfig,
+		SubscriptionsEnabled:                 updatedSettings.SubscriptionsEnabled,
 		HideCcsImportButton:                  updatedSettings.HideCcsImportButton,
 		PurchaseSubscriptionEnabled:          updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:              updatedSettings.PurchaseSubscriptionURL,
@@ -508,6 +564,15 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.HomeContent != after.HomeContent {
 		changed = append(changed, "home_content")
+	}
+	if before.LandingPricingEnabled != after.LandingPricingEnabled {
+		changed = append(changed, "landing_pricing_enabled")
+	}
+	if before.LandingPricingConfig != after.LandingPricingConfig {
+		changed = append(changed, "landing_pricing_config")
+	}
+	if before.SubscriptionsEnabled != after.SubscriptionsEnabled {
+		changed = append(changed, "subscriptions_enabled")
 	}
 	if before.HideCcsImportButton != after.HideCcsImportButton {
 		changed = append(changed, "hide_ccs_import_button")
@@ -691,6 +756,10 @@ func (h *SettingHandler) SendTestEmail(c *gin.Context) {
 // GetAdminAPIKey 获取管理员 API Key 状态
 // GET /api/v1/admin/settings/admin-api-key
 func (h *SettingHandler) GetAdminAPIKey(c *gin.Context) {
+	if !requireAdminJWT(c, "Admin API key management") {
+		return
+	}
+
 	maskedKey, exists, err := h.settingService.GetAdminAPIKeyStatus(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -706,6 +775,10 @@ func (h *SettingHandler) GetAdminAPIKey(c *gin.Context) {
 // RegenerateAdminAPIKey 生成/重新生成管理员 API Key
 // POST /api/v1/admin/settings/admin-api-key/regenerate
 func (h *SettingHandler) RegenerateAdminAPIKey(c *gin.Context) {
+	if !requireAdminJWT(c, "Admin API key management") {
+		return
+	}
+
 	key, err := h.settingService.GenerateAdminAPIKey(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -720,6 +793,10 @@ func (h *SettingHandler) RegenerateAdminAPIKey(c *gin.Context) {
 // DeleteAdminAPIKey 删除管理员 API Key
 // DELETE /api/v1/admin/settings/admin-api-key
 func (h *SettingHandler) DeleteAdminAPIKey(c *gin.Context) {
+	if !requireAdminJWT(c, "Admin API key management") {
+		return
+	}
+
 	if err := h.settingService.DeleteAdminAPIKey(c.Request.Context()); err != nil {
 		response.ErrorFrom(c, err)
 		return

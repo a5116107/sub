@@ -126,6 +126,47 @@ export async function refreshCredentials(id: number): Promise<Account> {
   return data
 }
 
+export interface GoogleOneTierRefreshResponse {
+  tier_id: string
+  storage_info: Record<string, unknown>
+  drive_storage_limit?: unknown
+  drive_storage_usage?: unknown
+  updated_at?: unknown
+}
+
+export interface BatchRefreshTierError {
+  account_id: number
+  error: string
+}
+
+export interface BatchRefreshTierResponse {
+  total: number
+  success: number
+  failed: number
+  errors: BatchRefreshTierError[]
+}
+
+/**
+ * Refresh Google One tier for a single Gemini OAuth account
+ * @param id - Account ID
+ * @returns Tier/storage info snapshot
+ */
+export async function refreshTier(id: number): Promise<GoogleOneTierRefreshResponse> {
+  const { data } = await apiClient.post<GoogleOneTierRefreshResponse>(`/admin/accounts/${id}/refresh-tier`)
+  return data
+}
+
+/**
+ * Batch refresh Google One tier for multiple (or all) Gemini OAuth accounts
+ * @param accountIds - Optional account IDs; if omitted/empty, backend refreshes all eligible accounts
+ * @returns Batch refresh summary + errors
+ */
+export async function batchRefreshTier(accountIds?: number[]): Promise<BatchRefreshTierResponse> {
+  const payload = accountIds && accountIds.length > 0 ? { account_ids: accountIds } : {}
+  const { data } = await apiClient.post<BatchRefreshTierResponse>('/admin/accounts/batch-refresh-tier', payload)
+  return data
+}
+
 /**
  * Get account usage statistics
  * @param id - Account ID
@@ -356,6 +397,8 @@ export const accountsAPI = {
   toggleStatus,
   testAccount,
   refreshCredentials,
+  refreshTier,
+  batchRefreshTier,
   getStats,
   clearError,
   getUsage,

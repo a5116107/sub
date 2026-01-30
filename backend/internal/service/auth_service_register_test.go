@@ -115,12 +115,14 @@ func newAuthService(repo *userRepoStub, settings map[string]string, emailCache E
 
 	return NewAuthService(
 		repo,
+		nil,
 		cfg,
 		settingService,
 		emailService,
 		nil,
 		nil,
 		nil, // promoService
+		nil, // authCacheInvalidator
 	)
 }
 

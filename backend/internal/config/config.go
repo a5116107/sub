@@ -42,6 +42,7 @@ type Config struct {
 	CORS         CORSConfig                 `mapstructure:"cors"`
 	Security     SecurityConfig             `mapstructure:"security"`
 	Billing      BillingConfig              `mapstructure:"billing"`
+	Payment      PaymentConfig              `mapstructure:"payment"`
 	Turnstile    TurnstileConfig            `mapstructure:"turnstile"`
 	Database     DatabaseConfig             `mapstructure:"database"`
 	Redis        RedisConfig                `mapstructure:"redis"`
@@ -141,6 +142,13 @@ type PricingConfig struct {
 	UpdateIntervalHours int `mapstructure:"update_interval_hours"`
 	// 哈希校验间隔（分钟）
 	HashCheckIntervalMinutes int `mapstructure:"hash_check_interval_minutes"`
+
+	// MissingPolicy defines behavior when pricing for a model is missing.
+	// Supported values:
+	// - "fallback_any": use hardcoded Claude fallback for any unknown model (legacy, unsafe for non-Claude providers)
+	// - "fallback_claude_only": only fallback for Claude-family models; others error
+	// - "fail_close": return error when pricing is missing
+	MissingPolicy string `mapstructure:"missing_policy"`
 }
 
 type ServerConfig struct {
@@ -150,6 +158,17 @@ type ServerConfig struct {
 	ReadHeaderTimeout int      `mapstructure:"read_header_timeout"` // 读取请求头超时（秒）
 	IdleTimeout       int      `mapstructure:"idle_timeout"`        // 空闲连接超时（秒）
 	TrustedProxies    []string `mapstructure:"trusted_proxies"`     // 可信代理列表（CIDR/IP）
+
+	// FrontendBaseURL is used to generate security-sensitive links (password reset, OAuth redirect URIs).
+	// Example: "https://your-frontend.example.com"
+	FrontendBaseURL string `mapstructure:"frontend_base_url"`
+
+	// DevAllowDerivedFrontendBaseURL allows deriving the frontend base URL from request headers in debug mode only.
+	DevAllowDerivedFrontendBaseURL bool `mapstructure:"dev_allow_derived_frontend_base_url"`
+
+	// DevAllowedFrontendHosts is an allowlist for derived frontend base URL hosts (debug-only).
+	// Values should be hostnames (optionally with wildcard prefix "*."), e.g. ["localhost","127.0.0.1"].
+	DevAllowedFrontendHosts []string `mapstructure:"dev_allowed_frontend_hosts"`
 }
 
 type CORSConfig struct {
@@ -191,6 +210,20 @@ type ProxyProbeConfig struct {
 
 type BillingConfig struct {
 	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
+
+	// SubscriptionRateMultiplierPolicy controls whether group rate_multiplier applies to subscription usage accounting.
+	// Values: "apply" (recommended) | "ignore" (legacy behavior).
+	SubscriptionRateMultiplierPolicy string `mapstructure:"subscription_rate_multiplier_policy"`
+
+	// Reconcile controls the optional background reconcile loop for unapplied billing ledger entries.
+	Reconcile BillingReconcileConfig `mapstructure:"reconcile"`
+}
+
+type BillingReconcileConfig struct {
+	Enabled   bool          `mapstructure:"enabled"`
+	Interval  time.Duration `mapstructure:"interval"`
+	BatchSize int           `mapstructure:"batch_size"`
+	Timeout   time.Duration `mapstructure:"timeout"`
 }
 
 type CircuitBreakerConfig struct {
@@ -198,6 +231,75 @@ type CircuitBreakerConfig struct {
 	FailureThreshold    int  `mapstructure:"failure_threshold"`
 	ResetTimeoutSeconds int  `mapstructure:"reset_timeout_seconds"`
 	HalfOpenRequests    int  `mapstructure:"half_open_requests"`
+}
+
+type PaymentConfig struct {
+	// Enabled turns on payment order creation and webhook processing.
+	Enabled bool `mapstructure:"enabled"`
+
+	// PublicBaseURL is used to construct provider notify/return URLs when absolute URLs are required.
+	// Example: "https://your-domain.com"
+	PublicBaseURL string `mapstructure:"public_base_url"`
+
+	// BaseCurrency is the currency unit for user balance (default: USD).
+	BaseCurrency string `mapstructure:"base_currency"`
+
+	// OrderTTL controls how long a payment order can stay in pending state.
+	OrderTTL time.Duration `mapstructure:"order_ttl"`
+
+	// TopUpMin/TopUpMax are guard rails for user initiated top-ups.
+	TopUpMin float64 `mapstructure:"topup_min"`
+	TopUpMax float64 `mapstructure:"topup_max"`
+
+	Providers PaymentProvidersConfig `mapstructure:"providers"`
+}
+
+type PaymentProvidersConfig struct {
+	Creem  CreemPaymentConfig  `mapstructure:"creem"`
+	PayPal PayPalPaymentConfig `mapstructure:"paypal"`
+	EPay   EPayPaymentConfig   `mapstructure:"epay"`
+}
+
+type CreemPaymentConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+
+	APIBaseURL string `mapstructure:"api_base_url"`
+	APIKey     string `mapstructure:"api_key"`
+
+	// WebhookSecret is used to verify `creem-signature` (HMAC-SHA256 hex digest).
+	WebhookSecret string `mapstructure:"webhook_secret"`
+
+	// TopUpProductID is the product_id used for top-up checkouts.
+	// Recommended: create a "$1 credit" product and set units = topup_amount (integer).
+	TopUpProductID string `mapstructure:"topup_product_id"`
+}
+
+type PayPalPaymentConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+
+	Mode         string `mapstructure:"mode"` // sandbox | live
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
+
+	// WebhookID is needed for signature verification (Verify Webhook Signature API).
+	WebhookID string `mapstructure:"webhook_id"`
+
+	// Optional override of API base URL.
+	APIBaseURL string `mapstructure:"api_base_url"`
+}
+
+type EPayPaymentConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+
+	// GatewayURL is usually https://<domain>/submit.php
+	GatewayURL  string `mapstructure:"gateway_url"`
+	MerchantID  string `mapstructure:"merchant_id"`  // pid
+	MerchantKey string `mapstructure:"merchant_key"` // key
+
+	// Channels supported by the upstream gateway, e.g. ["alipay","wxpay"].
+	Channels []string `mapstructure:"channels"`
+
+	SignType string `mapstructure:"sign_type"` // MD5
 }
 
 type ConcurrencyConfig struct {
@@ -254,7 +356,12 @@ type GatewayConfig struct {
 	LogUpstreamErrorBodyMaxBytes int `mapstructure:"log_upstream_error_body_max_bytes"`
 
 	// API-key 账号在客户端未提供 anthropic-beta 时，是否按需自动补齐（默认关闭以保持兼容）
-	InjectBetaForAPIKey bool `mapstructure:"inject_beta_for_apikey"`
+	InjectBetaForAPIKey              bool   `mapstructure:"inject_beta_for_apikey"`
+	CacheControlLimitRemovalStrategy string `mapstructure:"cache_control_limit_removal_strategy"`
+
+	// AllowGoogleQueryKey controls whether Gemini native endpoints can accept API keys via query string (?key=...).
+	// Default: false (safer; avoids key leakage via logs/proxies/referrers).
+	AllowGoogleQueryKey bool `mapstructure:"allow_google_query_key"`
 
 	// 是否允许对部分 400 错误触发 failover（默认关闭以避免改变语义）
 	FailoverOn400 bool `mapstructure:"failover_on_400"`
@@ -272,6 +379,55 @@ type GatewayConfig struct {
 
 	// TLSFingerprint: TLS指纹伪装配置
 	TLSFingerprint TLSFingerprintConfig `mapstructure:"tls_fingerprint"`
+
+	// ClaudeCodeCompat: Claude Code "compat mode"（安全子集，可配置开关）
+	ClaudeCodeCompat GatewayClaudeCodeCompatConfig `mapstructure:"claude_code_compat"`
+
+	// PayloadRules: 通用请求适配层（按 protocol/model/path 匹配的 payload 规则）
+	// 用于替代点状“兼容补丁”逻辑。仅提供安全子集：不支持 cloak/混淆/绕过策略。
+	PayloadRules GatewayPayloadRulesConfig `mapstructure:"payload_rules"`
+}
+
+// GatewayClaudeCodeCompatConfig controls Claude Code–specific request shaping in a safe, configurable way.
+//
+// This is intentionally limited (no obfuscation / no bypass): it only gates already-supported compat behavior.
+type GatewayClaudeCodeCompatConfig struct {
+	// Mode: "auto" (default), "always", or "never".
+	// - auto: apply compat only when request is NOT detected as Claude Code client.
+	// - always: always apply compat for OAuth/SetupToken accounts.
+	// - never: never apply.
+	Mode string `mapstructure:"mode"`
+}
+
+// GatewayPayloadRulesConfig defines default/override mutation rules applied to gateway request payloads.
+type GatewayPayloadRulesConfig struct {
+	// Default defines rules that only set parameters when they are missing in the payload.
+	Default []GatewayPayloadRule `mapstructure:"default"`
+	// DefaultRaw defines rules that set raw JSON values only when they are missing.
+	DefaultRaw []GatewayPayloadRule `mapstructure:"default_raw"`
+	// Override defines rules that always set parameters, overwriting any existing values.
+	Override []GatewayPayloadRule `mapstructure:"override"`
+	// OverrideRaw defines rules that always set raw JSON values, overwriting any existing values.
+	OverrideRaw []GatewayPayloadRule `mapstructure:"override_raw"`
+}
+
+// GatewayPayloadRule describes a single rule targeting a list of models/protocols with parameter updates.
+type GatewayPayloadRule struct {
+	// Models lists model entries with name pattern and protocol constraint.
+	Models []GatewayPayloadRuleModel `mapstructure:"models"`
+	// Paths optionally restricts the rule to requests whose URL path has one of these prefixes.
+	Paths []string `mapstructure:"paths"`
+	// Params maps JSON paths (gjson/sjson syntax) to values written into the payload.
+	// For *Raw rules, values are treated as raw JSON fragments (strings are used as-is).
+	Params map[string]any `mapstructure:"params"`
+}
+
+// GatewayPayloadRuleModel ties a model name pattern to a specific protocol.
+type GatewayPayloadRuleModel struct {
+	// Name is the model name or wildcard pattern (e.g., "gpt-*", "*-5").
+	Name string `mapstructure:"name"`
+	// Protocol restricts the rule to a specific payload protocol.
+	Protocol string `mapstructure:"protocol"`
 }
 
 // TLSFingerprintConfig TLS指纹伪装配置
@@ -303,6 +459,8 @@ type GatewaySchedulingConfig struct {
 	// 粘性会话排队配置
 	StickySessionMaxWaiting  int           `mapstructure:"sticky_session_max_waiting"`
 	StickySessionWaitTimeout time.Duration `mapstructure:"sticky_session_wait_timeout"`
+	StickySessionTTL         time.Duration `mapstructure:"sticky_session_ttl"`
+	OpenAIStickySessionTTL   time.Duration `mapstructure:"openai_sticky_session_ttl"`
 
 	// 兜底排队配置
 	FallbackWaitTimeout time.Duration `mapstructure:"fallback_wait_timeout"`
@@ -400,10 +558,11 @@ func (d *DatabaseConfig) DSNWithTimezone(tz string) string {
 // RedisConfig Redis 连接配置
 // 性能优化：新增连接池和超时参数，提升高并发场景下的吞吐量
 type RedisConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
+	Host      string `mapstructure:"host"`
+	Port      int    `mapstructure:"port"`
+	Password  string `mapstructure:"password"`
+	DB        int    `mapstructure:"db"`
+	KeyPrefix string `mapstructure:"key_prefix"`
 	// 连接池与超时配置（性能优化：可配置化连接池参数）
 	// DialTimeoutSeconds: 建立连接超时，防止慢连接阻塞
 	DialTimeoutSeconds int `mapstructure:"dial_timeout_seconds"`
@@ -623,6 +782,22 @@ func Load() (*Config, error) {
 	cfg.LinuxDo.UserInfoIDPath = strings.TrimSpace(cfg.LinuxDo.UserInfoIDPath)
 	cfg.LinuxDo.UserInfoUsernamePath = strings.TrimSpace(cfg.LinuxDo.UserInfoUsernamePath)
 	cfg.Dashboard.KeyPrefix = strings.TrimSpace(cfg.Dashboard.KeyPrefix)
+	cfg.Payment.PublicBaseURL = strings.TrimSpace(cfg.Payment.PublicBaseURL)
+	cfg.Payment.BaseCurrency = strings.ToUpper(strings.TrimSpace(cfg.Payment.BaseCurrency))
+	cfg.Payment.Providers.Creem.APIBaseURL = strings.TrimSpace(cfg.Payment.Providers.Creem.APIBaseURL)
+	cfg.Payment.Providers.Creem.APIKey = strings.TrimSpace(cfg.Payment.Providers.Creem.APIKey)
+	cfg.Payment.Providers.Creem.WebhookSecret = strings.TrimSpace(cfg.Payment.Providers.Creem.WebhookSecret)
+	cfg.Payment.Providers.Creem.TopUpProductID = strings.TrimSpace(cfg.Payment.Providers.Creem.TopUpProductID)
+	cfg.Payment.Providers.PayPal.Mode = strings.ToLower(strings.TrimSpace(cfg.Payment.Providers.PayPal.Mode))
+	cfg.Payment.Providers.PayPal.ClientID = strings.TrimSpace(cfg.Payment.Providers.PayPal.ClientID)
+	cfg.Payment.Providers.PayPal.ClientSecret = strings.TrimSpace(cfg.Payment.Providers.PayPal.ClientSecret)
+	cfg.Payment.Providers.PayPal.WebhookID = strings.TrimSpace(cfg.Payment.Providers.PayPal.WebhookID)
+	cfg.Payment.Providers.PayPal.APIBaseURL = strings.TrimSpace(cfg.Payment.Providers.PayPal.APIBaseURL)
+	cfg.Payment.Providers.EPay.GatewayURL = strings.TrimSpace(cfg.Payment.Providers.EPay.GatewayURL)
+	cfg.Payment.Providers.EPay.MerchantID = strings.TrimSpace(cfg.Payment.Providers.EPay.MerchantID)
+	cfg.Payment.Providers.EPay.MerchantKey = strings.TrimSpace(cfg.Payment.Providers.EPay.MerchantKey)
+	cfg.Payment.Providers.EPay.Channels = normalizeStringSlice(cfg.Payment.Providers.EPay.Channels)
+	cfg.Payment.Providers.EPay.SignType = strings.ToUpper(strings.TrimSpace(cfg.Payment.Providers.EPay.SignType))
 	cfg.CORS.AllowedOrigins = normalizeStringSlice(cfg.CORS.AllowedOrigins)
 	cfg.Security.ResponseHeaders.AdditionalAllowed = normalizeStringSlice(cfg.Security.ResponseHeaders.AdditionalAllowed)
 	cfg.Security.ResponseHeaders.ForceRemove = normalizeStringSlice(cfg.Security.ResponseHeaders.ForceRemove)
@@ -721,6 +896,34 @@ func setDefaults() {
 	viper.SetDefault("billing.circuit_breaker.reset_timeout_seconds", 30)
 	viper.SetDefault("billing.circuit_breaker.half_open_requests", 3)
 
+	// Payment
+	viper.SetDefault("payment.enabled", false)
+	viper.SetDefault("payment.public_base_url", "")
+	viper.SetDefault("payment.base_currency", "USD")
+	viper.SetDefault("payment.order_ttl", 30*time.Minute)
+	viper.SetDefault("payment.topup_min", 1.0)
+	viper.SetDefault("payment.topup_max", 10000.0)
+
+	viper.SetDefault("payment.providers.creem.enabled", false)
+	viper.SetDefault("payment.providers.creem.api_base_url", "https://api.creem.io")
+	viper.SetDefault("payment.providers.creem.api_key", "")
+	viper.SetDefault("payment.providers.creem.webhook_secret", "")
+	viper.SetDefault("payment.providers.creem.topup_product_id", "")
+
+	viper.SetDefault("payment.providers.paypal.enabled", false)
+	viper.SetDefault("payment.providers.paypal.mode", "sandbox")
+	viper.SetDefault("payment.providers.paypal.client_id", "")
+	viper.SetDefault("payment.providers.paypal.client_secret", "")
+	viper.SetDefault("payment.providers.paypal.webhook_id", "")
+	viper.SetDefault("payment.providers.paypal.api_base_url", "")
+
+	viper.SetDefault("payment.providers.epay.enabled", false)
+	viper.SetDefault("payment.providers.epay.gateway_url", "")
+	viper.SetDefault("payment.providers.epay.merchant_id", "")
+	viper.SetDefault("payment.providers.epay.merchant_key", "")
+	viper.SetDefault("payment.providers.epay.channels", []string{"alipay", "wxpay"})
+	viper.SetDefault("payment.providers.epay.sign_type", "MD5")
+
 	// Turnstile
 	viper.SetDefault("turnstile.required", false)
 
@@ -757,6 +960,7 @@ func setDefaults() {
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.password", "")
 	viper.SetDefault("redis.db", 0)
+	viper.SetDefault("redis.key_prefix", "")
 	viper.SetDefault("redis.dial_timeout_seconds", 5)
 	viper.SetDefault("redis.read_timeout_seconds", 3)
 	viper.SetDefault("redis.write_timeout_seconds", 3)
@@ -793,6 +997,11 @@ func setDefaults() {
 	viper.SetDefault("default.user_balance", 0)
 	viper.SetDefault("default.api_key_prefix", "sk-")
 	viper.SetDefault("default.rate_multiplier", 1.0)
+	viper.SetDefault("billing.subscription_rate_multiplier_policy", "apply")
+	viper.SetDefault("billing.reconcile.enabled", false)
+	viper.SetDefault("billing.reconcile.interval", 60*time.Second)
+	viper.SetDefault("billing.reconcile.batch_size", 200)
+	viper.SetDefault("billing.reconcile.timeout", 5*time.Second)
 
 	// RateLimit
 	viper.SetDefault("rate_limit.overload_cooldown_minutes", 10)
@@ -845,7 +1054,9 @@ func setDefaults() {
 	viper.SetDefault("gateway.response_header_timeout", 600) // 600秒(10分钟)等待上游响应头，LLM高负载时可能排队较久
 	viper.SetDefault("gateway.log_upstream_error_body", true)
 	viper.SetDefault("gateway.log_upstream_error_body_max_bytes", 2048)
+	viper.SetDefault("gateway.allow_google_query_key", false)
 	viper.SetDefault("gateway.inject_beta_for_apikey", false)
+	viper.SetDefault("gateway.cache_control_limit_removal_strategy", "messages_tail_then_head")
 	viper.SetDefault("gateway.failover_on_400", false)
 	viper.SetDefault("gateway.max_account_switches", 10)
 	viper.SetDefault("gateway.max_account_switches_gemini", 3)
@@ -865,6 +1076,8 @@ func setDefaults() {
 	viper.SetDefault("gateway.max_line_size", 40*1024*1024)
 	viper.SetDefault("gateway.scheduling.sticky_session_max_waiting", 3)
 	viper.SetDefault("gateway.scheduling.sticky_session_wait_timeout", 120*time.Second)
+	viper.SetDefault("gateway.scheduling.sticky_session_ttl", time.Hour)
+	viper.SetDefault("gateway.scheduling.openai_sticky_session_ttl", 0*time.Second)
 	viper.SetDefault("gateway.scheduling.fallback_wait_timeout", 30*time.Second)
 	viper.SetDefault("gateway.scheduling.fallback_max_waiting", 100)
 	viper.SetDefault("gateway.scheduling.fallback_selection_mode", "last_used")
@@ -881,6 +1094,8 @@ func setDefaults() {
 	viper.SetDefault("gateway.scheduling.full_rebuild_interval_seconds", 300)
 	// TLS指纹伪装配置（默认关闭，需要账号级别单独启用）
 	viper.SetDefault("gateway.tls_fingerprint.enabled", true)
+	// Claude Code compat mode: controls system prompt injection + fingerprint + user_id rewrite behavior.
+	viper.SetDefault("gateway.claude_code_compat.mode", "auto")
 	viper.SetDefault("concurrency.ping_interval", 10)
 
 	// TokenRefresh
@@ -911,6 +1126,15 @@ func (c *Config) Validate() error {
 	}
 	if c.Security.CSP.Enabled && strings.TrimSpace(c.Security.CSP.Policy) == "" {
 		return fmt.Errorf("security.csp.policy is required when CSP is enabled")
+	}
+	if strings.TrimSpace(c.Server.FrontendBaseURL) != "" {
+		if err := ValidateAbsoluteHTTPURL(c.Server.FrontendBaseURL); err != nil {
+			return fmt.Errorf("server.frontend_base_url invalid: %w", err)
+		}
+		warnIfInsecureURL("server.frontend_base_url", c.Server.FrontendBaseURL)
+	}
+	if c.Server.DevAllowDerivedFrontendBaseURL && !strings.EqualFold(strings.TrimSpace(c.Server.Mode), "debug") {
+		return fmt.Errorf("server.dev_allow_derived_frontend_base_url can only be enabled when server.mode=debug")
 	}
 	if c.LinuxDo.Enabled {
 		if strings.TrimSpace(c.LinuxDo.ClientID) == "" {
@@ -976,6 +1200,121 @@ func (c *Config) Validate() error {
 		}
 		if c.Billing.CircuitBreaker.HalfOpenRequests <= 0 {
 			return fmt.Errorf("billing.circuit_breaker.half_open_requests must be positive")
+		}
+	}
+	if c.Billing.Reconcile.Enabled {
+		if c.Billing.Reconcile.Interval <= 0 {
+			return fmt.Errorf("billing.reconcile.interval must be positive when billing.reconcile.enabled=true")
+		}
+		if c.Billing.Reconcile.BatchSize <= 0 {
+			return fmt.Errorf("billing.reconcile.batch_size must be positive when billing.reconcile.enabled=true")
+		}
+		if c.Billing.Reconcile.Timeout <= 0 {
+			return fmt.Errorf("billing.reconcile.timeout must be positive when billing.reconcile.enabled=true")
+		}
+	}
+	if c.Payment.Enabled {
+		if strings.TrimSpace(c.Payment.BaseCurrency) == "" {
+			return fmt.Errorf("payment.base_currency is required when payment.enabled=true")
+		}
+		if c.Payment.OrderTTL <= 0 {
+			return fmt.Errorf("payment.order_ttl must be positive when payment.enabled=true")
+		}
+		if c.Payment.TopUpMin <= 0 {
+			return fmt.Errorf("payment.topup_min must be positive when payment.enabled=true")
+		}
+		if c.Payment.TopUpMax <= 0 {
+			return fmt.Errorf("payment.topup_max must be positive when payment.enabled=true")
+		}
+		if c.Payment.TopUpMax < c.Payment.TopUpMin {
+			return fmt.Errorf("payment.topup_max must be >= payment.topup_min")
+		}
+
+		anyProviderEnabled := c.Payment.Providers.Creem.Enabled || c.Payment.Providers.PayPal.Enabled || c.Payment.Providers.EPay.Enabled
+		if !anyProviderEnabled {
+			return fmt.Errorf("payment.enabled=true but no payment.providers.*.enabled=true")
+		}
+
+		if strings.TrimSpace(c.Payment.PublicBaseURL) == "" {
+			return fmt.Errorf("payment.public_base_url is required when payment.enabled=true")
+		}
+		if err := ValidateAbsoluteHTTPURL(c.Payment.PublicBaseURL); err != nil {
+			return fmt.Errorf("payment.public_base_url invalid: %w", err)
+		}
+		warnIfInsecureURL("payment.public_base_url", c.Payment.PublicBaseURL)
+
+		if c.Payment.Providers.Creem.Enabled {
+			if strings.TrimSpace(c.Payment.Providers.Creem.APIKey) == "" {
+				return fmt.Errorf("payment.providers.creem.api_key is required when payment.providers.creem.enabled=true")
+			}
+			if strings.TrimSpace(c.Payment.Providers.Creem.WebhookSecret) == "" {
+				return fmt.Errorf("payment.providers.creem.webhook_secret is required when payment.providers.creem.enabled=true")
+			}
+			if strings.TrimSpace(c.Payment.Providers.Creem.TopUpProductID) == "" {
+				return fmt.Errorf("payment.providers.creem.topup_product_id is required when payment.providers.creem.enabled=true")
+			}
+			if strings.TrimSpace(c.Payment.Providers.Creem.APIBaseURL) != "" {
+				if err := ValidateAbsoluteHTTPURL(c.Payment.Providers.Creem.APIBaseURL); err != nil {
+					return fmt.Errorf("payment.providers.creem.api_base_url invalid: %w", err)
+				}
+				warnIfInsecureURL("payment.providers.creem.api_base_url", c.Payment.Providers.Creem.APIBaseURL)
+			}
+		}
+
+		if c.Payment.Providers.PayPal.Enabled {
+			if strings.TrimSpace(c.Payment.Providers.PayPal.ClientID) == "" {
+				return fmt.Errorf("payment.providers.paypal.client_id is required when payment.providers.paypal.enabled=true")
+			}
+			if strings.TrimSpace(c.Payment.Providers.PayPal.ClientSecret) == "" {
+				return fmt.Errorf("payment.providers.paypal.client_secret is required when payment.providers.paypal.enabled=true")
+			}
+			mode := strings.ToLower(strings.TrimSpace(c.Payment.Providers.PayPal.Mode))
+			switch mode {
+			case "", "sandbox", "live":
+			default:
+				return fmt.Errorf("payment.providers.paypal.mode must be one of: sandbox/live")
+			}
+			if strings.TrimSpace(c.Payment.Providers.PayPal.WebhookID) == "" {
+				return fmt.Errorf("payment.providers.paypal.webhook_id is required when payment.providers.paypal.enabled=true")
+			}
+			if strings.TrimSpace(c.Payment.Providers.PayPal.APIBaseURL) != "" {
+				if err := ValidateAbsoluteHTTPURL(c.Payment.Providers.PayPal.APIBaseURL); err != nil {
+					return fmt.Errorf("payment.providers.paypal.api_base_url invalid: %w", err)
+				}
+				warnIfInsecureURL("payment.providers.paypal.api_base_url", c.Payment.Providers.PayPal.APIBaseURL)
+			}
+		}
+
+		if c.Payment.Providers.EPay.Enabled {
+			if strings.TrimSpace(c.Payment.Providers.EPay.GatewayURL) == "" {
+				return fmt.Errorf("payment.providers.epay.gateway_url is required when payment.providers.epay.enabled=true")
+			}
+			if err := ValidateAbsoluteHTTPURL(c.Payment.Providers.EPay.GatewayURL); err != nil {
+				return fmt.Errorf("payment.providers.epay.gateway_url invalid: %w", err)
+			}
+			warnIfInsecureURL("payment.providers.epay.gateway_url", c.Payment.Providers.EPay.GatewayURL)
+
+			if strings.TrimSpace(c.Payment.Providers.EPay.MerchantID) == "" {
+				return fmt.Errorf("payment.providers.epay.merchant_id is required when payment.providers.epay.enabled=true")
+			}
+			if strings.TrimSpace(c.Payment.Providers.EPay.MerchantKey) == "" {
+				return fmt.Errorf("payment.providers.epay.merchant_key is required when payment.providers.epay.enabled=true")
+			}
+			if len(c.Payment.Providers.EPay.Channels) == 0 {
+				return fmt.Errorf("payment.providers.epay.channels must not be empty when payment.providers.epay.enabled=true")
+			}
+			for i, ch := range c.Payment.Providers.EPay.Channels {
+				if strings.TrimSpace(ch) == "" {
+					return fmt.Errorf("payment.providers.epay.channels[%d] must not be empty", i)
+				}
+			}
+			signType := strings.ToUpper(strings.TrimSpace(c.Payment.Providers.EPay.SignType))
+			if signType == "" {
+				signType = "MD5"
+			}
+			if signType != "MD5" {
+				return fmt.Errorf("payment.providers.epay.sign_type must be MD5")
+			}
 		}
 	}
 	if c.Database.MaxOpenConns <= 0 {
@@ -1121,6 +1460,13 @@ func (c *Config) Validate() error {
 				ConnectionPoolIsolationProxy, ConnectionPoolIsolationAccount, ConnectionPoolIsolationAccountProxy)
 		}
 	}
+	if strings.TrimSpace(c.Gateway.CacheControlLimitRemovalStrategy) != "" {
+		switch strings.ToLower(strings.TrimSpace(c.Gateway.CacheControlLimitRemovalStrategy)) {
+		case "messages_head", "messages_tail", "messages_tail_then_head", "messages_head_then_tail":
+		default:
+			return fmt.Errorf("gateway.cache_control_limit_removal_strategy must be one of: messages_head/messages_tail/messages_tail_then_head/messages_head_then_tail")
+		}
+	}
 	if c.Gateway.MaxIdleConns <= 0 {
 		return fmt.Errorf("gateway.max_idle_conns must be positive")
 	}
@@ -1170,6 +1516,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.Scheduling.StickySessionWaitTimeout <= 0 {
 		return fmt.Errorf("gateway.scheduling.sticky_session_wait_timeout must be positive")
+	}
+	if c.Gateway.Scheduling.StickySessionTTL <= 0 {
+		return fmt.Errorf("gateway.scheduling.sticky_session_ttl must be positive")
+	}
+	if c.Gateway.Scheduling.OpenAIStickySessionTTL < 0 {
+		return fmt.Errorf("gateway.scheduling.openai_sticky_session_ttl must be non-negative")
 	}
 	if c.Gateway.Scheduling.FallbackWaitTimeout <= 0 {
 		return fmt.Errorf("gateway.scheduling.fallback_wait_timeout must be positive")
@@ -1292,6 +1644,9 @@ func GetServerAddress() string {
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.SetDefault("server.host", "0.0.0.0")
 	v.SetDefault("server.port", 8080)
+	v.SetDefault("server.frontend_base_url", "")
+	v.SetDefault("server.dev_allow_derived_frontend_base_url", false)
+	v.SetDefault("server.dev_allowed_frontend_hosts", []string{"localhost", "127.0.0.1"})
 
 	// Try to read config file (ignore errors if not found)
 	_ = v.ReadInConfig()

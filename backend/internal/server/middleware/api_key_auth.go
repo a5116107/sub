@@ -97,6 +97,22 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			return
 		}
 
+		// 检查关联分组状态（禁用分组应立即生效，防止绕过/越权）
+		if apiKey.Group != nil && !apiKey.Group.IsActive() {
+			AbortWithError(c, 403, "GROUP_DISABLED", "Group is disabled")
+			return
+		}
+
+		// Enforce AllowedGroups as runtime ACL (revocation must take effect promptly).
+		//
+		// For subscription-type groups, "allowed groups" is not the entitlement source: the active subscription is.
+		// Requiring AllowedGroups here can incorrectly block paid subscribers (API key is bindable, but runtime denies it).
+		// In simple mode we still enforce AllowedGroups because subscription checks are skipped.
+		if apiKey.Group != nil && (cfg.RunMode == config.RunModeSimple || !apiKey.Group.IsSubscriptionType()) && !apiKey.User.CanBindGroup(apiKey.Group.ID, apiKey.Group.IsExclusive) {
+			AbortWithError(c, 403, "GROUP_NOT_ALLOWED", "Group is not allowed")
+			return
+		}
+
 		if cfg.RunMode == config.RunModeSimple {
 			// 简易模式：跳过余额和订阅检查，但仍需设置必要的上下文
 			c.Set(string(ContextKeyAPIKey), apiKey)

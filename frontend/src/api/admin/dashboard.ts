@@ -65,8 +65,14 @@ export interface TrendResponse {
  * @param params - Query parameters for filtering
  * @returns Usage trend data
  */
-export async function getUsageTrend(params?: TrendParams): Promise<TrendResponse> {
-  const { data } = await apiClient.get<TrendResponse>('/admin/dashboard/trend', { params })
+export async function getUsageTrend(
+  params?: TrendParams,
+  options?: { signal?: AbortSignal }
+): Promise<TrendResponse> {
+  const { data } = await apiClient.get<TrendResponse>('/admin/dashboard/trend', {
+    params,
+    signal: options?.signal
+  })
   return data
 }
 
@@ -93,8 +99,14 @@ export interface ModelStatsResponse {
  * @param params - Query parameters for filtering
  * @returns Model usage statistics
  */
-export async function getModelStats(params?: ModelStatsParams): Promise<ModelStatsResponse> {
-  const { data } = await apiClient.get<ModelStatsResponse>('/admin/dashboard/models', { params })
+export async function getModelStats(
+  params?: ModelStatsParams,
+  options?: { signal?: AbortSignal }
+): Promise<ModelStatsResponse> {
+  const { data } = await apiClient.get<ModelStatsResponse>('/admin/dashboard/models', {
+    params,
+    signal: options?.signal
+  })
   return data
 }
 
@@ -195,6 +207,30 @@ export async function getBatchApiKeysUsage(
   return data
 }
 
+export interface DashboardAggregationBackfillRequest {
+  start: string
+  end: string
+}
+
+export interface DashboardAggregationBackfillResponse {
+  status: 'accepted'
+}
+
+/**
+ * Trigger dashboard aggregation backfill (manual)
+ * @param request - Backfill time range (RFC3339)
+ * @returns Accepted status
+ */
+export async function backfillAggregation(
+  request: DashboardAggregationBackfillRequest
+): Promise<DashboardAggregationBackfillResponse> {
+  const { data } = await apiClient.post<DashboardAggregationBackfillResponse>(
+    '/admin/dashboard/aggregation/backfill',
+    request
+  )
+  return data
+}
+
 export const dashboardAPI = {
   getStats,
   getRealtimeMetrics,
@@ -203,7 +239,8 @@ export const dashboardAPI = {
   getApiKeyUsageTrend,
   getUserUsageTrend,
   getBatchUsersUsage,
-  getBatchApiKeysUsage
+  getBatchApiKeysUsage,
+  backfillAggregation
 }
 
 export default dashboardAPI

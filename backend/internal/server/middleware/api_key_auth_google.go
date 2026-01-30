@@ -6,6 +6,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -26,7 +27,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			abortWithGoogleError(c, 400, "Query parameter api_key is deprecated. Use Authorization header or key instead.")
 			return
 		}
-		apiKeyString := extractAPIKeyFromRequest(c)
+		apiKeyString := extractAPIKeyFromRequest(c, cfg)
 		if apiKeyString == "" {
 			abortWithGoogleError(c, 401, "API key is required")
 			return
@@ -46,12 +47,39 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			abortWithGoogleError(c, 401, "API key is disabled")
 			return
 		}
+
+		// Enforce IP restrictions (allow/deny lists) to prevent bypass via Google-style endpoints.
+		// Error message intentionally generic.
+		if len(apiKey.IPWhitelist) > 0 || len(apiKey.IPBlacklist) > 0 {
+			clientIP := ip.GetClientIP(c)
+			allowed, _ := ip.CheckIPRestriction(clientIP, apiKey.IPWhitelist, apiKey.IPBlacklist)
+			if !allowed {
+				abortWithGoogleError(c, 403, "Access denied")
+				return
+			}
+		}
 		if apiKey.User == nil {
 			abortWithGoogleError(c, 401, "User associated with API key not found")
 			return
 		}
 		if !apiKey.User.IsActive() {
 			abortWithGoogleError(c, 401, "User account is not active")
+			return
+		}
+
+		// Disabled group must be enforced to prevent privilege bypass.
+		if apiKey.Group != nil && !apiKey.Group.IsActive() {
+			abortWithGoogleError(c, 403, "Group is disabled")
+			return
+		}
+
+		// Enforce AllowedGroups as runtime ACL (revocation must take effect promptly).
+		//
+		// For subscription-type groups, the active subscription is the entitlement source.
+		// Requiring AllowedGroups here can incorrectly block paid subscribers. In simple mode we still
+		// enforce AllowedGroups because subscription checks are skipped.
+		if apiKey.Group != nil && (cfg.RunMode == config.RunModeSimple || !apiKey.Group.IsSubscriptionType()) && !apiKey.User.CanBindGroup(apiKey.Group.ID, apiKey.Group.IsExclusive) {
+			abortWithGoogleError(c, 403, "Group is not allowed")
 			return
 		}
 
@@ -108,7 +136,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 	}
 }
 
-func extractAPIKeyFromRequest(c *gin.Context) string {
+func extractAPIKeyFromRequest(c *gin.Context, cfg *config.Config) string {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader != "" {
 		parts := strings.SplitN(authHeader, " ", 2)
@@ -122,7 +150,7 @@ func extractAPIKeyFromRequest(c *gin.Context) string {
 	if v := strings.TrimSpace(c.GetHeader("x-goog-api-key")); v != "" {
 		return v
 	}
-	if allowGoogleQueryKey(c.Request.URL.Path) {
+	if allowGoogleQueryKey(cfg, c.Request.URL.Path) {
 		if v := strings.TrimSpace(c.Query("key")); v != "" {
 			return v
 		}
@@ -130,8 +158,14 @@ func extractAPIKeyFromRequest(c *gin.Context) string {
 	return ""
 }
 
-func allowGoogleQueryKey(path string) bool {
-	return strings.HasPrefix(path, "/v1beta") || strings.HasPrefix(path, "/antigravity/v1beta")
+func allowGoogleQueryKey(cfg *config.Config, path string) bool {
+	if cfg == nil || !cfg.Gateway.AllowGoogleQueryKey {
+		return false
+	}
+	return strings.HasPrefix(path, "/v1beta") ||
+		strings.HasPrefix(path, "/antigravity/v1beta") ||
+		strings.HasPrefix(path, "/v1internal") ||
+		strings.HasPrefix(path, "/antigravity/v1internal")
 }
 
 func abortWithGoogleError(c *gin.Context, status int, message string) {

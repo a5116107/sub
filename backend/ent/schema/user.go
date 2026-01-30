@@ -72,6 +72,19 @@ func (User) Fields() []ent.Field {
 		field.Time("totp_enabled_at").
 			Optional().
 			Nillable(),
+
+		// Referral / invite system
+		field.String("invite_code").
+			MaxLen(32).
+			Optional().
+			Nillable(),
+		field.Int64("invited_by_user_id").
+			Optional().
+			Nillable(),
+		field.Time("invited_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 	}
 }
 
@@ -79,6 +92,7 @@ func (User) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("api_keys", APIKey.Type),
 		edge.To("redeem_codes", RedeemCode.Type),
+		edge.To("payment_orders", PaymentOrder.Type),
 		edge.To("subscriptions", UserSubscription.Type),
 		edge.To("assigned_subscriptions", UserSubscription.Type),
 		edge.To("allowed_groups", Group.Type).

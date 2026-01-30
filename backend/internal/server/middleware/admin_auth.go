@@ -135,6 +135,10 @@ func validateAdminAPIKey(
 		AbortWithError(c, 500, "INTERNAL_ERROR", "No admin user found")
 		return false
 	}
+	if admin == nil || admin.ID == 0 || !admin.IsActive() || !admin.IsAdmin() {
+		AbortWithError(c, 500, "INTERNAL_ERROR", "No admin user found")
+		return false
+	}
 
 	c.Set(string(ContextKeyUser), AuthSubject{
 		UserID:      admin.ID,

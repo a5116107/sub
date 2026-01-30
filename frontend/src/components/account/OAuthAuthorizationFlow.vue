@@ -428,7 +428,7 @@ interface Props {
   allowMultiple?: boolean
   methodLabel?: string
   showCookieOption?: boolean // Whether to show cookie auto-auth option
-  platform?: 'anthropic' | 'openai' | 'gemini' | 'antigravity' // Platform type for different UI/text
+  platform?: 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'qwen' | 'iflow' // Platform type for different UI/text
   showProjectId?: boolean // New prop to control project ID visibility
 }
 
@@ -450,6 +450,7 @@ const emit = defineEmits<{
   'generate-url': []
   'exchange-code': [code: string]
   'cookie-auth': [sessionKey: string]
+  'update:authCode': [code: string]
   'update:inputMethod': [method: AuthInputMethod]
 }>()
 
@@ -506,6 +507,14 @@ const parsedKeyCount = computed(() => {
 watch(inputMethod, (newVal) => {
   emit('update:inputMethod', newVal)
 })
+
+watch(
+  authCodeInput,
+  (newVal) => {
+    emit('update:authCode', newVal)
+  },
+  { immediate: true }
+)
 
 // Auto-extract code from callback URL (OpenAI/Gemini/Antigravity)
 // e.g., http://localhost:8085/callback?code=xxx...&state=...

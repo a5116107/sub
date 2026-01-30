@@ -12,6 +12,15 @@ const setupClient = axios.create({
   }
 })
 
+export function setSetupToken(token?: string): void {
+  const trimmed = (token || '').trim()
+  if (trimmed) {
+    setupClient.defaults.headers.common['X-Setup-Token'] = trimmed
+  } else {
+    delete setupClient.defaults.headers.common['X-Setup-Token']
+  }
+}
+
 export interface SetupStatus {
   needs_setup: boolean
   step: string

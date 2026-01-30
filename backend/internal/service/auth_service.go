@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 
@@ -46,33 +47,39 @@ type JWTClaims struct {
 
 // AuthService 认证服务
 type AuthService struct {
-	userRepo          UserRepository
-	cfg               *config.Config
-	settingService    *SettingService
-	emailService      *EmailService
-	turnstileService  *TurnstileService
-	emailQueueService *EmailQueueService
-	promoService      *PromoService
+	userRepo             UserRepository
+	entClient            *dbent.Client
+	cfg                  *config.Config
+	settingService       *SettingService
+	emailService         *EmailService
+	turnstileService     *TurnstileService
+	emailQueueService    *EmailQueueService
+	promoService         *PromoService
+	authCacheInvalidator APIKeyAuthCacheInvalidator
 }
 
 // NewAuthService 创建认证服务实例
 func NewAuthService(
 	userRepo UserRepository,
+	entClient *dbent.Client,
 	cfg *config.Config,
 	settingService *SettingService,
 	emailService *EmailService,
 	turnstileService *TurnstileService,
 	emailQueueService *EmailQueueService,
 	promoService *PromoService,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
 ) *AuthService {
 	return &AuthService{
-		userRepo:          userRepo,
-		cfg:               cfg,
-		settingService:    settingService,
-		emailService:      emailService,
-		turnstileService:  turnstileService,
-		emailQueueService: emailQueueService,
-		promoService:      promoService,
+		userRepo:             userRepo,
+		entClient:            entClient,
+		cfg:                  cfg,
+		settingService:       settingService,
+		emailService:         emailService,
+		turnstileService:     turnstileService,
+		emailQueueService:    emailQueueService,
+		promoService:         promoService,
+		authCacheInvalidator: authCacheInvalidator,
 	}
 }
 
@@ -153,13 +160,42 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		return "", nil, ErrServiceUnavailable
 	}
 
-	// 应用优惠码（如果提供且功能已启用）
-	if promoCode != "" && s.promoService != nil && s.settingService != nil && s.settingService.IsPromoCodeEnabled(ctx) {
-		if err := s.promoService.ApplyPromoCode(ctx, user.ID, promoCode); err != nil {
-			// 优惠码应用失败不影响注册，只记录日志
-			log.Printf("[Auth] Failed to apply promo code for user %d: %v", user.ID, err)
-		} else {
-			// 重新获取用户信息以获取更新后的余额
+	// Ensure per-user invite code is allocated (best-effort).
+	if _, err := EnsureUserInviteCode(ctx, s.userRepo, user); err != nil {
+		log.Printf("[Auth] Failed to ensure invite code for user %d: %v", user.ID, err)
+	}
+
+	// Apply registration code (promo code or user invite code), best-effort.
+	code := strings.TrimSpace(promoCode)
+	if code != "" && s.settingService != nil && s.settingService.IsPromoCodeEnabled(ctx) {
+		changed := false
+
+		// 1) Promo codes (admin-managed)
+		if s.promoService != nil {
+			if _, err := s.promoService.ValidatePromoCode(ctx, code); err == nil {
+				if err := s.promoService.ApplyPromoCode(ctx, user.ID, code); err != nil {
+					log.Printf("[Auth] Failed to apply promo code for user %d: %v", user.ID, err)
+				} else {
+					changed = true
+				}
+			} else if !errors.Is(err, ErrPromoCodeNotFound) {
+				// If this is a real promo code but not usable (expired/disabled/maxed), don't treat it as invite code.
+				log.Printf("[Auth] Promo code validation failed for user %d: %v", user.ID, err)
+				changed = true
+			}
+		}
+
+		// 2) User invite codes (per-user referral)
+		if !changed {
+			if applied, err := s.applyInviteCode(ctx, user, code); err != nil {
+				log.Printf("[Auth] Failed to apply invite code for user %d: %v", user.ID, err)
+			} else if applied {
+				changed = true
+			}
+		}
+
+		if changed {
+			// Reload user for updated balance/invite metadata.
 			if updatedUser, err := s.userRepo.GetByID(ctx, user.ID); err == nil {
 				user = updatedUser
 			}
@@ -173,6 +209,117 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	}
 
 	return token, user, nil
+}
+
+func (s *AuthService) applyInviteCode(ctx context.Context, user *User, inviteCode string) (bool, error) {
+	inviteCode = strings.TrimSpace(inviteCode)
+	if inviteCode == "" || user == nil || user.ID == 0 {
+		return false, nil
+	}
+
+	// Only allow one inviter binding.
+	if user.InvitedByUserID != nil && *user.InvitedByUserID != 0 {
+		return false, nil
+	}
+
+	inviter, err := s.userRepo.GetByInviteCode(ctx, inviteCode)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	if inviter == nil || inviter.ID == 0 || !inviter.IsActive() {
+		return false, nil
+	}
+
+	// Prevent self-invite (shouldn't happen during normal registration).
+	if inviter.ID == user.ID {
+		return false, nil
+	}
+
+	inviteeBonus := 0.0
+	inviterBonus := 0.0
+	if s.settingService != nil {
+		inviteeBonus = s.settingService.GetReferralInviteeBonus(ctx)
+		inviterBonus = s.settingService.GetReferralInviterBonus(ctx)
+	}
+
+	// Use a DB transaction to ensure inviter binding and bonuses are applied atomically.
+	// Without this, transient errors could bind inviter but skip bonuses (and the user can't retry).
+	if s.entClient == nil {
+		// Fallback to best-effort (non-atomic) behavior for tests/misconfigured deployments.
+		invitedAt := time.Now()
+		updated, err := s.userRepo.SetInvitedByIfEmpty(ctx, user.ID, inviter.ID, invitedAt)
+		if err != nil {
+			return false, err
+		}
+		if !updated {
+			return false, nil
+		}
+
+		user.InvitedByUserID = &inviter.ID
+		user.InvitedAt = &invitedAt
+
+		if inviteeBonus > 0 {
+			if err := s.userRepo.UpdateBalance(ctx, user.ID, inviteeBonus); err != nil {
+				return true, err
+			}
+		}
+		if inviterBonus > 0 {
+			if err := s.userRepo.UpdateBalance(ctx, inviter.ID, inviterBonus); err != nil {
+				return true, err
+			}
+		}
+		if (inviteeBonus > 0 || inviterBonus > 0) && s.authCacheInvalidator != nil {
+			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
+			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, inviter.ID)
+		}
+		return true, nil
+	}
+
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return false, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+
+	invitedAt := time.Now()
+	updated, err := s.userRepo.SetInvitedByIfEmpty(txCtx, user.ID, inviter.ID, invitedAt)
+	if err != nil {
+		return false, err
+	}
+	if !updated {
+		return false, nil
+	}
+
+	if inviteeBonus > 0 {
+		if err := s.userRepo.UpdateBalance(txCtx, user.ID, inviteeBonus); err != nil {
+			return true, err
+		}
+	}
+
+	if inviterBonus > 0 {
+		if err := s.userRepo.UpdateBalance(txCtx, inviter.ID, inviterBonus); err != nil {
+			return true, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return true, fmt.Errorf("commit transaction: %w", err)
+	}
+
+	user.InvitedByUserID = &inviter.ID
+	user.InvitedAt = &invitedAt
+
+	if (inviteeBonus > 0 || inviterBonus > 0) && s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
+		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, inviter.ID)
+	}
+
+	return true, nil
 }
 
 // SendVerifyCodeResult 发送验证码返回结果

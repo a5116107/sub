@@ -80,6 +80,11 @@ func Model(v string) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldModel, v))
 }
 
+// BilledModel applies equality check predicate on the "billed_model" field. It's identical to BilledModelEQ.
+func BilledModel(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldBilledModel, v))
+}
+
 // GroupID applies equality check predicate on the "group_id" field. It's identical to GroupIDEQ.
 func GroupID(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldGroupID, v))
@@ -393,6 +398,81 @@ func ModelEqualFold(v string) predicate.UsageLog {
 // ModelContainsFold applies the ContainsFold predicate on the "model" field.
 func ModelContainsFold(v string) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldContainsFold(FieldModel, v))
+}
+
+// BilledModelEQ applies the EQ predicate on the "billed_model" field.
+func BilledModelEQ(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldBilledModel, v))
+}
+
+// BilledModelNEQ applies the NEQ predicate on the "billed_model" field.
+func BilledModelNEQ(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldBilledModel, v))
+}
+
+// BilledModelIn applies the In predicate on the "billed_model" field.
+func BilledModelIn(vs ...string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldBilledModel, vs...))
+}
+
+// BilledModelNotIn applies the NotIn predicate on the "billed_model" field.
+func BilledModelNotIn(vs ...string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldBilledModel, vs...))
+}
+
+// BilledModelGT applies the GT predicate on the "billed_model" field.
+func BilledModelGT(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldBilledModel, v))
+}
+
+// BilledModelGTE applies the GTE predicate on the "billed_model" field.
+func BilledModelGTE(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldBilledModel, v))
+}
+
+// BilledModelLT applies the LT predicate on the "billed_model" field.
+func BilledModelLT(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldBilledModel, v))
+}
+
+// BilledModelLTE applies the LTE predicate on the "billed_model" field.
+func BilledModelLTE(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldBilledModel, v))
+}
+
+// BilledModelContains applies the Contains predicate on the "billed_model" field.
+func BilledModelContains(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldContains(FieldBilledModel, v))
+}
+
+// BilledModelHasPrefix applies the HasPrefix predicate on the "billed_model" field.
+func BilledModelHasPrefix(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldHasPrefix(FieldBilledModel, v))
+}
+
+// BilledModelHasSuffix applies the HasSuffix predicate on the "billed_model" field.
+func BilledModelHasSuffix(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldHasSuffix(FieldBilledModel, v))
+}
+
+// BilledModelIsNil applies the IsNil predicate on the "billed_model" field.
+func BilledModelIsNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIsNull(FieldBilledModel))
+}
+
+// BilledModelNotNil applies the NotNil predicate on the "billed_model" field.
+func BilledModelNotNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotNull(FieldBilledModel))
+}
+
+// BilledModelEqualFold applies the EqualFold predicate on the "billed_model" field.
+func BilledModelEqualFold(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEqualFold(FieldBilledModel, v))
+}
+
+// BilledModelContainsFold applies the ContainsFold predicate on the "billed_model" field.
+func BilledModelContainsFold(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldContainsFold(FieldBilledModel, v))
 }
 
 // GroupIDEQ applies the EQ predicate on the "group_id" field.

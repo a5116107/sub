@@ -9,6 +9,10 @@ type SystemSettings struct {
 	TotpEnabled                 bool `json:"totp_enabled"`                   // TOTP 双因素认证
 	TotpEncryptionKeyConfigured bool `json:"totp_encryption_key_configured"` // TOTP 加密密钥是否已配置
 
+	ReferralInviterBonus   float64 `json:"referral_inviter_bonus"`
+	ReferralInviteeBonus   float64 `json:"referral_invitee_bonus"`
+	ReferralCommissionRate float64 `json:"referral_commission_rate"`
+
 	SMTPHost               string `json:"smtp_host"`
 	SMTPPort               int    `json:"smtp_port"`
 	SMTPUsername           string `json:"smtp_username"`
@@ -26,14 +30,17 @@ type SystemSettings struct {
 	LinuxDoConnectClientSecretConfigured bool   `json:"linuxdo_connect_client_secret_configured"`
 	LinuxDoConnectRedirectURL            string `json:"linuxdo_connect_redirect_url"`
 
-	SiteName                    string `json:"site_name"`
-	SiteLogo                    string `json:"site_logo"`
-	SiteSubtitle                string `json:"site_subtitle"`
-	APIBaseURL                  string `json:"api_base_url"`
-	ContactInfo                 string `json:"contact_info"`
-	DocURL                      string `json:"doc_url"`
-	HomeContent                 string `json:"home_content"`
-	HideCcsImportButton         bool   `json:"hide_ccs_import_button"`
+	SiteName              string `json:"site_name"`
+	SiteLogo              string `json:"site_logo"`
+	SiteSubtitle          string `json:"site_subtitle"`
+	APIBaseURL            string `json:"api_base_url"`
+	ContactInfo           string `json:"contact_info"`
+	DocURL                string `json:"doc_url"`
+	HomeContent           string `json:"home_content"`
+	LandingPricingEnabled bool   `json:"landing_pricing_enabled"`
+	LandingPricingConfig  string `json:"landing_pricing_config"`
+	SubscriptionsEnabled  bool   `json:"subscriptions_enabled"`
+	HideCcsImportButton   bool   `json:"hide_ccs_import_button"`
 	PurchaseSubscriptionEnabled bool   `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     string `json:"purchase_subscription_url"`
 
@@ -73,6 +80,9 @@ type PublicSettings struct {
 	ContactInfo                 string `json:"contact_info"`
 	DocURL                      string `json:"doc_url"`
 	HomeContent                 string `json:"home_content"`
+	LandingPricingEnabled       bool   `json:"landing_pricing_enabled"`
+	LandingPricingConfig        string `json:"landing_pricing_config"`
+	SubscriptionsEnabled        bool   `json:"subscriptions_enabled"`
 	HideCcsImportButton         bool   `json:"hide_ccs_import_button"`
 	PurchaseSubscriptionEnabled bool   `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     string `json:"purchase_subscription_url"`

@@ -18,8 +18,14 @@ type User struct {
 	Status        string
 	AllowedGroups []int64
 	TokenVersion  int64 // Incremented on password change to invalidate existing tokens
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+
+	// Referral / invite system
+	InviteCode      *string
+	InvitedByUserID *int64
+	InvitedAt       *time.Time
+
+	CreatedAt time.Time
+	UpdatedAt time.Time
 
 	// TOTP 双因素认证字段
 	TotpSecretEncrypted *string    // AES-256-GCM 加密的 TOTP 密钥

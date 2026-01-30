@@ -7,6 +7,10 @@ type SystemSettings struct {
 	PasswordResetEnabled bool
 	TotpEnabled          bool // TOTP 双因素认证
 
+	ReferralInviterBonus   float64
+	ReferralInviteeBonus   float64
+	ReferralCommissionRate float64
+
 	SMTPHost               string
 	SMTPPort               int
 	SMTPUsername           string
@@ -28,14 +32,17 @@ type SystemSettings struct {
 	LinuxDoConnectClientSecretConfigured bool
 	LinuxDoConnectRedirectURL            string
 
-	SiteName                    string
-	SiteLogo                    string
-	SiteSubtitle                string
-	APIBaseURL                  string
-	ContactInfo                 string
-	DocURL                      string
-	HomeContent                 string
-	HideCcsImportButton         bool
+	SiteName              string
+	SiteLogo              string
+	SiteSubtitle          string
+	APIBaseURL            string
+	ContactInfo           string
+	DocURL                string
+	HomeContent           string
+	LandingPricingConfig  string
+	LandingPricingEnabled bool
+	SubscriptionsEnabled  bool
+	HideCcsImportButton   bool
 	PurchaseSubscriptionEnabled bool
 	PurchaseSubscriptionURL     string
 
@@ -75,11 +82,12 @@ type PublicSettings struct {
 	ContactInfo          string
 	DocURL               string
 	HomeContent          string
-	HideCcsImportButton  bool
-
+	LandingPricingConfig  string
+	LandingPricingEnabled bool
+	SubscriptionsEnabled  bool
+	HideCcsImportButton   bool
 	PurchaseSubscriptionEnabled bool
 	PurchaseSubscriptionURL     string
-
 	LinuxDoOAuthEnabled bool
 	Version             string
 }

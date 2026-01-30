@@ -1,5 +1,8 @@
 <template>
-  <div v-if="selectedIds.length > 0" class="mb-4 flex items-center justify-between p-3 bg-primary-50 rounded-lg dark:bg-primary-900/20">
+  <div
+    v-if="selectedIds.length > 0"
+    class="mb-4 flex items-center justify-between rounded-lg bg-primary-50 p-3 dark:bg-primary-900/20"
+  >
     <div class="flex flex-wrap items-center gap-2">
       <span class="text-sm font-medium text-primary-900 dark:text-primary-100">
         {{ t('admin.accounts.bulkActions.selected', { count: selectedIds.length }) }}
@@ -19,15 +22,42 @@
       </button>
     </div>
     <div class="flex gap-2">
-      <button @click="$emit('delete')" class="btn btn-danger btn-sm">{{ t('admin.accounts.bulkActions.delete') }}</button>
-      <button @click="$emit('toggle-schedulable', true)" class="btn btn-success btn-sm">{{ t('admin.accounts.bulkActions.enableScheduling') }}</button>
-      <button @click="$emit('toggle-schedulable', false)" class="btn btn-warning btn-sm">{{ t('admin.accounts.bulkActions.disableScheduling') }}</button>
-      <button @click="$emit('edit')" class="btn btn-primary btn-sm">{{ t('admin.accounts.bulkActions.edit') }}</button>
+      <button @click="$emit('delete')" class="btn btn-danger btn-sm">
+        {{ t('admin.accounts.bulkActions.delete') }}
+      </button>
+      <button @click="$emit('toggle-schedulable', true)" class="btn btn-success btn-sm">
+        {{ t('admin.accounts.bulkActions.enableScheduling') }}
+      </button>
+      <button @click="$emit('toggle-schedulable', false)" class="btn btn-warning btn-sm">
+        {{ t('admin.accounts.bulkActions.disableScheduling') }}
+      </button>
+      <button v-if="showRefreshTier" @click="$emit('refresh-tier')" class="btn btn-secondary btn-sm" :disabled="refreshTierLoading">
+        {{ t('admin.accounts.bulkActions.refreshTier') }}
+      </button>
+      <button @click="$emit('edit')" class="btn btn-primary btn-sm">
+        {{ t('admin.accounts.bulkActions.edit') }}
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-defineProps(['selectedIds']); defineEmits(['delete', 'edit', 'clear', 'select-page', 'toggle-schedulable']); const { t } = useI18n()
+
+defineProps<{
+  selectedIds: number[]
+  showRefreshTier?: boolean
+  refreshTierLoading?: boolean
+}>()
+
+defineEmits<{
+  (e: 'delete'): void
+  (e: 'edit'): void
+  (e: 'clear'): void
+  (e: 'select-page'): void
+  (e: 'toggle-schedulable', enabled: boolean): void
+  (e: 'refresh-tier'): void
+}>()
+
+const { t } = useI18n()
 </script>

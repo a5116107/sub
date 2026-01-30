@@ -12,6 +12,8 @@ export interface AdminUsageStatsResponse {
   total_requests: number
   total_input_tokens: number
   total_output_tokens: number
+  total_cache_creation_tokens: number
+  total_cache_read_tokens: number
   total_cache_tokens: number
   total_tokens: number
   total_cost: number
@@ -109,9 +111,10 @@ export async function getStats(params: {
   start_date?: string
   end_date?: string
   timezone?: string
-}): Promise<AdminUsageStatsResponse> {
+}, options?: { signal?: AbortSignal }): Promise<AdminUsageStatsResponse> {
   const { data } = await apiClient.get<AdminUsageStatsResponse>('/admin/usage/stats', {
-    params
+    params,
+    signal: options?.signal
   })
   return data
 }

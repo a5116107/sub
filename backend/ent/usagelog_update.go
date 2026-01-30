@@ -102,6 +102,26 @@ func (_u *UsageLogUpdate) SetNillableModel(v *string) *UsageLogUpdate {
 	return _u
 }
 
+// SetBilledModel sets the "billed_model" field.
+func (_u *UsageLogUpdate) SetBilledModel(v string) *UsageLogUpdate {
+	_u.mutation.SetBilledModel(v)
+	return _u
+}
+
+// SetNillableBilledModel sets the "billed_model" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableBilledModel(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetBilledModel(*v)
+	}
+	return _u
+}
+
+// ClearBilledModel clears the value of the "billed_model" field.
+func (_u *UsageLogUpdate) ClearBilledModel() *UsageLogUpdate {
+	_u.mutation.ClearBilledModel()
+	return _u
+}
+
 // SetGroupID sets the "group_id" field.
 func (_u *UsageLogUpdate) SetGroupID(v int64) *UsageLogUpdate {
 	_u.mutation.SetGroupID(v)
@@ -711,6 +731,11 @@ func (_u *UsageLogUpdate) check() error {
 			return &ValidationError{Name: "model", err: fmt.Errorf(`ent: validator failed for field "UsageLog.model": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.BilledModel(); ok {
+		if err := usagelog.BilledModelValidator(v); err != nil {
+			return &ValidationError{Name: "billed_model", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billed_model": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.UserAgent(); ok {
 		if err := usagelog.UserAgentValidator(v); err != nil {
 			return &ValidationError{Name: "user_agent", err: fmt.Errorf(`ent: validator failed for field "UsageLog.user_agent": %w`, err)}
@@ -755,6 +780,12 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Model(); ok {
 		_spec.SetField(usagelog.FieldModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.BilledModel(); ok {
+		_spec.SetField(usagelog.FieldBilledModel, field.TypeString, value)
+	}
+	if _u.mutation.BilledModelCleared() {
+		_spec.ClearField(usagelog.FieldBilledModel, field.TypeString)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
@@ -1126,6 +1157,26 @@ func (_u *UsageLogUpdateOne) SetNillableModel(v *string) *UsageLogUpdateOne {
 	if v != nil {
 		_u.SetModel(*v)
 	}
+	return _u
+}
+
+// SetBilledModel sets the "billed_model" field.
+func (_u *UsageLogUpdateOne) SetBilledModel(v string) *UsageLogUpdateOne {
+	_u.mutation.SetBilledModel(v)
+	return _u
+}
+
+// SetNillableBilledModel sets the "billed_model" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableBilledModel(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetBilledModel(*v)
+	}
+	return _u
+}
+
+// ClearBilledModel clears the value of the "billed_model" field.
+func (_u *UsageLogUpdateOne) ClearBilledModel() *UsageLogUpdateOne {
+	_u.mutation.ClearBilledModel()
 	return _u
 }
 
@@ -1751,6 +1802,11 @@ func (_u *UsageLogUpdateOne) check() error {
 			return &ValidationError{Name: "model", err: fmt.Errorf(`ent: validator failed for field "UsageLog.model": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.BilledModel(); ok {
+		if err := usagelog.BilledModelValidator(v); err != nil {
+			return &ValidationError{Name: "billed_model", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billed_model": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.UserAgent(); ok {
 		if err := usagelog.UserAgentValidator(v); err != nil {
 			return &ValidationError{Name: "user_agent", err: fmt.Errorf(`ent: validator failed for field "UsageLog.user_agent": %w`, err)}
@@ -1812,6 +1868,12 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if value, ok := _u.mutation.Model(); ok {
 		_spec.SetField(usagelog.FieldModel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.BilledModel(); ok {
+		_spec.SetField(usagelog.FieldBilledModel, field.TypeString, value)
+	}
+	if _u.mutation.BilledModelCleared() {
+		_spec.ClearField(usagelog.FieldBilledModel, field.TypeString)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)

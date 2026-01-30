@@ -132,6 +132,8 @@
         :show-project-id="isGemini && geminiOAuthType === 'code_assist'"
         @generate-url="handleGenerateUrl"
         @cookie-auth="handleCookieAuth"
+        @update:authCode="handleOAuthAuthCodeUpdate"
+        @update:inputMethod="handleOAuthInputMethodUpdate"
       />
 
     </div>
@@ -230,6 +232,16 @@ const antigravityOAuth = useAntigravityOAuth()
 
 // Refs
 const oauthFlowRef = ref<OAuthFlowExposed | null>(null)
+const oauthAuthCode = ref('')
+const oauthInputMethod = ref<AuthInputMethod>('manual')
+
+const handleOAuthAuthCodeUpdate = (code: string) => {
+  oauthAuthCode.value = code
+}
+
+const handleOAuthInputMethodUpdate = (method: AuthInputMethod) => {
+  oauthInputMethod.value = method
+}
 
 // State
 const addMethod = ref<AddMethod>('oauth')
@@ -270,11 +282,11 @@ const currentError = computed(() => {
 // Computed
 const isManualInputMethod = computed(() => {
   // OpenAI/Gemini/Antigravity always use manual input (no cookie auth option)
-  return isOpenAI.value || isGemini.value || isAntigravity.value || oauthFlowRef.value?.inputMethod === 'manual'
+  return isOpenAI.value || isGemini.value || isAntigravity.value || oauthInputMethod.value === 'manual'
 })
 
 const canExchangeCode = computed(() => {
-  const authCode = oauthFlowRef.value?.authCode || ''
+  const authCode = oauthAuthCode.value || ''
   const sessionId = currentSessionId.value
   const loading = currentLoading.value
   return authCode.trim() && sessionId && !loading
@@ -315,6 +327,8 @@ const resetState = () => {
   openaiOAuth.resetState()
   geminiOAuth.resetState()
   antigravityOAuth.resetState()
+  oauthAuthCode.value = ''
+  oauthInputMethod.value = 'manual'
   oauthFlowRef.value?.reset()
 }
 
@@ -342,7 +356,7 @@ const handleGenerateUrl = async () => {
 const handleExchangeCode = async () => {
   if (!props.account) return
 
-  const authCode = oauthFlowRef.value?.authCode || ''
+  const authCode = oauthAuthCode.value || ''
   if (!authCode.trim()) return
 
   if (isOpenAI.value) {

@@ -1,0 +1,205 @@
+# =============================================================================
+# Sub2API Development Docker Compose (Frontend + Backend)
+# =============================================================================
+# Quick Start:
+#   1) cd deploy
+#   2) cp .env.example .env   (set POSTGRES_PASSWORD at least)
+#   3) docker compose -f docker-compose.dev.yml up -d --build
+#
+# Access:
+#   - Frontend (Vite): http://localhost:${FRONTEND_PORT:-3000}
+#   - Backend API:     http://localhost:${SERVER_PORT:-8080}
+#
+# Notes:
+#   - Frontend uses Vite proxy to talk to backend (no CORS needed)
+#   - node_modules / pnpm store / Go caches use named volumes (fast restarts)
+# =============================================================================
+
+name: sub2api-dev
+
+services:
+  # ---------------------------------------------------------------------------
+  # Backend (Go) - runs from source
+  # ---------------------------------------------------------------------------
+  backend:
+    image: sub2api-backend-dev:latest
+    container_name: sub2api-dev-backend
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.backend.dev
+    working_dir: /app/backend
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 100000
+        hard: 100000
+    ports:
+      - "${BIND_HOST:-0.0.0.0}:${SERVER_PORT:-8080}:8080"
+    volumes:
+      - sub2api_data:/app/data
+      - ../backend:/app/backend
+      - type: volume
+        source: go_mod_cache
+        target: /go/pkg/mod
+      - type: volume
+        source: go_build_cache
+        target: /root/.cache/go-build
+    environment:
+      - AUTO_SETUP=true
+
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - SERVER_MODE=${DEV_SERVER_MODE:-debug}
+      - RUN_MODE=${RUN_MODE:-standard}
+
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=${POSTGRES_USER:-sub2api}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - DATABASE_DBNAME=${POSTGRES_DB:-sub2api}
+      - DATABASE_SSLMODE=disable
+
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=${REDIS_DB:-0}
+
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@sub2api.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+
+      - JWT_SECRET=${JWT_SECRET:-}
+      - JWT_EXPIRE_HOUR=${JWT_EXPIRE_HOUR:-24}
+
+      - TZ=${TZ:-Asia/Shanghai}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Frontend (Vite) - runs dev server
+  # ---------------------------------------------------------------------------
+  frontend:
+    image: sub2api-frontend-dev:latest
+    container_name: sub2api-dev-frontend
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend.dev
+    working_dir: /app/frontend
+    restart: unless-stopped
+    ports:
+      - "${BIND_HOST:-0.0.0.0}:${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - VITE_DEV_PORT=3000
+      - VITE_DEV_PROXY_TARGET=http://backend:8080
+      # Windows/macOS Docker bind mounts may miss FS events; polling is more reliable.
+      - CHOKIDAR_USEPOLLING=${CHOKIDAR_USEPOLLING:-true}
+    volumes:
+      - ../frontend:/app/frontend
+      - type: volume
+        source: frontend_node_modules
+        target: /app/frontend/node_modules
+        volume:
+          nocopy: true
+      - type: volume
+        source: frontend_pnpm_store
+        target: /pnpm-store
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - sub2api-network
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18-alpine
+    container_name: sub2api-dev-postgres
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 100000
+        hard: 100000
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-sub2api}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - POSTGRES_DB=${POSTGRES_DB:-sub2api}
+      - TZ=${TZ:-Asia/Shanghai}
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sub2api} -d ${POSTGRES_DB:-sub2api}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Redis
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:8-alpine
+    container_name: sub2api-dev-redis
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 100000
+        hard: 100000
+    volumes:
+      - redis_data:/data
+    command: >
+      sh -c '
+        redis-server
+        --save 60 1
+        --appendonly yes
+        --appendfsync everysec
+        ${REDIS_PASSWORD:+--requirepass "$REDIS_PASSWORD"}'
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - REDISCLI_AUTH=${REDIS_PASSWORD:-}
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  sub2api_data:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  go_mod_cache:
+    driver: local
+  go_build_cache:
+    driver: local
+  frontend_node_modules:
+    driver: local
+  frontend_pnpm_store:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  sub2api-network:
+    driver: bridge

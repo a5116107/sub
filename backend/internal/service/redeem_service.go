@@ -28,6 +28,16 @@ const (
 	redeemLockDuration      = 10 * time.Second // 锁超时时间，防止死锁
 )
 
+func normalizeRedeemCode(code string) string {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return ""
+	}
+	// Remove all whitespace from copy/paste (spaces/newlines/tabs), keep dashes.
+	code = strings.Join(strings.Fields(code), "")
+	return strings.ToUpper(code)
+}
+
 // RedeemCache defines cache operations for redeem service
 type RedeemCache interface {
 	GetRedeemAttemptCount(ctx context.Context, userID int64) (int, error)
@@ -37,6 +47,7 @@ type RedeemCache interface {
 	ReleaseRedeemLock(ctx context.Context, code string) error
 }
 
+// RedeemCodeRepository provides redeem code persistence.
 type RedeemCodeRepository interface {
 	Create(ctx context.Context, code *RedeemCode) error
 	CreateBatch(ctx context.Context, codes []RedeemCode) error
@@ -49,6 +60,17 @@ type RedeemCodeRepository interface {
 	List(ctx context.Context, params pagination.PaginationParams) ([]RedeemCode, *pagination.PaginationResult, error)
 	ListWithFilters(ctx context.Context, params pagination.PaginationParams, codeType, status, search string) ([]RedeemCode, *pagination.PaginationResult, error)
 	ListByUser(ctx context.Context, userID int64, limit int) ([]RedeemCode, error)
+
+	GetStats(ctx context.Context) (*RedeemCodeStats, error)
+}
+
+type RedeemCodeStats struct {
+	TotalCodes            int64
+	ActiveCodes           int64
+	UsedCodes             int64
+	ExpiredCodes          int64
+	TotalValueDistributed float64
+	ByType                map[string]int64
 }
 
 // GenerateCodesRequest 生成兑换码请求
@@ -216,6 +238,8 @@ func (s *RedeemService) releaseRedeemLock(ctx context.Context, code string) {
 
 // Redeem 使用兑换码
 func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (*RedeemCode, error) {
+	code = normalizeRedeemCode(code)
+
 	// 检查限流
 	if err := s.checkRedeemRateLimit(ctx, userID); err != nil {
 		return nil, err
@@ -414,18 +438,24 @@ func (s *RedeemService) Delete(ctx context.Context, id int64) error {
 
 // GetStats 获取兑换码统计信息
 func (s *RedeemService) GetStats(ctx context.Context) (map[string]any, error) {
-	// TODO: 实现统计逻辑
 	// 统计未使用、已使用的兑换码数量
 	// 统计总面值等
 
-	stats := map[string]any{
-		"total_codes":  0,
-		"unused_codes": 0,
-		"used_codes":   0,
-		"total_value":  0.0,
+	if s == nil || s.redeemRepo == nil {
+		return nil, fmt.Errorf("redeem repository not configured")
 	}
 
-	return stats, nil
+	stats, err := s.redeemRepo.GetStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
+		"total_codes":  stats.TotalCodes,
+		"unused_codes": stats.ActiveCodes,
+		"used_codes":   stats.UsedCodes,
+		"total_value":  stats.TotalValueDistributed,
+	}, nil
 }
 
 // GetUserHistory 获取用户的兑换历史

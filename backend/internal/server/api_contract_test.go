@@ -237,6 +237,81 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
+			name: "GET /api/v1/subscriptions/:id/progress (own subscription)",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+
+				windowStart := time.Date(2025, 1, 1, 3, 4, 5, 0, time.UTC)
+				deps.userSubRepo.SetByUserID(1, []service.UserSubscription{
+					{
+						ID:            501,
+						UserID:        1,
+						GroupID:       10,
+						StartsAt:      deps.now,
+						ExpiresAt:     deps.now, // use past date so expires_in_days is stable (0)
+						Status:        service.SubscriptionStatusActive,
+						DailyUsageUSD: 2.5,
+						// include group to avoid groupRepo lookup in GetSubscriptionProgress
+						Group: &service.Group{
+							ID:           10,
+							Name:         "Group One",
+							DailyLimitUSD: ptr(10.0),
+						},
+						DailyWindowStart: &windowStart,
+						CreatedAt:        deps.now,
+						UpdatedAt:        deps.now,
+					},
+				})
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/subscriptions/501/progress",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": {
+					"id": 501,
+					"group_name": "Group One",
+					"expires_at": "2025-01-02T03:04:05Z",
+					"expires_in_days": 0,
+					"daily": {
+						"limit_usd": 10,
+						"used_usd": 2.5,
+						"remaining_usd": 7.5,
+						"percentage": 25,
+						"window_start": "2025-01-01T03:04:05Z",
+						"resets_at": "2025-01-02T03:04:05Z",
+						"resets_in_seconds": 0
+					}
+				}
+			}`,
+		},
+		{
+			name: "GET /api/v1/subscriptions/:id/progress (other user's subscription)",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.userSubRepo.SetByUserID(2, []service.UserSubscription{
+					{
+						ID:        502,
+						UserID:    2,
+						GroupID:   10,
+						StartsAt:  deps.now,
+						ExpiresAt: deps.now,
+						Status:    service.SubscriptionStatusActive,
+						CreatedAt: deps.now,
+						UpdatedAt: deps.now,
+					},
+				})
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/subscriptions/502/progress",
+			wantStatus: http.StatusNotFound,
+			wantJSON: `{
+				"code": 404,
+				"message": "Subscription not found"
+			}`,
+		},
+		{
 			name: "GET /api/v1/redeem/history",
 			setup: func(t *testing.T, deps *contractDeps) {
 				t.Helper()
@@ -584,20 +659,20 @@ func newContractDeps(t *testing.T) *contractDeps {
 		RunMode: config.RunModeStandard,
 	}
 
+	settingRepo := newStubSettingRepo()
+	settingService := service.NewSettingService(settingRepo, cfg)
+
 	userService := service.NewUserService(userRepo, nil)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, apiKeyCache, cfg)
 
 	usageRepo := newStubUsageLogRepo()
-	usageService := service.NewUsageService(usageRepo, userRepo, nil, nil)
+	usageService := service.NewUsageService(usageRepo, userRepo, nil, nil, nil)
 
 	subscriptionService := service.NewSubscriptionService(groupRepo, userSubRepo, nil)
-	subscriptionHandler := handler.NewSubscriptionHandler(subscriptionService)
+	subscriptionHandler := handler.NewSubscriptionHandler(subscriptionService, settingService)
 
 	redeemService := service.NewRedeemService(redeemRepo, userRepo, subscriptionService, nil, nil, nil, nil)
 	redeemHandler := handler.NewRedeemHandler(redeemService)
-
-	settingRepo := newStubSettingRepo()
-	settingService := service.NewSettingService(settingRepo, cfg)
 
 	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, nil)
@@ -645,6 +720,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Subs := v1.Group("")
 	v1Subs.Use(jwtAuth)
 	v1Subs.GET("/subscriptions", subscriptionHandler.List)
+	v1Subs.GET("/subscriptions/:id/progress", subscriptionHandler.GetProgressByID)
 
 	v1Redeem := v1.Group("")
 	v1Redeem.Use(jwtAuth)
@@ -1142,29 +1218,50 @@ func (r *stubRedeemCodeRepo) ListByUser(ctx context.Context, userID int64, limit
 }
 
 type stubUserSubscriptionRepo struct {
+	byID         map[int64]service.UserSubscription
 	byUser       map[int64][]service.UserSubscription
 	activeByUser map[int64][]service.UserSubscription
 }
 
 func (r *stubUserSubscriptionRepo) SetByUserID(userID int64, subs []service.UserSubscription) {
+	if r.byID == nil {
+		r.byID = make(map[int64]service.UserSubscription)
+	}
 	if r.byUser == nil {
 		r.byUser = make(map[int64][]service.UserSubscription)
 	}
 	r.byUser[userID] = append([]service.UserSubscription(nil), subs...)
+	for _, sub := range subs {
+		r.byID[sub.ID] = sub
+	}
 }
 
 func (r *stubUserSubscriptionRepo) SetActiveByUserID(userID int64, subs []service.UserSubscription) {
+	if r.byID == nil {
+		r.byID = make(map[int64]service.UserSubscription)
+	}
 	if r.activeByUser == nil {
 		r.activeByUser = make(map[int64][]service.UserSubscription)
 	}
 	r.activeByUser[userID] = append([]service.UserSubscription(nil), subs...)
+	for _, sub := range subs {
+		r.byID[sub.ID] = sub
+	}
 }
 
 func (stubUserSubscriptionRepo) Create(ctx context.Context, sub *service.UserSubscription) error {
 	return errors.New("not implemented")
 }
-func (stubUserSubscriptionRepo) GetByID(ctx context.Context, id int64) (*service.UserSubscription, error) {
-	return nil, errors.New("not implemented")
+func (r *stubUserSubscriptionRepo) GetByID(ctx context.Context, id int64) (*service.UserSubscription, error) {
+	if r.byID == nil {
+		return nil, service.ErrSubscriptionNotFound
+	}
+	sub, ok := r.byID[id]
+	if !ok {
+		return nil, service.ErrSubscriptionNotFound
+	}
+	clone := sub
+	return &clone, nil
 }
 func (stubUserSubscriptionRepo) GetByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
 	return nil, errors.New("not implemented")
@@ -1439,6 +1536,14 @@ func (r *stubUsageLogRepo) SetUserLogs(userID int64, logs []service.UsageLog) {
 
 func (r *stubUsageLogRepo) Create(ctx context.Context, log *service.UsageLog) (bool, error) {
 	return false, errors.New("not implemented")
+}
+
+func (r *stubUsageLogRepo) CreateBillingUsageEntry(ctx context.Context, entry *service.BillingUsageEntry) (bool, error) {
+	return false, errors.New("not implemented")
+}
+
+func (r *stubUsageLogRepo) MarkBillingUsageEntryApplied(ctx context.Context, id int64) error {
+	return errors.New("not implemented")
 }
 
 func (r *stubUsageLogRepo) GetByID(ctx context.Context, id int64) (*service.UsageLog, error) {

@@ -22,6 +22,8 @@ type BillingCache interface {
 	GetSubscriptionCache(ctx context.Context, userID, groupID int64) (*SubscriptionCacheData, error)
 	SetSubscriptionCache(ctx context.Context, userID, groupID int64, data *SubscriptionCacheData) error
 	UpdateSubscriptionUsage(ctx context.Context, userID, groupID int64, cost float64) error
+	ReserveSubscriptionUsage(ctx context.Context, userID, groupID int64, reserveUSD float64, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64) (int, error)
+	FinalizeSubscriptionUsage(ctx context.Context, userID, groupID int64, reservedUSD, actualUSD float64) error
 	InvalidateSubscriptionCache(ctx context.Context, userID, groupID int64) error
 }
 
@@ -182,11 +184,31 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 		}
 	}
 
-	// 2. 使用硬编码回退价格
-	fallback := s.getFallbackPricing(model)
-	if fallback != nil {
-		log.Printf("[Billing] Using fallback pricing for model: %s", model)
-		return fallback, nil
+	// 2. Missing pricing policy
+	policy := strings.ToLower(strings.TrimSpace(s.cfg.Pricing.MissingPolicy))
+	if policy == "" {
+		policy = "fallback_any"
+	}
+	switch policy {
+	case "fallback_any":
+		fallback := s.getFallbackPricing(model)
+		if fallback != nil {
+			log.Printf("[Billing] Missing pricing for model=%s; policy=%s (using fallback)", model, policy)
+			return fallback, nil
+		}
+	case "fallback_claude_only":
+		if strings.HasPrefix(model, "claude") {
+			fallback := s.getFallbackPricing(model)
+			if fallback != nil {
+				log.Printf("[Billing] Missing pricing for model=%s; policy=%s (using fallback)", model, policy)
+				return fallback, nil
+			}
+		}
+	case "fail_close":
+		// Always error below
+	default:
+		// Unknown policy -> be safe but deterministic
+		log.Printf("[Billing] Unknown pricing missing policy=%q; defaulting to fail_close", policy)
 	}
 
 	return nil, fmt.Errorf("pricing not found for model: %s", model)

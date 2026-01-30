@@ -10,6 +10,16 @@ export default {
     login: 'Login',
     getStarted: 'Get Started',
     goToDashboard: 'Go to Dashboard',
+    nav: {
+      enterprise: 'Enterprise-ready',
+      features: 'Features',
+      providers: 'Providers'
+    },
+    pricing: {
+      goToPurchase: 'Go to purchase',
+      nav: 'Pricing',
+      customHint: 'Custom billing is available for enterprise plans (contact sales).'
+    },
     tags: {
       subscriptionToApi: 'Subscription to API',
       stickySession: 'Sticky Session',
@@ -45,6 +55,11 @@ export default {
   setup: {
     title: 'Sub2API Setup',
     description: 'Configure your Sub2API instance',
+    token: {
+      label: 'Setup Token (optional)',
+      placeholder: 'Enter setup token',
+      help: 'If your server requires a setup token, enter it here.'
+    },
     database: {
       title: 'Database Configuration',
       description: 'Connect to your PostgreSQL database',
@@ -112,6 +127,9 @@ export default {
     update: 'Update',
     confirm: 'Confirm',
     reset: 'Reset',
+    format: 'Format',
+    preview: 'Preview',
+    invalidJson: 'Invalid JSON',
     search: 'Search',
     filter: 'Filter',
     export: 'Export',
@@ -207,6 +225,7 @@ export default {
     github: 'GitHub',
     mySubscriptions: 'My Subscriptions',
     buySubscription: 'Purchase Subscription',
+    purchase: 'Purchase',
     docs: 'Docs'
   },
 
@@ -560,6 +579,62 @@ export default {
     pleaseEnterCode: 'Please enter a redeem code'
   },
 
+  // Purchase
+  purchase: {
+    title: 'Purchase',
+    description: 'Choose a plan and complete your payment',
+    howToBuy: {
+      title: 'How to purchase',
+      desc: 'Select your plan and follow the payment steps. If online payment is unavailable, contact support.'
+    },
+    checkSubscriptions: 'Check subscriptions',
+    contact: 'Contact',
+    copyContact: 'Copy contact',
+    contactCopied: 'Contact copied',
+    selected: 'Selected',
+    notSelected: 'Not selected',
+    nextStep: 'Next step',
+    pleaseSelectPlan: 'Please select a plan',
+    noContactInfo: 'No contact info configured',
+    nextStepToast: 'Please contact support to complete your purchase.',
+    onlineTopupTitle: 'Online top-up',
+    onlineTopupDesc: 'Create a top-up order and pay via a supported provider. Your balance will be credited after the provider callback is verified.',
+    amountLabel: 'Amount',
+    providerLabel: 'Provider',
+    channelLabel: 'Channel',
+    amountRequired: 'Please enter a valid amount',
+    providerRequired: 'Please select a provider',
+    channelRequired: 'Please select a channel',
+    createOrder: 'Create order & pay',
+    creatingOrder: 'Creating order...',
+    paymentUnavailable: 'Online payment is currently unavailable',
+    paymentUnavailableHint: 'Ask the administrator to enable payment providers in the backend config.'
+  },
+
+  // Billing
+  billing: {
+    title: 'Billing',
+    description: 'Payment status and balance update',
+    currentBalance: 'Current Balance',
+    tip: 'Balance is credited after webhook verification. It may take a short while.',
+    refresh: 'Refresh',
+    refreshing: 'Refreshing...',
+    refreshFailed: 'Failed to refresh billing status',
+    goToPurchase: 'Go to purchase',
+    orderTitle: 'Latest order',
+    orderNo: 'Order No',
+    amount: 'Amount',
+    provider: 'Provider',
+    orderHint: 'If your balance does not update, please contact support with the order number.',
+    noOrder: 'No recent payment order found on this device.',
+    noOrderHint: 'If you just paid, go back to Purchase and try again, or contact support.',
+    statusPending: 'Pending',
+    statusPaid: 'Paid',
+    statusFailed: 'Failed',
+    statusCanceled: 'Canceled',
+    statusExpired: 'Expired'
+  },
+
   // Profile
   profile: {
     title: 'Profile Settings',
@@ -569,6 +644,9 @@ export default {
     memberSince: 'Member Since',
     administrator: 'Administrator',
     user: 'User',
+    inviteCode: 'Invite Code',
+    copyInviteCode: 'Copy code',
+    copyInviteLink: 'Copy register link',
     username: 'Username',
     enterUsername: 'Enter username',
     editProfile: 'Edit Profile',
@@ -722,6 +800,19 @@ export default {
       standard: 'Standard',
       noDataAvailable: 'No data available',
       recentUsage: 'Recent Usage',
+      backfill: {
+        open: 'Backfill',
+        title: 'Dashboard Aggregation Backfill',
+        description: 'Trigger a manual backfill for pre-aggregated dashboard data.',
+        start: 'Start Time',
+        end: 'End Time',
+        submit: 'Trigger Backfill',
+        invalidTime: 'Please provide a valid start and end time.',
+        invalidRange: 'Start time must be before end time.',
+        rangeTooLarge: 'Range too large (max {days} days).',
+        accepted: 'Backfill accepted. Aggregation will run in the background.',
+        failed: 'Failed to trigger backfill'
+      },
       failedToLoad: 'Failed to load dashboard statistics'
     },
 
@@ -967,7 +1058,9 @@ export default {
         anthropic: 'Anthropic',
         openai: 'OpenAI',
         gemini: 'Gemini',
-        antigravity: 'Antigravity'
+        antigravity: 'Antigravity',
+        qwen: 'Qwen',
+        iflow: 'iFlow'
       },
       deleteConfirm:
         "Are you sure you want to delete '{name}'? All associated API keys will no longer belong to any group.",
@@ -1027,6 +1120,8 @@ export default {
     subscriptions: {
       title: 'Subscription Management',
       description: 'Manage user subscriptions and quota limits',
+      disabled: 'Subscriptions are disabled',
+      disabledDesc: 'This feature is currently turned off by the administrator.',
       assignSubscription: 'Assign Subscription',
       adjustSubscription: 'Adjust Subscription',
       revokeSubscription: 'Revoke Subscription',
@@ -1151,7 +1246,9 @@ export default {
         claude: 'Claude',
         openai: 'OpenAI',
         gemini: 'Gemini',
-        antigravity: 'Antigravity'
+        antigravity: 'Antigravity',
+        qwen: 'Qwen',
+        iflow: 'iFlow'
       },
       types: {
         oauth: 'OAuth',
@@ -1254,9 +1351,16 @@ export default {
       testConnection: 'Test Connection',
       reAuthorize: 'Re-Authorize',
       refreshToken: 'Refresh Token',
+      refreshTier: 'Refresh Tier',
       noAccountsYet: 'No accounts yet',
       createFirstAccount: 'Create your first account to start using AI services.',
       tokenRefreshed: 'Token refreshed successfully',
+      tierRefreshed: 'Tier refreshed successfully',
+      batchTierRefreshTitle: 'Batch Tier Refresh',
+      batchTierRefreshSummary: 'Tier refresh: {success} succeeded, {failed} failed',
+      batchTierRefreshAccountId: 'Account ID',
+      batchTierRefreshError: 'Error',
+      batchTierRefreshFailed: 'Batch tier refresh failed',
       accountDeleted: 'Account deleted successfully',
       rateLimitCleared: 'Rate limit cleared successfully',
       bulkSchedulableEnabled: 'Successfully enabled scheduling for {count} account(s)',
@@ -1270,7 +1374,8 @@ export default {
         edit: 'Bulk Edit',
         delete: 'Bulk Delete',
         enableScheduling: 'Enable Scheduling',
-        disableScheduling: 'Disable Scheduling'
+        disableScheduling: 'Disable Scheduling',
+        refreshTier: 'Refresh Tier'
       },
       bulkEdit: {
         title: 'Bulk Edit Accounts',
@@ -1296,6 +1401,7 @@ export default {
       failedToResetStatus: 'Failed to reset account status',
       failedToLoad: 'Failed to load accounts',
       failedToRefresh: 'Failed to refresh token',
+      failedToRefreshTier: 'Failed to refresh tier',
       failedToDelete: 'Failed to delete account',
       failedToClearRateLimit: 'Failed to clear rate limit',
       deleteConfirm: "Are you sure you want to delete '{name}'? This action cannot be undone.",
@@ -1318,6 +1424,23 @@ export default {
       openai: {
         baseUrlHint: 'Leave default for official OpenAI API',
         apiKeyHint: 'Your OpenAI API Key'
+      },
+      // Qwen specific hints
+      qwen: {
+        baseUrlHint: 'Leave default for official Qwen API (default https://portal.qwen.ai/v1)',
+        apiKeyHint: 'Your Qwen API Key (or access token)',
+        deviceFlowNote: 'Recommended: use Device Flow to avoid copying tokens in the browser.',
+        accountType: {
+          oauthTitle: 'OAuth (Device Flow)',
+          oauthDesc: 'Authorize via user code; server securely exchanges tokens.',
+          apiKeyTitle: 'API Key',
+          apiKeyDesc: 'Manually enter an API key (or access token).'
+        }
+      },
+      // iFlow specific hints
+      iflow: {
+        baseUrlHint: 'Leave default for official iFlow API (default https://apis.iflow.cn/v1)',
+        apiKeyHint: 'Your iFlow API Key'
       },
       modelRestriction: 'Model Restriction (Optional)',
       modelWhitelist: 'Model Whitelist',
@@ -1482,6 +1605,17 @@ export default {
             'Option 1: Copy the complete URL\n(http://localhost:xxx/auth/callback?code=...)\nOption 2: Copy only the code parameter value',
           authCodeHint:
             'You can copy the entire URL or just the code parameter value, the system will auto-detect'
+        },
+        // Qwen specific
+        qwen: {
+          title: 'Qwen Account Authorization',
+          deviceFlowTitle: 'Qwen Device Flow Authorization',
+          deviceFlowDesc: 'Open the verification URL and enter the user code to authorize.',
+          start: 'Start Authorization',
+          starting: 'Starting...',
+          userCodeLabel: 'User Code',
+          verifyUrlLabel: 'Verification URL',
+          afterAuthHint: 'After authorization, click “Complete Authorization” below to create the account.'
         },
         // Gemini specific
 	        gemini: {
@@ -2014,6 +2148,27 @@ export default {
     usage: {
       title: 'Usage Records',
       description: 'View and manage all user usage records',
+      charts: {
+        title: 'Charts',
+        show: 'Show charts',
+        hide: 'Hide charts'
+      },
+      filters: {
+        more: 'More filters',
+        less: 'Less filters'
+      },
+      presets: {
+        title: 'Presets',
+        recent: 'Recent',
+        favorites: 'Favorites',
+        save: 'Save',
+        namePlaceholder: 'Preset name',
+        emptyRecent: 'No recent presets yet',
+        emptyFavorites: 'No favorites yet',
+        applied: 'Preset applied',
+        saved: 'Saved to favorites',
+        deleted: 'Removed from favorites'
+      },
       userFilter: 'User',
       searchUserPlaceholder: 'Search user by email...',
       searchApiKeyPlaceholder: 'Search API key by name...',
@@ -2036,6 +2191,7 @@ export default {
       outputTokens: 'Output Tokens',
       cacheCreationTokens: 'Cache Creation Tokens',
       cacheReadTokens: 'Cache Read Tokens',
+      cacheHitRate: 'Cache Hit Rate',
       failedToLoad: 'Failed to load usage records',
       billingType: 'Billing Type',
       allBillingTypes: 'All Billing Types',
@@ -2823,6 +2979,16 @@ export default {
         totpKeyNotConfigured:
           'Please configure TOTP_ENCRYPTION_KEY in environment variables first. Generate a key with: openssl rand -hex 32'
       },
+      referral: {
+        title: 'Referral / Invite',
+        description: 'Configure invite codes and inviter rebates',
+        inviterBonus: 'Inviter signup bonus',
+        inviterBonusHint: 'Added to inviter balance when a new user registers with their invite code',
+        inviteeBonus: 'Invitee signup bonus',
+        inviteeBonusHint: 'Added to invitee balance when registering with a valid invite code',
+        commissionRate: 'Commission rate',
+        commissionRateHint: '0-1. Inviter earns this proportion of invitee actual cost'
+      },
       turnstile: {
         title: 'Cloudflare Turnstile',
         description: 'Bot protection for login and registration',
@@ -2880,6 +3046,10 @@ export default {
         contactInfoHint: 'Customer support contact info, displayed on redeem page, profile, etc.',
         docUrl: 'Documentation URL',
         docUrlPlaceholder: 'https://docs.example.com',
+        subscriptionsEnabled: 'Enable subscriptions',
+        subscriptionsEnabledHint: 'Controls user/admin subscription pages and subscription APIs (disabled => hidden + 403).',
+        landingPricingEnabled: 'Enable landing pricing',
+        landingPricingEnabledHint: 'Controls the subscription plans (pricing) section on /home and /purchase.',
         docUrlHint: 'Link to your documentation site. Leave empty to hide the documentation link.',
         siteLogo: 'Site Logo',
         uploadImage: 'Upload Image',
@@ -2892,6 +3062,10 @@ export default {
         homeContentPlaceholder: 'Enter custom content for the home page. Supports Markdown & HTML. If a URL is entered, it will be displayed as an iframe.',
         homeContentHint: 'Customize the home page content. Supports Markdown/HTML. If you enter a URL (starting with http:// or https://), it will be used as an iframe src to embed an external page. When set, the default status information will no longer be displayed.',
         homeContentIframeWarning: '⚠️ iframe mode note: Some websites have X-Frame-Options or CSP security policies that prevent embedding in iframes. If the page appears blank or shows an error, please verify the target website allows embedding, or consider using HTML mode to build your own content.',
+        landingPricingConfig: 'Landing / Pricing Config (JSON)',
+        landingPricingConfigPlaceholder: 'Enter JSON config (plans, prices, copywriting, etc.)',
+        landingPricingConfigHint: 'Used by the home pricing section and /purchase page. Supports weekly/monthly/custom and pay-as-you-go info.',
+        landingPricingConfigInvalid: 'Invalid pricing config',
         hideCcsImportButton: 'Hide CCS Import Button',
         hideCcsImportButtonHint: 'When enabled, the "Import to CCS" button will be hidden on the API Keys page'
       },
@@ -3067,6 +3241,8 @@ export default {
   userSubscriptions: {
     title: 'My Subscriptions',
     description: 'View your subscription plans and usage',
+    disabled: 'Subscriptions are disabled',
+    disabledDesc: 'This feature is currently turned off by the administrator.',
     noActiveSubscriptions: 'No Active Subscriptions',
     noActiveSubscriptionsDesc:
       "You don't have any active subscriptions. Contact administrator to get one.",

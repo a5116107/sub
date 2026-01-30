@@ -55,6 +55,7 @@ var ProviderSet = wire.NewSet(
 	NewAccountRepository,
 	NewProxyRepository,
 	NewRedeemCodeRepository,
+	NewPaymentOrderRepository,
 	NewPromoCodeRepository,
 	NewUsageLogRepository,
 	NewUsageCleanupRepository,
@@ -96,6 +97,7 @@ var ProviderSet = wire.NewSet(
 	NewClaudeOAuthClient,
 	NewHTTPUpstream,
 	NewOpenAIOAuthClient,
+	NewQwenOAuthClient,
 	NewGeminiOAuthClient,
 	NewGeminiCliCodeAssistClient,
 

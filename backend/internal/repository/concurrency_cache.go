@@ -148,6 +148,7 @@ var (
 		`)
 
 	// getAccountsLoadBatchScript - batch load query with expired slot cleanup
+	// KEYS[1..2n] = slotKey1, waitKey1, slotKey2, waitKey2, ...
 	// ARGV[1] = slot TTL (seconds)
 	// ARGV[2..n] = accountID1, maxConcurrency1, accountID2, maxConcurrency2, ...
 	getAccountsLoadBatchScript = redis.NewScript(`
@@ -159,18 +160,21 @@ var (
 			local nowSeconds = tonumber(timeResult[1])
 			local cutoffTime = nowSeconds - slotTTL
 
-			local i = 2
-			while i <= #ARGV do
-				local accountID = ARGV[i]
-				local maxConcurrency = tonumber(ARGV[i + 1])
+			local numAccounts = math.floor((#ARGV - 1) / 2)
+			for idx = 1, numAccounts do
+				local argIndex = 2 + (idx - 1) * 2
+				local keyIndex = 1 + (idx - 1) * 2
 
-				local slotKey = 'concurrency:account:' .. accountID
+				local accountID = ARGV[argIndex]
+				local maxConcurrency = tonumber(ARGV[argIndex + 1])
+
+				local slotKey = KEYS[keyIndex]
+				local waitKey = KEYS[keyIndex + 1]
 
 				-- Clean up expired slots before counting
 				redis.call('ZREMRANGEBYSCORE', slotKey, '-inf', cutoffTime)
 				local currentConcurrency = redis.call('ZCARD', slotKey)
 
-				local waitKey = 'wait:account:' .. accountID
 				local waitingCount = redis.call('GET', waitKey)
 				if waitingCount == false then
 					waitingCount = 0
@@ -187,8 +191,6 @@ var (
 				table.insert(result, currentConcurrency)
 				table.insert(result, waitingCount)
 				table.insert(result, loadRate)
-
-				i = i + 2
 			end
 
 			return result
@@ -352,12 +354,14 @@ func (c *concurrencyCache) GetAccountsLoadBatch(ctx context.Context, accounts []
 		return map[int64]*service.AccountLoadInfo{}, nil
 	}
 
+	keys := make([]string, 0, len(accounts)*2)
 	args := []any{c.slotTTLSeconds}
 	for _, acc := range accounts {
+		keys = append(keys, accountSlotKey(acc.ID), accountWaitKey(acc.ID))
 		args = append(args, acc.ID, acc.MaxConcurrency)
 	}
 
-	result, err := getAccountsLoadBatchScript.Run(ctx, c.rdb, []string{}, args...).Slice()
+	result, err := getAccountsLoadBatchScript.Run(ctx, c.rdb, keys, args...).Slice()
 	if err != nil {
 		return nil, err
 	}

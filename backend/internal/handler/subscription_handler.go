@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"strconv"
+
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -33,12 +35,14 @@ type SubscriptionProgressInfo struct {
 // SubscriptionHandler handles user subscription operations
 type SubscriptionHandler struct {
 	subscriptionService *service.SubscriptionService
+	settingService      *service.SettingService
 }
 
 // NewSubscriptionHandler creates a new user subscription handler
-func NewSubscriptionHandler(subscriptionService *service.SubscriptionService) *SubscriptionHandler {
+func NewSubscriptionHandler(subscriptionService *service.SubscriptionService, settingService *service.SettingService) *SubscriptionHandler {
 	return &SubscriptionHandler{
 		subscriptionService: subscriptionService,
+		settingService:      settingService,
 	}
 }
 
@@ -48,6 +52,10 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
 		response.Unauthorized(c, "User not found in context")
+		return
+	}
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
 		return
 	}
 
@@ -72,6 +80,10 @@ func (h *SubscriptionHandler) GetActive(c *gin.Context) {
 		response.Unauthorized(c, "User not found in context")
 		return
 	}
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
 
 	subscriptions, err := h.subscriptionService.ListActiveUserSubscriptions(c.Request.Context(), subject.UserID)
 	if err != nil {
@@ -92,6 +104,10 @@ func (h *SubscriptionHandler) GetProgress(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
 		response.Unauthorized(c, "User not found in context")
+		return
+	}
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
 		return
 	}
 
@@ -119,12 +135,51 @@ func (h *SubscriptionHandler) GetProgress(c *gin.Context) {
 	response.Success(c, result)
 }
 
+// GetProgressByID handles getting subscription progress for a specific subscription.
+// GET /api/v1/subscriptions/:id/progress
+func (h *SubscriptionHandler) GetProgressByID(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not found in context")
+		return
+	}
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
+
+	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid subscription ID")
+		return
+	}
+
+	// Ensure the subscription belongs to the current user (avoid cross-user leakage).
+	sub, err := h.subscriptionService.GetByID(c.Request.Context(), subscriptionID)
+	if err != nil || sub == nil || sub.UserID != subject.UserID {
+		response.NotFound(c, "Subscription not found")
+		return
+	}
+
+	progress, err := h.subscriptionService.GetSubscriptionProgress(c.Request.Context(), subscriptionID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, progress)
+}
+
 // GetSummary handles getting a summary of current user's subscription status
 // GET /api/v1/subscriptions/summary
 func (h *SubscriptionHandler) GetSummary(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
 		response.Unauthorized(c, "User not found in context")
+		return
+	}
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
 		return
 	}
 

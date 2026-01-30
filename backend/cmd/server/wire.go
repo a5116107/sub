@@ -72,11 +72,13 @@ func provideCleanup(
 	accountExpiry *service.AccountExpiryService,
 	subscriptionExpiry *service.SubscriptionExpiryService,
 	usageCleanup *service.UsageCleanupService,
+	billingReconcile *service.BillingReconcileService,
 	pricing *service.PricingService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
+	qwenOAuth *service.QwenOAuthService,
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
 ) func() {
@@ -131,6 +133,12 @@ func provideCleanup(
 				}
 				return nil
 			}},
+			{"BillingReconcileService", func() error {
+				if billingReconcile != nil {
+					billingReconcile.Stop()
+				}
+				return nil
+			}},
 			{"TokenRefreshService", func() error {
 				tokenRefresh.Stop()
 				return nil
@@ -161,6 +169,10 @@ func provideCleanup(
 			}},
 			{"OpenAIOAuthService", func() error {
 				openaiOAuth.Stop()
+				return nil
+			}},
+			{"QwenOAuthService", func() error {
+				qwenOAuth.Stop()
 				return nil
 			}},
 			{"GeminiOAuthService", func() error {

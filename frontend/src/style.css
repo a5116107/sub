@@ -3,6 +3,13 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Brand tokens (NeoGraphite) */
+    --neo-cyan: 34 211 238; /* #22D3EE */
+    --neo-gold: 245 158 11; /* #F59E0B */
+    --neo-graphite: 2 6 23; /* #020617 */
+  }
+
   * {
     @apply border-gray-200 dark:border-dark-700;
   }
@@ -14,6 +21,25 @@
   body {
     @apply bg-gray-50 text-gray-900 dark:bg-dark-950 dark:text-gray-100;
     @apply min-h-screen;
+    background-image:
+      radial-gradient(900px 480px at 10% 0%, rgba(var(--neo-cyan) / 0.16), transparent 60%),
+      radial-gradient(760px 440px at 95% 0%, rgba(var(--neo-gold) / 0.08), transparent 60%),
+      radial-gradient(900px 520px at 50% 115%, rgba(255 255 255 / 0.12), transparent 65%),
+      linear-gradient(rgba(34, 211, 238, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34, 211, 238, 0.03) 1px, transparent 1px);
+    background-size: auto, auto, auto, 80px 80px, 80px 80px;
+    background-attachment: fixed;
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(900px 520px at 10% 0%, rgba(var(--neo-cyan) / 0.20), transparent 62%),
+      radial-gradient(760px 460px at 95% 0%, rgba(var(--neo-gold) / 0.10), transparent 62%),
+      radial-gradient(900px 520px at 50% 115%, rgba(255 255 255 / 0.06), transparent 66%),
+      linear-gradient(rgba(34, 211, 238, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34, 211, 238, 0.04) 1px, transparent 1px);
+    background-size: auto, auto, auto, 96px 96px, 96px 96px;
+    background-attachment: fixed;
   }
 
   /* 自定义滚动条 - 默认隐藏，悬停或滚动时显示 */
@@ -57,10 +83,153 @@
   ::selection {
     @apply bg-primary-500/20 text-primary-900 dark:text-primary-100;
   }
+
+  /* 降低动效偏好：保持交互但避免强动画 */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
 @layer components {
   /* ============ 按钮样式 ============ */
+  /* ============ NeoGraphite Surfaces ============ */
+  .neo-surface {
+    @apply relative overflow-hidden;
+    @apply bg-white/70 dark:bg-dark-950/55;
+    @apply backdrop-blur-xl;
+    @apply border border-gray-200/60 dark:border-dark-800/70;
+  }
+
+  .neo-surface::before,
+  .glass::before,
+  .glass-card::before,
+  .card::before,
+  .card-glass::before,
+  .tabs::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--neo-cyan) / 0.55),
+      rgba(var(--neo-gold) / 0.18),
+      rgba(255 255 255 / 0.06)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.7;
+  }
+
+  .dark .neo-surface::before,
+  .dark .glass::before,
+  .dark .glass-card::before,
+  .dark .card::before,
+  .dark .card-glass::before,
+  .dark .tabs::before {
+    opacity: 0.55;
+  }
+
+  .neo-surface::after,
+  .glass::after,
+  .glass-card::after,
+  .card::after,
+  .card-glass::after,
+  .tabs::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(
+      800px 240px at 20% 0%,
+      rgba(var(--neo-cyan) / 0.14),
+      transparent 70%
+    );
+    opacity: 0.9;
+  }
+
+  .neo-surface > *,
+  .glass > *,
+  .glass-card > *,
+  .card > *,
+  .card-glass > *,
+  .tabs > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .neo-panel {
+    @apply relative overflow-hidden;
+    @apply rounded-3xl;
+    @apply bg-dark-950/85 text-white;
+    @apply backdrop-blur-xl;
+    @apply border border-white/10;
+    @apply shadow-2xl;
+  }
+
+  .neo-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--neo-cyan) / 0.65),
+      rgba(255 255 255 / 0.10),
+      rgba(var(--neo-gold) / 0.22)
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.85;
+  }
+
+  .neo-panel::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(900px 420px at 0% 0%, rgba(var(--neo-cyan) / 0.26), transparent 60%),
+      radial-gradient(700px 360px at 100% 0%, rgba(var(--neo-gold) / 0.16), transparent 60%),
+      radial-gradient(800px 420px at 50% 100%, rgba(255 255 255 / 0.10), transparent 65%);
+    opacity: 0.9;
+  }
+
+  .neo-panel > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .neo-border-animated::before {
+    background-size: 220% 220%;
+    animation: neoBorderShift 10s linear infinite;
+  }
+
+  @keyframes neoBorderShift {
+    0% {
+      background-position: 0% 40%;
+    }
+    50% {
+      background-position: 100% 60%;
+    }
+    100% {
+      background-position: 0% 40%;
+    }
+  }
+
   .btn {
     @apply inline-flex items-center justify-center gap-2;
     @apply rounded-xl px-4 py-2.5 text-sm font-medium;
@@ -71,10 +240,38 @@
   }
 
   .btn-primary {
-    @apply bg-gradient-to-r from-primary-500 to-primary-600;
+    @apply bg-gradient-to-r from-primary-400 to-primary-600;
     @apply text-white shadow-md shadow-primary-500/25;
     @apply hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:shadow-primary-500/30;
     @apply dark:shadow-primary-500/20;
+    @apply relative overflow-hidden;
+  }
+
+  .btn-primary::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    background: radial-gradient(
+      260px 120px at 30% 0%,
+      rgba(255 255 255 / 0.35),
+      transparent 70%
+    );
+    transform: translateY(-35%);
+    opacity: 0.35;
+    transition: opacity 180ms ease-out, transform 220ms ease-out;
+    pointer-events: none;
+  }
+
+  .btn-primary:hover::after {
+    opacity: 0.55;
+    transform: translateY(-20%);
+  }
+
+  /* 企业高亮（黑金） */
+  .btn-premium {
+    @apply bg-gradient-to-r from-gold-500 to-gold-600;
+    @apply text-white shadow-md shadow-gold-500/25;
+    @apply hover:from-gold-600 hover:to-gold-700 hover:shadow-lg hover:shadow-gold-500/30;
   }
 
   .btn-secondary {
@@ -163,24 +360,30 @@
 
   /* ============ 玻璃效果 ============ */
   .glass {
-    @apply bg-white/80 backdrop-blur-xl dark:bg-dark-800/80;
+    @apply relative overflow-hidden;
+    @apply bg-white/70 dark:bg-dark-950/55;
+    @apply backdrop-blur-xl;
+    @apply border border-gray-200/60 dark:border-dark-800/70;
   }
 
   .glass-card {
-    @apply bg-white/70 dark:bg-dark-800/70;
+    @apply relative overflow-hidden;
+    @apply bg-white/70 dark:bg-dark-950/55;
     @apply backdrop-blur-xl;
+    @apply border border-gray-200/60 dark:border-dark-800/70;
     @apply rounded-2xl;
-    @apply border border-white/20 dark:border-dark-700/50;
     @apply shadow-glass;
     @apply transition-all duration-300;
   }
 
   /* ============ 卡片样式 ============ */
   .card {
-    @apply bg-white dark:bg-dark-800/50;
+    @apply relative overflow-hidden;
+    @apply bg-white/70 dark:bg-dark-950/55;
+    @apply backdrop-blur-xl;
+    @apply border border-gray-200/60 dark:border-dark-800/70;
     @apply rounded-2xl;
-    @apply border border-gray-100 dark:border-dark-700/50;
-    @apply shadow-card;
+    @apply shadow-glass-sm;
     @apply transition-all duration-300;
   }
 
@@ -190,9 +393,10 @@
   }
 
   .card-glass {
-    @apply bg-white/70 dark:bg-dark-800/70;
+    @apply relative overflow-hidden;
+    @apply bg-white/70 dark:bg-dark-950/55;
     @apply backdrop-blur-xl;
-    @apply border border-white/20 dark:border-dark-700/50;
+    @apply border border-gray-200/60 dark:border-dark-800/70;
     @apply shadow-glass;
   }
 
@@ -270,8 +474,8 @@
   .table th {
     @apply px-4 py-3 text-left font-medium;
     @apply text-gray-600 dark:text-dark-300;
-    @apply bg-gray-50 dark:bg-dark-800/50;
-    @apply border-b border-gray-200 dark:border-dark-700;
+    @apply bg-gray-50/70 dark:bg-dark-900/50;
+    @apply border-b border-gray-200/80 dark:border-dark-800/70;
   }
 
   .table td {
@@ -307,6 +511,10 @@
     @apply bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400;
   }
 
+  .badge-gold {
+    @apply bg-gold-100 text-gold-800 dark:bg-gold-900/25 dark:text-gold-300;
+  }
+
   .badge-danger {
     @apply bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400;
   }
@@ -322,9 +530,10 @@
   /* ============ 下拉菜单 ============ */
   .dropdown {
     @apply absolute z-50;
-    @apply bg-white dark:bg-dark-800;
+    @apply bg-white/85 dark:bg-dark-900/75;
+    @apply backdrop-blur-xl;
     @apply rounded-xl;
-    @apply border border-gray-200 dark:border-dark-700;
+    @apply border border-gray-200/70 dark:border-dark-800/70;
     @apply shadow-lg;
     @apply py-1;
     @apply origin-top-right animate-scale-in;
@@ -348,7 +557,8 @@
   .modal-content {
     @apply w-full;
     @apply max-h-[95vh] sm:max-h-[90vh];
-    @apply bg-white dark:bg-dark-800;
+    @apply bg-white/90 dark:bg-dark-900/80;
+    @apply backdrop-blur-xl;
     @apply rounded-2xl shadow-2xl;
     @apply border border-gray-200 dark:border-dark-700;
     @apply flex flex-col;
@@ -441,7 +651,8 @@
   .dialog-container {
     @apply flex w-full flex-col;
     @apply max-h-[90vh];
-    @apply rounded-2xl bg-white dark:bg-dark-800;
+    @apply rounded-2xl bg-white/90 dark:bg-dark-900/80;
+    @apply backdrop-blur-xl;
     @apply shadow-xl;
   }
 
@@ -464,9 +675,10 @@
   .toast {
     @apply fixed right-4 top-4 z-[100];
     @apply min-w-[320px] max-w-md;
-    @apply bg-white dark:bg-dark-800;
+    @apply bg-white/80 dark:bg-dark-900/70;
+    @apply backdrop-blur-xl;
     @apply rounded-xl shadow-lg;
-    @apply border-l-4;
+    @apply border border-gray-200/70 dark:border-dark-800/70 border-l-4;
     @apply p-4;
     @apply animate-slide-in-right;
   }
@@ -490,16 +702,24 @@
   /* ============ 侧边栏 ============ */
   .sidebar {
     @apply fixed inset-y-0 left-0 z-40;
-    @apply w-64 bg-white dark:bg-dark-900;
-    @apply border-r border-gray-200 dark:border-dark-800;
+    @apply bg-white/70 dark:bg-dark-950/80;
+    @apply backdrop-blur-xl;
+    @apply border-r border-gray-200/70 dark:border-dark-800/70;
+    @apply shadow-glass-sm;
     @apply flex flex-col;
     @apply transition-transform duration-300;
+    @apply overflow-hidden;
+    background-image:
+      radial-gradient(900px 420px at 0% 0%, rgba(var(--neo-cyan) / 0.14), transparent 55%),
+      radial-gradient(700px 420px at 0% 100%, rgba(var(--neo-gold) / 0.10), transparent 55%),
+      radial-gradient(900px 520px at 100% 0%, rgba(34, 211, 238, 0.06), transparent 60%),
+      linear-gradient(180deg, rgba(255 255 255 / 0.10), transparent 45%);
   }
 
   .sidebar-header {
     @apply h-16 px-6;
     @apply flex items-center gap-3;
-    @apply border-b border-gray-100 dark:border-dark-800;
+    @apply border-b border-gray-200/70 dark:border-dark-800/70;
   }
 
   .sidebar-nav {
@@ -509,16 +729,34 @@
   .sidebar-link {
     @apply flex items-center gap-3 rounded-xl px-3 py-2.5;
     @apply text-sm font-medium;
-    @apply text-gray-600 dark:text-dark-300;
+    @apply relative;
+    @apply text-gray-700 dark:text-dark-200/80;
     @apply transition-all duration-200;
-    @apply hover:bg-gray-100 dark:hover:bg-dark-800;
+    @apply hover:bg-gray-100/70 dark:hover:bg-white/5;
     @apply hover:text-gray-900 dark:hover:text-white;
   }
 
   .sidebar-link-active {
-    @apply bg-primary-50 dark:bg-primary-900/20;
-    @apply text-primary-600 dark:text-primary-400;
-    @apply hover:bg-primary-100 dark:hover:bg-primary-900/30;
+    @apply bg-primary-500/10 dark:bg-primary-500/12;
+    @apply text-primary-700 dark:text-primary-200;
+    @apply ring-1 ring-primary-500/25;
+    @apply shadow-glow;
+    @apply hover:bg-primary-500/14 dark:hover:bg-primary-500/16;
+  }
+
+  .sidebar-link-active::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    transform: translateY(-50%);
+    border-radius: 999px;
+    background: rgba(var(--neo-cyan) / 0.95);
+    box-shadow:
+      0 0 0 6px rgba(var(--neo-cyan) / 0.14),
+      0 0 18px rgba(var(--neo-cyan) / 0.35);
   }
 
   .sidebar-section {
@@ -528,7 +766,7 @@
   .sidebar-section-title {
     @apply mb-2 px-3;
     @apply text-xs font-semibold uppercase tracking-wider;
-    @apply text-gray-400 dark:text-dark-500;
+    @apply text-gray-500 dark:text-dark-400;
   }
 
   /* ============ 页面头部 ============ */
@@ -580,21 +818,26 @@
 
   /* ============ 标签页 ============ */
   .tabs {
-    @apply flex gap-1 p-1;
-    @apply rounded-xl bg-gray-100 dark:bg-dark-800;
+    @apply relative overflow-hidden;
+    @apply backdrop-blur-xl;
+    @apply border border-gray-200/60 dark:border-dark-800/70;
+    @apply inline-flex gap-1 p-1;
+    @apply rounded-2xl bg-gray-100/70 dark:bg-dark-900/40;
   }
 
   .tab {
-    @apply rounded-lg px-4 py-2 text-sm font-medium;
-    @apply text-gray-600 dark:text-dark-400;
+    @apply rounded-xl px-4 py-2 text-sm font-medium;
+    @apply text-gray-600 dark:text-dark-300;
     @apply transition-all duration-200;
     @apply hover:text-gray-900 dark:hover:text-white;
+    @apply hover:bg-white dark:hover:bg-dark-800/60;
   }
 
   .tab-active {
-    @apply bg-white dark:bg-dark-700;
-    @apply text-gray-900 dark:text-white;
-    @apply shadow-sm;
+    @apply bg-gradient-to-r from-primary-400/20 to-primary-600/20;
+    @apply text-primary-900 dark:text-white;
+    @apply ring-1 ring-primary-500/25;
+    @apply shadow-glass-sm;
   }
 
   /* ============ 进度条 ============ */
@@ -698,10 +941,6 @@
   }
 
   /* 玻璃效果 */
-  .glass {
-    @apply bg-white/80 backdrop-blur-xl dark:bg-dark-800/80;
-  }
-
   /* 隐藏滚动条 */
   .scrollbar-hide {
     -ms-overflow-style: none;

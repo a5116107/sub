@@ -23,6 +23,16 @@ server:
   # Trusted proxies for X-Forwarded-For parsing (CIDR/IP). Empty disables trusted proxies.
   # 信任的代理地址（CIDR/IP 格式），用于解析 X-Forwarded-For 头。留空则禁用代理信任。
   trusted_proxies: []
+  # Frontend base URL used to generate security-sensitive links (password reset, OAuth redirect URIs).
+  # 用于生成安全敏感链接的前端 Base URL（密码重置、OAuth 回调等），必须为绝对 http(s) URL。
+  # Example: "https://your-frontend.example.com"
+  frontend_base_url: ""
+  # Debug-only: allow deriving frontend_base_url from request headers, gated by host allowlist.
+  # 仅 debug 可用：允许从请求头派生 frontend_base_url（必须命中 allowlist，避免被 Host/Origin 注入）。
+  dev_allow_derived_frontend_base_url: false
+  # Debug-only allowlist for derived frontend hostnames (no scheme/path), e.g. ["localhost","127.0.0.1"].
+  # debug-only 派生模式的 host 白名单（仅主机名，不含 scheme/path）。
+  dev_allowed_frontend_hosts: ["localhost","127.0.0.1"]
 
 # =============================================================================
 # Run Mode Configuration
@@ -111,6 +121,9 @@ gateway:
   # Timeout for waiting upstream response headers (seconds)
   # 等待上游响应头超时时间（秒）
   response_header_timeout: 600
+  # Whether to allow `?key=` query parameter for Gemini native endpoints (/v1beta, /v1internal).
+  # 是否允许 Gemini 原生端点使用 `?key=` query 参数传递 API key（有泄露风险，默认关闭）。
+  allow_google_query_key: false
   # Max request body size in bytes (default: 100MB)
   # 请求体最大字节数（默认 100MB）
   max_body_size: 104857600
@@ -169,6 +182,29 @@ gateway:
   # Allow failover on selected 400 errors (default: off)
   # 允许在特定 400 错误时进行故障转移（默认：关闭）
   failover_on_400: false
+
+  # Claude Code compat mode (safe subset; no obfuscation)
+  # Claude Code 兼容模式（安全子集；不包含混淆/绕过）
+  # Controls existing request-shaping for Anthropic OAuth/SetupToken accounts:
+  # - system prompt injection
+  # - fingerprint headers + metadata.user_id rewrite (incl. optional session_id_masking)
+  # Modes: auto (default), always, never
+  claude_code_compat:
+    mode: "auto"
+
+  # Generic payload rules engine (safe subset; no cloak/obfuscation)
+  # 通用请求适配层（安全子集；不包含 cloak/混淆/绕过策略）
+  # Uses gjson/sjson JSON path syntax for `params` keys.
+  # `default*` rules only set when missing; `override*` rules always overwrite.
+  payload_rules:
+    # Default rules: set only when missing.
+    default: []
+    # Default raw rules: set raw JSON only when missing (strings are treated as raw JSON fragments).
+    default_raw: []
+    # Override rules: always overwrite.
+    override: []
+    # Override raw rules: always overwrite raw JSON.
+    override_raw: []
 
 # =============================================================================
 # API Key Auth Cache Configuration
@@ -432,12 +468,36 @@ pricing:
   # Hash check interval in minutes
   # 哈希检查间隔（分钟）
   hash_check_interval_minutes: 10
+  # Missing pricing policy: fallback_any / fallback_claude_only / fail_close
+  # 缺失定价策略：fallback_any / fallback_claude_only / fail_close
+  # - fallback_any：对任意未知模型都使用 Claude 回退价（历史行为，非 Claude 容易误计费）
+  # - fallback_claude_only：仅对 Claude 系列回退，其他直接报错（推荐）
+  # - fail_close：所有未知模型直接报错（最严格）
+  missing_policy: "fallback_any"
 
 # =============================================================================
 # Billing Configuration
 # 计费配置
 # =============================================================================
 billing:
+  # Whether group rate_multiplier applies to subscription usage accounting.
+  # 订阅用量是否应用分组 rate_multiplier（计费倍率）。
+  # - apply：订阅用量按“计费口径”扣减（与余额计费一致，推荐）
+  # - ignore：订阅用量按“原始价格”扣减（历史行为）
+  subscription_rate_multiplier_policy: "apply"
+  # Optional reconcile loop for unapplied billing ledger entries.
+  # 可选：后台对账补偿（处理 billing_usage_entries.applied=false 的残留记录）
+  reconcile:
+    enabled: false
+    # How often to run reconcile.
+    # 对账频率
+    interval: 60s
+    # Max entries processed per run.
+    # 每次最多处理条数
+    batch_size: 200
+    # Per-run timeout budget.
+    # 单次对账超时预算
+    timeout: 5s
   circuit_breaker:
     # Enable circuit breaker for billing service
     # 启用计费服务熔断器

@@ -28,12 +28,14 @@ func toResponsePagination(p *pagination.PaginationResult) *response.PaginationRe
 // SubscriptionHandler handles admin subscription management
 type SubscriptionHandler struct {
 	subscriptionService *service.SubscriptionService
+	settingService      *service.SettingService
 }
 
 // NewSubscriptionHandler creates a new admin subscription handler
-func NewSubscriptionHandler(subscriptionService *service.SubscriptionService) *SubscriptionHandler {
+func NewSubscriptionHandler(subscriptionService *service.SubscriptionService, settingService *service.SettingService) *SubscriptionHandler {
 	return &SubscriptionHandler{
 		subscriptionService: subscriptionService,
+		settingService:      settingService,
 	}
 }
 
@@ -61,6 +63,10 @@ type AdjustSubscriptionRequest struct {
 // List handles listing all subscriptions with pagination and filters
 // GET /api/v1/admin/subscriptions
 func (h *SubscriptionHandler) List(c *gin.Context) {
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
 	page, pageSize := response.ParsePagination(c)
 
 	// Parse optional filters
@@ -97,6 +103,10 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 // GetByID handles getting a subscription by ID
 // GET /api/v1/admin/subscriptions/:id
 func (h *SubscriptionHandler) GetByID(c *gin.Context) {
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
 	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "Invalid subscription ID")
@@ -115,6 +125,10 @@ func (h *SubscriptionHandler) GetByID(c *gin.Context) {
 // GetProgress handles getting subscription usage progress
 // GET /api/v1/admin/subscriptions/:id/progress
 func (h *SubscriptionHandler) GetProgress(c *gin.Context) {
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
 	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "Invalid subscription ID")
@@ -133,6 +147,10 @@ func (h *SubscriptionHandler) GetProgress(c *gin.Context) {
 // Assign handles assigning a subscription to a user
 // POST /api/v1/admin/subscriptions/assign
 func (h *SubscriptionHandler) Assign(c *gin.Context) {
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
 	var req AssignSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
@@ -160,6 +178,10 @@ func (h *SubscriptionHandler) Assign(c *gin.Context) {
 // BulkAssign handles bulk assigning subscriptions to multiple users
 // POST /api/v1/admin/subscriptions/bulk-assign
 func (h *SubscriptionHandler) BulkAssign(c *gin.Context) {
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
 	var req BulkAssignSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
@@ -187,6 +209,10 @@ func (h *SubscriptionHandler) BulkAssign(c *gin.Context) {
 // Extend handles adjusting a subscription (extend or shorten)
 // POST /api/v1/admin/subscriptions/:id/extend
 func (h *SubscriptionHandler) Extend(c *gin.Context) {
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
 	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "Invalid subscription ID")
@@ -211,6 +237,10 @@ func (h *SubscriptionHandler) Extend(c *gin.Context) {
 // Revoke handles revoking a subscription
 // DELETE /api/v1/admin/subscriptions/:id
 func (h *SubscriptionHandler) Revoke(c *gin.Context) {
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
 	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "Invalid subscription ID")
@@ -229,6 +259,10 @@ func (h *SubscriptionHandler) Revoke(c *gin.Context) {
 // ListByGroup handles listing subscriptions for a specific group
 // GET /api/v1/admin/groups/:id/subscriptions
 func (h *SubscriptionHandler) ListByGroup(c *gin.Context) {
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
 	groupID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "Invalid group ID")
@@ -253,6 +287,10 @@ func (h *SubscriptionHandler) ListByGroup(c *gin.Context) {
 // ListByUser handles listing subscriptions for a specific user
 // GET /api/v1/admin/users/:id/subscriptions
 func (h *SubscriptionHandler) ListByUser(c *gin.Context) {
+	if h.settingService != nil && !h.settingService.IsSubscriptionsEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrSubscriptionsDisabled)
+		return
+	}
 	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		response.BadRequest(c, "Invalid user ID")

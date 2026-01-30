@@ -19,6 +19,11 @@
           {{ t('usage.in') }}: {{ formatTokens(stats?.total_input_tokens || 0) }} /
           {{ t('usage.out') }}: {{ formatTokens(stats?.total_output_tokens || 0) }}
         </p>
+        <p class="text-xs text-gray-500">
+          {{ t('admin.usage.cacheReadTokens') }}: {{ formatTokens(stats?.total_cache_read_tokens || 0) }} |
+          {{ t('admin.usage.cacheCreationTokens') }}: {{ formatTokens(stats?.total_cache_creation_tokens || 0) }} |
+          {{ t('admin.usage.cacheHitRate') }}: {{ formatPercent(cacheHitRate) }}
+        </p>
       </div>
     </div>
     <div class="card p-4 flex items-center gap-3">
@@ -52,13 +57,22 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AdminUsageStatsResponse } from '@/api/admin/usage'
 import Icon from '@/components/icons/Icon.vue'
 
-defineProps<{ stats: AdminUsageStatsResponse | null }>()
+const props = defineProps<{ stats: AdminUsageStatsResponse | null }>()
 
 const { t } = useI18n()
+
+const cacheHitRate = computed(() => {
+  const stats = props.stats
+  if (!stats) return 0
+  const denom = (stats.total_cache_read_tokens || 0) + (stats.total_input_tokens || 0)
+  if (denom <= 0) return 0
+  return (stats.total_cache_read_tokens || 0) / denom
+})
 
 const formatDuration = (ms: number) =>
   ms < 1000 ? `${ms.toFixed(0)}ms` : `${(ms / 1000).toFixed(2)}s`
@@ -69,4 +83,6 @@ const formatTokens = (value: number) => {
   if (value >= 1e3) return (value / 1e3).toFixed(2) + 'K'
   return value.toLocaleString()
 }
+
+const formatPercent = (value: number) => `${(value * 100).toFixed(2)}%`
 </script>

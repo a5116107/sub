@@ -32,6 +32,7 @@ export interface User {
   balance: number // User balance for API usage
   concurrency: number // Allowed concurrent requests
   status: 'active' | 'disabled' // Account status
+  invite_code?: string
   allowed_groups: number[] | null // Allowed group IDs (null = all non-exclusive groups)
   subscriptions?: UserSubscription[] // User's active subscriptions
   created_at: string
@@ -81,6 +82,9 @@ export interface PublicSettings {
   contact_info: string
   doc_url: string
   home_content: string
+  landing_pricing_enabled: boolean
+  landing_pricing_config: string
+  subscriptions_enabled: boolean
   hide_ccs_import_button: boolean
   purchase_subscription_enabled: boolean
   purchase_subscription_url: string
@@ -255,7 +259,7 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'qwen' | 'iflow' | 'antigravity'
 
 export type SubscriptionType = 'standard' | 'subscription'
 
@@ -358,7 +362,7 @@ export interface UpdateGroupRequest {
 
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'qwen' | 'iflow' | 'antigravity'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks5' | 'socks5h'
@@ -813,6 +817,8 @@ export interface TrendDataPoint {
   requests: number
   input_tokens: number
   output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
   cache_tokens: number
   total_tokens: number
   cost: number // 标准计费
@@ -886,28 +892,29 @@ export interface UserSubscription {
   group?: Group
 }
 
+export interface UsageWindowProgress {
+  limit_usd: number
+  used_usd: number
+  remaining_usd: number
+  percentage: number
+  window_start: string
+  resets_at: string
+  resets_in_seconds: number
+}
+
 export interface SubscriptionProgress {
-  subscription_id: number
-  daily: {
-    used: number
-    limit: number | null
-    percentage: number
-    reset_in_seconds: number | null
-  } | null
-  weekly: {
-    used: number
-    limit: number | null
-    percentage: number
-    reset_in_seconds: number | null
-  } | null
-  monthly: {
-    used: number
-    limit: number | null
-    percentage: number
-    reset_in_seconds: number | null
-  } | null
-  expires_at: string | null
-  days_remaining: number | null
+  id: number
+  group_name: string
+  expires_at: string
+  expires_in_days: number
+  daily?: UsageWindowProgress
+  weekly?: UsageWindowProgress
+  monthly?: UsageWindowProgress
+}
+
+export interface UserSubscriptionProgressInfo {
+  subscription: UserSubscription
+  progress: SubscriptionProgress
 }
 
 export interface AssignSubscriptionRequest {

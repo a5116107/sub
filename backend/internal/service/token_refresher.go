@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -128,5 +129,47 @@ func (r *OpenAITokenRefresher) Refresh(ctx context.Context, account *Account) (m
 		}
 	}
 
+	return newCredentials, nil
+}
+
+// QwenTokenRefresher handles Qwen OAuth token refresh.
+type QwenTokenRefresher struct {
+	qwenOAuthService *QwenOAuthService
+}
+
+func NewQwenTokenRefresher(qwenOAuthService *QwenOAuthService) *QwenTokenRefresher {
+	return &QwenTokenRefresher{
+		qwenOAuthService: qwenOAuthService,
+	}
+}
+
+func (r *QwenTokenRefresher) CanRefresh(account *Account) bool {
+	return account.Platform == PlatformQwen &&
+		account.Type == AccountTypeOAuth
+}
+
+func (r *QwenTokenRefresher) NeedsRefresh(account *Account, refreshWindow time.Duration) bool {
+	expiresAt := account.GetCredentialAsTime("expires_at")
+	if expiresAt == nil {
+		return false
+	}
+	return time.Until(*expiresAt) < refreshWindow
+}
+
+func (r *QwenTokenRefresher) Refresh(ctx context.Context, account *Account) (map[string]any, error) {
+	if r.qwenOAuthService == nil {
+		return nil, fmt.Errorf("qwen oauth service not configured")
+	}
+	tokenInfo, err := r.qwenOAuthService.RefreshAccountToken(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+
+	newCredentials := r.qwenOAuthService.BuildAccountCredentials(tokenInfo)
+	for k, v := range account.Credentials {
+		if _, exists := newCredentials[k]; !exists {
+			newCredentials[k] = v
+		}
+	}
 	return newCredentials, nil
 }

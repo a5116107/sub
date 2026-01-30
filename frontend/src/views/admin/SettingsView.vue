@@ -382,6 +382,71 @@
           </div>
         </div>
 
+        <!-- Referral Settings -->
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.referral.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.referral.description') }}
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.referral.inviterBonus') }}
+                </label>
+                <input
+                  v-model.number="form.referral_inviter_bonus"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="input font-mono text-sm"
+                  placeholder="0"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.referral.inviterBonusHint') }}
+                </p>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.referral.inviteeBonus') }}
+                </label>
+                <input
+                  v-model.number="form.referral_invitee_bonus"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="input font-mono text-sm"
+                  placeholder="0"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.referral.inviteeBonusHint') }}
+                </p>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.referral.commissionRate') }}
+                </label>
+                <input
+                  v-model.number="form.referral_commission_rate"
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  class="input font-mono text-sm"
+                  placeholder="0"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.referral.commissionRateHint') }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Cloudflare Turnstile Settings -->
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
@@ -777,6 +842,79 @@
               </p>
             </div>
 
+            <!-- Subscriptions Feature Toggle -->
+            <div
+              class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
+            >
+              <div>
+                <label class="font-medium text-gray-900 dark:text-white">{{
+                  t('admin.settings.site.subscriptionsEnabled')
+                }}</label>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.site.subscriptionsEnabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.subscriptions_enabled" />
+            </div>
+
+            <!-- Landing Pricing Toggle -->
+            <div
+              class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
+            >
+              <div>
+                <label class="font-medium text-gray-900 dark:text-white">{{
+                  t('admin.settings.site.landingPricingEnabled')
+                }}</label>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.site.landingPricingEnabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.landing_pricing_enabled" />
+            </div>
+
+            <!-- Landing Pricing Config (JSON) -->
+            <div>
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.site.landingPricingConfig') }}
+                </label>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="formatLandingPricingConfig"
+                  >
+                    <Icon name="sparkles" size="sm" class="mr-1.5" :stroke-width="2" />
+                    {{ t('common.format') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="resetLandingPricingConfig"
+                  >
+                    <Icon name="refresh" size="sm" class="mr-1.5" :stroke-width="2" />
+                    {{ t('common.reset') }}
+                  </button>
+                  <router-link to="/home#pricing" class="btn btn-secondary btn-sm">
+                    <Icon name="eye" size="sm" class="mr-1.5" :stroke-width="2" />
+                    {{ t('common.preview') }}
+                  </router-link>
+                </div>
+              </div>
+              <textarea
+                v-model="form.landing_pricing_config"
+                rows="12"
+                class="input mt-2 font-mono text-xs"
+                :placeholder="t('admin.settings.site.landingPricingConfigPlaceholder')"
+              ></textarea>
+              <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.site.landingPricingConfigHint') }}
+              </p>
+              <p v-if="landingPricingConfigError" class="mt-1 text-xs text-red-500">
+                {{ landingPricingConfigError }}
+              </p>
+            </div>
+
             <!-- Hide CCS Import Button -->
             <div
               class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
@@ -1075,6 +1213,7 @@ import Icon from '@/components/icons/Icon.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { useAppStore } from '@/stores'
+import { DEFAULT_LANDING_PRICING_CONFIG_V1_JSON, parseLandingPricingConfig } from '@/utils/landingPricing'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -1086,6 +1225,7 @@ const testingSmtp = ref(false)
 const sendingTestEmail = ref(false)
 const testEmailAddress = ref('')
 const logoError = ref('')
+const landingPricingConfigError = ref('')
 
 // Admin API Key 状态
 const adminApiKeyLoading = ref(true)
@@ -1118,6 +1258,9 @@ const form = reactive<SettingsForm>({
   password_reset_enabled: false,
   totp_enabled: false,
   totp_encryption_key_configured: false,
+  referral_inviter_bonus: 0,
+  referral_invitee_bonus: 0,
+  referral_commission_rate: 0,
   default_balance: 0,
   default_concurrency: 1,
   site_name: 'Sub2API',
@@ -1127,6 +1270,9 @@ const form = reactive<SettingsForm>({
   contact_info: '',
   doc_url: '',
   home_content: '',
+  landing_pricing_enabled: true,
+  landing_pricing_config: '',
+  subscriptions_enabled: true,
   hide_ccs_import_button: false,
   purchase_subscription_enabled: false,
   purchase_subscription_url: '',
@@ -1219,6 +1365,26 @@ function handleLogoUpload(event: Event) {
   input.value = ''
 }
 
+function resetLandingPricingConfig() {
+  form.landing_pricing_config = DEFAULT_LANDING_PRICING_CONFIG_V1_JSON
+  landingPricingConfigError.value = ''
+}
+
+function formatLandingPricingConfig() {
+  if (!form.landing_pricing_config || !form.landing_pricing_config.trim()) {
+    resetLandingPricingConfig()
+    return
+  }
+
+  try {
+    const parsed = JSON.parse(form.landing_pricing_config)
+    form.landing_pricing_config = JSON.stringify(parsed, null, 2)
+    landingPricingConfigError.value = ''
+  } catch (e: any) {
+    landingPricingConfigError.value = e?.message || t('common.invalidJson')
+  }
+}
+
 async function loadSettings() {
   loading.value = true
   try {
@@ -1227,6 +1393,9 @@ async function loadSettings() {
     form.smtp_password = ''
     form.turnstile_secret_key = ''
     form.linuxdo_connect_client_secret = ''
+    if (!form.landing_pricing_config) {
+      form.landing_pricing_config = DEFAULT_LANDING_PRICING_CONFIG_V1_JSON
+    }
   } catch (error: any) {
     appStore.showError(
       t('admin.settings.failedToLoad') + ': ' + (error.message || t('common.unknownError'))
@@ -1239,12 +1408,23 @@ async function loadSettings() {
 async function saveSettings() {
   saving.value = true
   try {
+    const { error: pricingError } = parseLandingPricingConfig(form.landing_pricing_config)
+    if (pricingError) {
+      landingPricingConfigError.value = pricingError
+      appStore.showError(t('admin.settings.site.landingPricingConfigInvalid') + ': ' + pricingError)
+      return
+    }
+    landingPricingConfigError.value = ''
+
     const payload: UpdateSettingsRequest = {
       registration_enabled: form.registration_enabled,
       email_verify_enabled: form.email_verify_enabled,
       promo_code_enabled: form.promo_code_enabled,
       password_reset_enabled: form.password_reset_enabled,
       totp_enabled: form.totp_enabled,
+      referral_inviter_bonus: form.referral_inviter_bonus,
+      referral_invitee_bonus: form.referral_invitee_bonus,
+      referral_commission_rate: form.referral_commission_rate,
       default_balance: form.default_balance,
       default_concurrency: form.default_concurrency,
       site_name: form.site_name,
@@ -1254,6 +1434,9 @@ async function saveSettings() {
       contact_info: form.contact_info,
       doc_url: form.doc_url,
       home_content: form.home_content,
+      landing_pricing_enabled: form.landing_pricing_enabled,
+      landing_pricing_config: form.landing_pricing_config,
+      subscriptions_enabled: form.subscriptions_enabled,
       hide_ccs_import_button: form.hide_ccs_import_button,
       purchase_subscription_enabled: form.purchase_subscription_enabled,
       purchase_subscription_url: form.purchase_subscription_url,

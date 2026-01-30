@@ -10,6 +10,16 @@ export default {
     login: '登录',
     getStarted: '开始使用',
     goToDashboard: '进入控制台',
+    nav: {
+      enterprise: '企业级就绪',
+      features: '产品特性',
+      providers: '服务商'
+    },
+    pricing: {
+      goToPurchase: '前往购买',
+      nav: '价格',
+      customHint: '自定义周期以套餐说明为准（如“联系销售”）。'
+    },
     tags: {
       subscriptionToApi: '订阅转 API',
       stickySession: '粘性会话',
@@ -38,10 +48,47 @@ export default {
     }
   },
 
+  // Purchase
+  purchase: {
+    title: '购买',
+    description: '选择套餐后，按指引完成购买流程。',
+    howToBuy: {
+      title: '如何购买',
+      desc: '当前为人工对接购买。选择套餐后联系管理员/客服完成开通。'
+    },
+    checkSubscriptions: '我的订阅',
+    contact: '联系方式',
+    copyContact: '复制',
+    contactCopied: '已复制联系方式',
+    selected: '已选择',
+    notSelected: '未选择',
+    nextStep: '下一步',
+    nextStepToast: '请联系管理员/客服完成购买与开通。',
+    pleaseSelectPlan: '请先选择一个套餐。',
+    noContactInfo: '未配置联系方式。',
+    onlineTopupTitle: '在线充值',
+    onlineTopupDesc: '创建充值订单并通过支付通道完成支付；回调验签后将自动入账。',
+    amountLabel: '金额',
+    providerLabel: '支付通道',
+    channelLabel: '支付方式',
+    amountRequired: '请输入有效金额',
+    providerRequired: '请选择支付通道',
+    channelRequired: '请选择支付方式',
+    createOrder: '创建订单并支付',
+    creatingOrder: '正在创建订单...',
+    paymentUnavailable: '当前在线支付不可用',
+    paymentUnavailableHint: '请让管理员在后端配置中启用 payment.providers.*。'
+  },
+
   // Setup Wizard
   setup: {
     title: 'Sub2API 安装向导',
     description: '配置您的 Sub2API 实例',
+    token: {
+      label: '安装令牌（可选）',
+      placeholder: '请输入安装令牌',
+      help: '如果服务端启用了安装令牌校验，请在此输入。'
+    },
     database: {
       title: '数据库配置',
       description: '连接到您的 PostgreSQL 数据库',
@@ -109,6 +156,9 @@ export default {
     update: '更新',
     confirm: '确认',
     reset: '重置',
+    format: '格式化',
+    preview: '预览',
+    invalidJson: '无效的 JSON',
     search: '搜索',
     filter: '筛选',
     export: '导出',
@@ -204,6 +254,7 @@ export default {
     github: 'GitHub',
     mySubscriptions: '我的订阅',
     buySubscription: '购买订阅',
+    purchase: '购买/充值',
     docs: '文档'
   },
 
@@ -556,6 +607,30 @@ export default {
     pleaseEnterCode: '请输入兑换码'
   },
 
+  // Billing
+  billing: {
+    title: '账单 / 支付',
+    description: '查看支付状态并刷新余额',
+    currentBalance: '当前余额',
+    tip: '余额在回调验签后入账，可能需要等待一会儿。',
+    refresh: '刷新',
+    refreshing: '刷新中...',
+    refreshFailed: '刷新账单状态失败',
+    goToPurchase: '前往购买',
+    orderTitle: '最近订单',
+    orderNo: '订单号',
+    amount: '金额',
+    provider: '支付通道',
+    orderHint: '如余额长时间未更新，请提供订单号联系管理员/客服。',
+    noOrder: '未发现本设备的最近支付订单。',
+    noOrderHint: '如果刚完成支付，请返回购买页重试，或联系管理员/客服。',
+    statusPending: '待支付',
+    statusPaid: '已入账',
+    statusFailed: '失败',
+    statusCanceled: '已取消',
+    statusExpired: '已过期'
+  },
+
   // Profile
   profile: {
     title: '个人设置',
@@ -565,6 +640,9 @@ export default {
     memberSince: '注册时间',
     administrator: '管理员',
     user: '用户',
+    inviteCode: '邀请码',
+    copyInviteCode: '复制邀请码',
+    copyInviteLink: '复制注册链接',
     username: '用户名',
     enterUsername: '输入用户名',
     editProfile: '编辑个人资料',
@@ -724,6 +802,19 @@ export default {
       tokens: 'Token',
       cache: '缓存',
       recentUsage: '最近使用',
+      backfill: {
+        open: '回填',
+        title: '仪表盘聚合回填',
+        description: '手动触发预聚合数据回填（后台异步执行）。',
+        start: '开始时间',
+        end: '结束时间',
+        submit: '触发回填',
+        invalidTime: '请填写有效的开始/结束时间。',
+        invalidRange: '开始时间必须早于结束时间。',
+        rangeTooLarge: '时间跨度过大（最多 {days} 天）。',
+        accepted: '已提交回填任务，聚合将在后台执行。',
+        failed: '触发回填失败'
+      },
       last7Days: '近 7 天',
       noUsageRecords: '暂无使用记录',
       startUsingApi: '开始使用 API 后，使用历史将显示在这里。',
@@ -1013,7 +1104,9 @@ export default {
         anthropic: 'Anthropic',
         openai: 'OpenAI',
         gemini: 'Gemini',
-        antigravity: 'Antigravity'
+        antigravity: 'Antigravity',
+        qwen: 'Qwen',
+        iflow: 'iFlow'
       },
       saving: '保存中...',
       noGroups: '暂无分组',
@@ -1102,6 +1195,8 @@ export default {
     subscriptions: {
       title: '订阅管理',
       description: '管理用户订阅和配额限制',
+      disabled: '订阅功能已关闭',
+      disabledDesc: '该功能已被管理员关闭，暂不可用。',
       assignSubscription: '分配订阅',
       adjustSubscription: '调整订阅',
       revokeSubscription: '撤销订阅',
@@ -1257,21 +1352,31 @@ export default {
       testConnection: '测试连接',
       reAuthorize: '重新授权',
       refreshToken: '刷新令牌',
+      refreshTier: '刷新等级',
       noAccountsYet: '暂无账号',
       createFirstAccount: '添加 AI 平台账号以开始使用 API 网关。',
       tokenRefreshed: 'Token 刷新成功',
+      tierRefreshed: '等级刷新成功',
+      batchTierRefreshTitle: '批量刷新等级',
+      batchTierRefreshSummary: '等级刷新：成功 {success} 个，失败 {failed} 个',
+      batchTierRefreshAccountId: '账号 ID',
+      batchTierRefreshError: '错误',
+      batchTierRefreshFailed: '批量刷新等级失败',
       accountDeleted: '账号删除成功',
       rateLimitCleared: '速率限制已清除',
       setupToken: 'Setup Token',
       apiKey: 'API Key',
       deleteConfirm: "确定要删除账号 '{name}' 吗？此操作无法撤销。",
+      failedToRefreshTier: '刷新等级失败',
       failedToClearRateLimit: '清除速率限制失败',
       platforms: {
         claude: 'Claude',
         openai: 'OpenAI',
         anthropic: 'Anthropic',
         gemini: 'Gemini',
-        antigravity: 'Antigravity'
+        antigravity: 'Antigravity',
+        qwen: 'Qwen',
+        iflow: 'iFlow'
       },
       types: {
         oauth: 'OAuth',
@@ -1404,7 +1509,8 @@ export default {
         edit: '批量编辑账号',
         delete: '批量删除',
         enableScheduling: '批量启用调度',
-        disableScheduling: '批量停止调度'
+        disableScheduling: '批量停止调度',
+        refreshTier: '批量刷新等级'
       },
       bulkEdit: {
         title: '批量编辑账号',
@@ -1453,6 +1559,23 @@ export default {
       openai: {
         baseUrlHint: '留空使用官方 OpenAI API',
         apiKeyHint: '您的 OpenAI API Key'
+      },
+      // Qwen specific hints
+      qwen: {
+        baseUrlHint: '留空使用官方 Qwen API（默认 https://portal.qwen.ai/v1）',
+        apiKeyHint: '您的 Qwen API Key（或平台分配的访问令牌）',
+        deviceFlowNote: '推荐使用 Device Flow 授权，避免在浏览器中复制/粘贴 token。',
+        accountType: {
+          oauthTitle: 'OAuth 授权（Device Flow）',
+          oauthDesc: '通过验证码方式授权，服务器侧安全完成 token 交换。',
+          apiKeyTitle: 'API Key',
+          apiKeyDesc: '手动填写 API Key（或访问令牌）。'
+        }
+      },
+      // iFlow specific hints
+      iflow: {
+        baseUrlHint: '留空使用官方 iFlow API（默认 https://apis.iflow.cn/v1）',
+        apiKeyHint: '您的 iFlow API Key'
       },
       modelRestriction: '模型限制（可选）',
       modelWhitelist: '模型白名单',
@@ -1609,6 +1732,17 @@ export default {
           authCodePlaceholder:
             '方式1：复制完整的链接\n(http://localhost:xxx/auth/callback?code=...)\n方式2：仅复制 code 参数的值',
           authCodeHint: '您可以直接复制整个链接或仅复制 code 参数值，系统会自动识别'
+        },
+        // Qwen specific
+        qwen: {
+          title: 'Qwen 账户授权',
+          deviceFlowTitle: 'Qwen Device Flow 授权',
+          deviceFlowDesc: '打开验证链接，输入验证码完成授权。',
+          start: '开始授权',
+          starting: '启动中...',
+          userCodeLabel: '验证码（User Code）',
+          verifyUrlLabel: '验证链接（Verification URL）',
+          afterAuthHint: '完成授权后，点击下方「完成授权」创建账号。'
         },
         // Gemini specific
 	        gemini: {
@@ -2161,6 +2295,27 @@ export default {
     usage: {
       title: '使用记录',
       description: '查看和管理所有用户的使用记录',
+      charts: {
+        title: '图表',
+        show: '展开图表',
+        hide: '收起图表'
+      },
+      filters: {
+        more: '更多筛选',
+        less: '收起筛选'
+      },
+      presets: {
+        title: '预设',
+        recent: '最近',
+        favorites: '收藏',
+        save: '保存',
+        namePlaceholder: '预设名称',
+        emptyRecent: '暂无最近预设',
+        emptyFavorites: '暂无收藏预设',
+        applied: '已应用预设',
+        saved: '已保存到收藏',
+        deleted: '已从收藏移除'
+      },
       userFilter: '用户',
       searchUserPlaceholder: '按邮箱搜索用户...',
       searchApiKeyPlaceholder: '按名称搜索 API 密钥...',
@@ -2183,6 +2338,7 @@ export default {
       outputTokens: '输出 Token',
       cacheCreationTokens: '缓存创建 Token',
       cacheReadTokens: '缓存读取 Token',
+      cacheHitRate: '缓存命中率',
       failedToLoad: '加载使用记录失败',
       billingType: '计费类型',
       allBillingTypes: '全部计费类型',
@@ -2976,6 +3132,16 @@ export default {
         totpKeyNotConfigured:
           '请先在环境变量中配置 TOTP_ENCRYPTION_KEY。使用命令 openssl rand -hex 32 生成密钥。'
       },
+      referral: {
+        title: '邀请 / 返利',
+        description: '配置用户邀请码与邀请返利',
+        inviterBonus: '邀请人注册奖励',
+        inviterBonusHint: '新用户使用邀请码注册时，奖励到邀请人余额',
+        inviteeBonus: '被邀请人注册奖励',
+        inviteeBonusHint: '注册时使用有效邀请码，奖励到新用户余额',
+        commissionRate: '返利比例',
+        commissionRateHint: '0-1。邀请人获得被邀请人实际扣费金额的此比例返利'
+      },
       turnstile: {
         title: 'Cloudflare Turnstile',
         description: '登录和注册的机器人防护',
@@ -3032,6 +3198,10 @@ export default {
         docUrl: '文档链接',
         docUrlHint: '文档网站的链接。留空则隐藏文档链接。',
         docUrlPlaceholder: 'https://docs.example.com',
+        subscriptionsEnabled: '启用订阅功能',
+        subscriptionsEnabledHint: '控制用户/管理端订阅页面与订阅相关 API（关闭后隐藏入口并返回 403）。',
+        landingPricingEnabled: '启用订阅套餐展示',
+        landingPricingEnabledHint: '控制首页 /home 与购买页 /purchase 的订阅套餐展示（关闭后不展示价格模块）。',
         siteLogo: '站点Logo',
         uploadImage: '上传图片',
         remove: '移除',
@@ -3043,6 +3213,10 @@ export default {
         homeContentPlaceholder: '在此输入首页内容，支持 Markdown & HTML 代码。如果输入的是一个链接，则会使用该链接作为 iframe 的 src 属性。',
         homeContentHint: '自定义首页内容，支持 Markdown/HTML。如果输入的是链接（以 http:// 或 https:// 开头），则会使用该链接作为 iframe 的 src 属性，这允许你设置任意网页作为首页。设置后首页的状态信息将不再显示。',
         homeContentIframeWarning: '⚠️ iframe 模式提示：部分网站设置了 X-Frame-Options 或 CSP 安全策略，禁止被嵌入到 iframe 中。如果页面显示空白或报错，请确认目标网站允许被嵌入，或考虑使用 HTML 模式自行构建页面内容。',
+        landingPricingConfig: 'Landing / Pricing 配置（JSON）',
+        landingPricingConfigPlaceholder: '请输入 JSON 配置（例如 plans、价格、描述文案等）',
+        landingPricingConfigHint: '用于首页价格模块与 /purchase 页面展示。支持周付/月付/自定义、按量计费信息等。',
+        landingPricingConfigInvalid: '定价配置无效',
         hideCcsImportButton: '隐藏 CCS 导入按钮',
         hideCcsImportButtonHint: '启用后将在 API Keys 页面隐藏"导入 CCS"按钮'
       },
@@ -3216,6 +3390,8 @@ export default {
   userSubscriptions: {
     title: '我的订阅',
     description: '查看您的订阅计划和用量',
+    disabled: '订阅功能已关闭',
+    disabledDesc: '该功能已被管理员关闭，暂不可用。',
     noActiveSubscriptions: '暂无有效订阅',
     noActiveSubscriptionsDesc: '您没有任何有效订阅。请联系管理员获取订阅。',
     failedToLoad: '加载订阅失败',

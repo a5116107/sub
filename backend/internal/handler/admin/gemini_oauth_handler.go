@@ -2,8 +2,10 @@ package admin
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -56,7 +58,12 @@ func (h *GeminiOAuthHandler) GenerateAuthURL(c *gin.Context) {
 
 	// Always pass the "hosted" callback URI; the OAuth service may override it depending on
 	// oauth_type and whether the built-in Gemini CLI OAuth client is used.
-	redirectURI := deriveGeminiRedirectURI(c)
+	redirectURI, err := deriveGeminiRedirectURI(c, h.geminiOAuthService.GetConfig())
+	if err != nil {
+		log.Printf("[Gemini OAuth] derive redirect URI failed: %v", err)
+		response.BadRequest(c, "Failed to generate auth URL: server.frontend_base_url is required (or enable debug-only derived mode)")
+		return
+	}
 	result, err := h.geminiOAuthService.GenerateAuthURL(c.Request.Context(), req.ProxyID, redirectURI, req.ProjectID, oauthType, req.TierID)
 	if err != nil {
 		msg := err.Error()
@@ -119,24 +126,14 @@ func (h *GeminiOAuthHandler) ExchangeCode(c *gin.Context) {
 	response.Success(c, tokenInfo)
 }
 
-func deriveGeminiRedirectURI(c *gin.Context) string {
-	origin := strings.TrimSpace(c.GetHeader("Origin"))
-	if origin != "" {
-		return strings.TrimRight(origin, "/") + "/auth/callback"
+func deriveGeminiRedirectURI(c *gin.Context, cfg *config.Config) (string, error) {
+	base, err := service.TrustedFrontendBaseURL(service.FrontendBaseURLInput{
+		Origin: c.GetHeader("Origin"),
+		Host:   c.Request.Host,
+		IsTLS:  c.Request.TLS != nil,
+	}, cfg)
+	if err != nil {
+		return "", err
 	}
-
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	if xfProto := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")); xfProto != "" {
-		scheme = strings.TrimSpace(strings.Split(xfProto, ",")[0])
-	}
-
-	host := strings.TrimSpace(c.Request.Host)
-	if xfHost := strings.TrimSpace(c.GetHeader("X-Forwarded-Host")); xfHost != "" {
-		host = strings.TrimSpace(strings.Split(xfHost, ",")[0])
-	}
-
-	return fmt.Sprintf("%s://%s/auth/callback", scheme, host)
+	return fmt.Sprintf("%s/auth/callback", strings.TrimRight(base, "/")), nil
 }

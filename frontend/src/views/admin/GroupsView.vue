@@ -1152,6 +1152,8 @@ const platformOptions = computed(() => [
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
+  { value: 'qwen', label: 'Qwen' },
+  { value: 'iflow', label: 'iFlow' },
   { value: 'antigravity', label: 'Antigravity' }
 ])
 
@@ -1160,6 +1162,8 @@ const platformFilterOptions = computed(() => [
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
+  { value: 'qwen', label: 'Qwen' },
+  { value: 'iflow', label: 'iFlow' },
   { value: 'antigravity', label: 'Antigravity' }
 ])
 

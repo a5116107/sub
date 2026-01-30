@@ -21,8 +21,8 @@ var (
 	// - "" (默认): 使用 /v1/messages, /v1beta/models（混合模式，可调度 antigravity 账户）
 	// - "/antigravity": 使用 /antigravity/v1/messages, /antigravity/v1beta/models（非混合模式，仅 antigravity 账户）
 	endpointPrefix = getEnv("ENDPOINT_PREFIX", "")
-	claudeAPIKey   = "sk-8e572bc3b3de92ace4f41f4256c28600ca11805732a7b693b5c44741346bbbb3"
-	geminiAPIKey   = "sk-5950197a2085b38bbe5a1b229cc02b8ece914963fc44cacc06d497ae8b87410f"
+	claudeAPIKey   = getEnv("E2E_CLAUDE_API_KEY", "")
+	geminiAPIKey   = getEnv("E2E_GEMINI_API_KEY", "")
 	testInterval   = 1 * time.Second // 测试间隔，防止限流
 )
 
@@ -65,12 +65,27 @@ func TestMain(m *testing.M) {
 	if endpointPrefix != "" {
 		mode = "Antigravity 模式"
 	}
-	fmt.Printf("\n🚀 E2E Gateway Tests - %s (prefix=%q, %s)\n\n", baseURL, endpointPrefix, mode)
+	fmt.Printf("\nE2E Gateway Tests - %s (prefix=%q, %s)\n\n", baseURL, endpointPrefix, mode)
 	os.Exit(m.Run())
+}
+
+func requireClaudeAPIKey(t *testing.T) {
+	t.Helper()
+	if claudeAPIKey == "" {
+		t.Skip("E2E_CLAUDE_API_KEY not set")
+	}
+}
+
+func requireGeminiAPIKey(t *testing.T) {
+	t.Helper()
+	if geminiAPIKey == "" {
+		t.Skip("E2E_GEMINI_API_KEY not set")
+	}
 }
 
 // TestClaudeModelsList 测试 GET /v1/models
 func TestClaudeModelsList(t *testing.T) {
+	requireClaudeAPIKey(t)
 	url := baseURL + endpointPrefix + "/v1/models"
 
 	req, _ := http.NewRequest("GET", url, nil)
@@ -106,6 +121,7 @@ func TestClaudeModelsList(t *testing.T) {
 
 // TestGeminiModelsList 测试 GET /v1beta/models
 func TestGeminiModelsList(t *testing.T) {
+	requireGeminiAPIKey(t)
 	url := baseURL + endpointPrefix + "/v1beta/models"
 
 	req, _ := http.NewRequest("GET", url, nil)
@@ -137,6 +153,7 @@ func TestGeminiModelsList(t *testing.T) {
 
 // TestClaudeMessages 测试 Claude /v1/messages 接口
 func TestClaudeMessages(t *testing.T) {
+	requireClaudeAPIKey(t)
 	for i, model := range claudeModels {
 		if i > 0 {
 			time.Sleep(testInterval)
@@ -152,6 +169,7 @@ func TestClaudeMessages(t *testing.T) {
 }
 
 func testClaudeMessage(t *testing.T, model string, stream bool) {
+	requireClaudeAPIKey(t)
 	url := baseURL + endpointPrefix + "/v1/messages"
 
 	payload := map[string]any{
@@ -213,6 +231,7 @@ func testClaudeMessage(t *testing.T, model string, stream bool) {
 
 // TestGeminiGenerateContent 测试 Gemini /v1beta/models/:model 接口
 func TestGeminiGenerateContent(t *testing.T) {
+	requireGeminiAPIKey(t)
 	for i, model := range geminiModels {
 		if i > 0 {
 			time.Sleep(testInterval)
@@ -228,6 +247,7 @@ func TestGeminiGenerateContent(t *testing.T) {
 }
 
 func testGeminiGenerate(t *testing.T, model string, stream bool) {
+	requireGeminiAPIKey(t)
 	action := "generateContent"
 	if stream {
 		action = "streamGenerateContent"
@@ -318,6 +338,7 @@ func TestClaudeMessagesWithComplexTools(t *testing.T) {
 }
 
 func testClaudeMessageWithTools(t *testing.T, model string) {
+	requireClaudeAPIKey(t)
 	url := baseURL + endpointPrefix + "/v1/messages"
 
 	// 构造包含复杂 schema 的工具定义（模拟 Claude Code 的工具）
@@ -533,6 +554,7 @@ func TestClaudeMessagesWithThinkingAndTools(t *testing.T) {
 }
 
 func testClaudeThinkingWithToolHistory(t *testing.T, model string) {
+	requireClaudeAPIKey(t)
 	url := baseURL + endpointPrefix + "/v1/messages"
 
 	// 模拟历史对话：用户请求 → assistant 调用工具 → 工具返回 → 继续对话
@@ -646,6 +668,8 @@ func testClaudeThinkingWithToolHistory(t *testing.T, model string) {
 // 验证：通过 /v1/messages 端点传入 gemini 模型名的场景（含前缀映射）
 // 仅在 Antigravity 模式下运行（ENDPOINT_PREFIX="/antigravity"）
 func TestClaudeMessagesWithGeminiModel(t *testing.T) {
+	requireClaudeAPIKey(t)
+	requireGeminiAPIKey(t)
 	if endpointPrefix != "/antigravity" {
 		t.Skip("仅在 Antigravity 模式下运行")
 	}
@@ -676,6 +700,7 @@ func TestClaudeMessagesWithGeminiModel(t *testing.T) {
 // TestClaudeMessagesWithNoSignature 测试历史 thinking block 不带 signature 的场景
 // 验证：Gemini 模型接受没有 signature 的 thinking block
 func TestClaudeMessagesWithNoSignature(t *testing.T) {
+	requireClaudeAPIKey(t)
 	models := []string{
 		"claude-haiku-4-5-20251001", // gemini-3-flash - 支持无 signature
 	}
@@ -690,6 +715,7 @@ func TestClaudeMessagesWithNoSignature(t *testing.T) {
 }
 
 func testClaudeWithNoSignature(t *testing.T, model string) {
+	requireClaudeAPIKey(t)
 	url := baseURL + endpointPrefix + "/v1/messages"
 
 	// 模拟历史对话包含 thinking block 但没有 signature

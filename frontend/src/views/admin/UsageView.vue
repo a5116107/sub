@@ -3,18 +3,50 @@
     <div class="space-y-6">
       <UsageStatsCards :stats="usageStats" />
       <!-- Charts Section -->
-      <div class="space-y-4">
-        <div class="card p-4">
+      <div class="card p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="rounded-lg bg-primary-100 p-2 dark:bg-primary-900/30">
+              <Icon name="chart" size="sm" class="text-primary-600 dark:text-primary-300" />
+            </div>
+            <div>
+              <div class="text-sm font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.usage.charts.title') }}
+              </div>
+              <div class="text-xs text-gray-500 dark:text-dark-400">
+                {{ startDate }} ~ {{ endDate }}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm px-2 md:px-3"
+            :title="chartsCollapsed ? t('admin.usage.charts.show') : t('admin.usage.charts.hide')"
+            :aria-label="chartsCollapsed ? t('admin.usage.charts.show') : t('admin.usage.charts.hide')"
+            @click="toggleChartsCollapsed"
+          >
+            <Icon
+              name="chevronDown"
+              size="sm"
+              class="transition-transform md:mr-1.5"
+              :class="chartsCollapsed ? '' : 'rotate-180'"
+            />
+            <span class="hidden md:inline">{{ chartsCollapsed ? t('common.expand') : t('common.collapse') }}</span>
+          </button>
+        </div>
+
+        <div v-if="!chartsCollapsed" class="mt-4 space-y-4">
           <div class="flex items-center gap-4">
             <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
             <div class="w-28">
               <Select v-model="granularity" :options="granularityOptions" @change="loadChartData" />
             </div>
           </div>
-        </div>
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <ModelDistributionChart :model-stats="modelStats" :loading="chartsLoading" />
-          <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
+          <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <ModelDistributionChart :model-stats="modelStats" :loading="chartsLoading" />
+            <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
+          </div>
         </div>
       </div>
       <UsageFilters v-model="filters" v-model:startDate="startDate" v-model:endDate="endDate" :exporting="exporting" @change="applyFilters" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel" />
@@ -38,6 +70,7 @@ import { useI18n } from 'vue-i18n'
 import { saveAs } from 'file-saver'
 import { useAppStore } from '@/stores/app'; import { adminAPI } from '@/api/admin'; import { adminUsageAPI } from '@/api/admin/usage'
 import AppLayout from '@/components/layout/AppLayout.vue'; import Pagination from '@/components/common/Pagination.vue'; import Select from '@/components/common/Select.vue'
+import Icon from '@/components/icons/Icon.vue'
 import UsageStatsCards from '@/components/admin/usage/UsageStatsCards.vue'; import UsageFilters from '@/components/admin/usage/UsageFilters.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'; import UsageExportProgress from '@/components/admin/usage/UsageExportProgress.vue'
 import UsageCleanupDialog from '@/components/admin/usage/UsageCleanupDialog.vue'
@@ -48,9 +81,40 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const usageStats = ref<AdminUsageStatsResponse | null>(null); const usageLogs = ref<AdminUsageLog[]>([]); const loading = ref(false); const exporting = ref(false)
 const trendData = ref<TrendDataPoint[]>([]); const modelStats = ref<ModelStat[]>([]); const chartsLoading = ref(false); const granularity = ref<'day' | 'hour'>('day')
-let abortController: AbortController | null = null; let exportAbortController: AbortController | null = null
+let abortController: AbortController | null = null; let statsAbortController: AbortController | null = null; let chartsAbortController: AbortController | null = null; let exportAbortController: AbortController | null = null
 const exportProgress = reactive({ show: false, progress: 0, current: 0, total: 0, estimatedTime: '' })
 const cleanupDialogVisible = ref(false)
+const chartsCollapsed = ref(false)
+const ADMIN_USAGE_CHARTS_COLLAPSED_STORAGE_KEY = 'admin-usage-charts-collapsed'
+const isRequestCanceled = (error: any) => error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError' || error?.name === 'AbortError'
+
+const loadChartsCollapsed = () => {
+  try {
+    chartsCollapsed.value = localStorage.getItem(ADMIN_USAGE_CHARTS_COLLAPSED_STORAGE_KEY) === '1'
+  } catch (e) {
+    console.error('Failed to load usage charts state:', e)
+  }
+}
+
+const persistChartsCollapsed = () => {
+  try {
+    localStorage.setItem(ADMIN_USAGE_CHARTS_COLLAPSED_STORAGE_KEY, chartsCollapsed.value ? '1' : '0')
+  } catch (e) {
+    console.error('Failed to persist usage charts state:', e)
+  }
+}
+
+const toggleChartsCollapsed = () => {
+  chartsCollapsed.value = !chartsCollapsed.value
+  persistChartsCollapsed()
+
+  if (chartsCollapsed.value) {
+    chartsAbortController?.abort()
+    chartsLoading.value = false
+  } else {
+    loadChartData()
+  }
+}
 
 const granularityOptions = computed(() => [{ value: 'day', label: t('admin.dashboard.day') }, { value: 'hour', label: t('admin.dashboard.hour') }])
 // Use local timezone to avoid UTC timezone issues
@@ -70,18 +134,37 @@ const loadLogs = async () => {
   try {
     const res = await adminAPI.usage.list({ page: pagination.page, page_size: pagination.page_size, ...filters.value }, { signal: c.signal })
     if(!c.signal.aborted) { usageLogs.value = res.items; pagination.total = res.total }
-  } catch (error: any) { if(error?.name !== 'AbortError') console.error('Failed to load usage logs:', error) } finally { if(abortController === c) loading.value = false }
+  } catch (error: any) { if(!isRequestCanceled(error)) console.error('Failed to load usage logs:', error) } finally { if(abortController === c) loading.value = false }
 }
-const loadStats = async () => { try { const s = await adminAPI.usage.getStats(filters.value); usageStats.value = s } catch (error) { console.error('Failed to load usage stats:', error) } }
+const loadStats = async () => {
+  statsAbortController?.abort()
+  const c = new AbortController()
+  statsAbortController = c
+  try {
+    const s = await adminAPI.usage.getStats(filters.value, { signal: c.signal })
+    if(!c.signal.aborted) usageStats.value = s
+  } catch (error) {
+    if(!isRequestCanceled(error)) console.error('Failed to load usage stats:', error)
+  }
+}
 const loadChartData = async () => {
+  if (chartsCollapsed.value) return
+  chartsAbortController?.abort()
+  const c = new AbortController()
+  chartsAbortController = c
   chartsLoading.value = true
   try {
     const params = { start_date: filters.value.start_date || startDate.value, end_date: filters.value.end_date || endDate.value, granularity: granularity.value, user_id: filters.value.user_id, model: filters.value.model, api_key_id: filters.value.api_key_id, account_id: filters.value.account_id, group_id: filters.value.group_id, stream: filters.value.stream, billing_type: filters.value.billing_type }
-    const [trendRes, modelRes] = await Promise.all([adminAPI.dashboard.getUsageTrend(params), adminAPI.dashboard.getModelStats({ start_date: params.start_date, end_date: params.end_date, user_id: params.user_id, model: params.model, api_key_id: params.api_key_id, account_id: params.account_id, group_id: params.group_id, stream: params.stream, billing_type: params.billing_type })])
-    trendData.value = trendRes.trend || []; modelStats.value = modelRes.models || []
-  } catch (error) { console.error('Failed to load chart data:', error) } finally { chartsLoading.value = false }
+    const [trendRes, modelRes] = await Promise.all([
+      adminAPI.dashboard.getUsageTrend(params, { signal: c.signal }),
+      adminAPI.dashboard.getModelStats({ start_date: params.start_date, end_date: params.end_date, user_id: params.user_id, model: params.model, api_key_id: params.api_key_id, account_id: params.account_id, group_id: params.group_id, stream: params.stream, billing_type: params.billing_type }, { signal: c.signal })
+    ])
+    if(!c.signal.aborted) {
+      trendData.value = trendRes.trend || []; modelStats.value = modelRes.models || []
+    }
+  } catch (error) { if(!isRequestCanceled(error)) console.error('Failed to load chart data:', error) } finally { if(chartsAbortController === c) chartsLoading.value = false }
 }
-const applyFilters = () => { pagination.page = 1; loadLogs(); loadStats(); loadChartData() }
+const applyFilters = () => { pagination.page = 1; loadLogs(); loadStats(); if (!chartsCollapsed.value) loadChartData() }
 const resetFilters = () => { startDate.value = formatLD(weekAgo); endDate.value = formatLD(now); filters.value = { start_date: startDate.value, end_date: endDate.value, billing_type: null }; granularity.value = 'day'; applyFilters() }
 const handlePageChange = (p: number) => { pagination.page = p; loadLogs() }
 const handlePageSizeChange = (s: number) => { pagination.page_size = s; pagination.page = 1; loadLogs() }
@@ -151,6 +234,6 @@ const exportToExcel = async () => {
   finally { if(exportAbortController === c) { exportAbortController = null; exporting.value = false; exportProgress.show = false } }
 }
 
-onMounted(() => { loadLogs(); loadStats(); loadChartData() })
-onUnmounted(() => { abortController?.abort(); exportAbortController?.abort() })
+onMounted(() => { loadChartsCollapsed(); loadLogs(); loadStats(); if (!chartsCollapsed.value) loadChartData() })
+onUnmounted(() => { abortController?.abort(); statsAbortController?.abort(); chartsAbortController?.abort(); exportAbortController?.abort() })
 </script>

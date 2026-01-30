@@ -761,6 +761,13 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		handleError:    s.handleUpstreamError,
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		if strings.TrimSpace(proxyURL) != "" {
+			log.Printf("%s upstream request error via proxy, triggering failover: %v", prefix, err)
+			return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
+		}
 		return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed after retries")
 	}
 	resp := result.resp
@@ -1339,6 +1346,13 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		handleError:    s.handleUpstreamError,
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		if strings.TrimSpace(proxyURL) != "" {
+			log.Printf("%s upstream request error via proxy, triggering failover: %v", prefix, err)
+			return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
+		}
 		return nil, s.writeGoogleError(c, http.StatusBadGateway, "Upstream request failed after retries")
 	}
 	resp := result.resp

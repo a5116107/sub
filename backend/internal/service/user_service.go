@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -26,6 +27,7 @@ type UserRepository interface {
 	Create(ctx context.Context, user *User) error
 	GetByID(ctx context.Context, id int64) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
+	GetByInviteCode(ctx context.Context, inviteCode string) (*User, error)
 	GetFirstAdmin(ctx context.Context) (*User, error)
 	Update(ctx context.Context, user *User) error
 	Delete(ctx context.Context, id int64) error
@@ -43,6 +45,10 @@ type UserRepository interface {
 	UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error
 	EnableTotp(ctx context.Context, userID int64) error
 	DisableTotp(ctx context.Context, userID int64) error
+
+	// Referral / invite system
+	SetInviteCodeIfEmpty(ctx context.Context, userID int64, inviteCode string) (bool, error)
+	SetInvitedByIfEmpty(ctx context.Context, userID int64, inviterUserID int64, invitedAt time.Time) (bool, error)
 }
 
 // UpdateProfileRequest 更新用户资料请求
@@ -87,6 +93,7 @@ func (s *UserService) GetProfile(ctx context.Context, userID int64) (*User, erro
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
+	_, _ = EnsureUserInviteCode(ctx, s.userRepo, user)
 	return user, nil
 }
 
@@ -162,6 +169,15 @@ func (s *UserService) GetByID(ctx context.Context, id int64) (*User, error) {
 	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
+	}
+	_, _ = EnsureUserInviteCode(ctx, s.userRepo, user)
+	return user, nil
+}
+
+func (s *UserService) GetByInviteCode(ctx context.Context, inviteCode string) (*User, error) {
+	user, err := s.userRepo.GetByInviteCode(ctx, inviteCode)
+	if err != nil {
+		return nil, fmt.Errorf("get user by invite code: %w", err)
 	}
 	return user, nil
 }

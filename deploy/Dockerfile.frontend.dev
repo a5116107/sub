@@ -1,0 +1,17 @@
+# =============================================================================
+# Sub2API Frontend Dev Image
+# - Runs Vite dev server (pnpm dev)
+# - Used by deploy/docker-compose.dev.yml
+# =============================================================================
+
+FROM node:24-alpine
+
+WORKDIR /app/frontend
+
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# The actual source code is bind-mounted in docker-compose.dev.yml.
+# Keep this image minimal and focused on providing the toolchain.
+
+CMD ["sh", "-c", "pnpm config set store-dir /pnpm-store && pnpm install && pnpm dev"]
+

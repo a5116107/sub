@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -49,6 +50,7 @@ type APIKeyRepository interface {
 	SearchAPIKeys(ctx context.Context, userID int64, keyword string, limit int) ([]APIKey, error)
 	ClearGroupIDByGroupID(ctx context.Context, groupID int64) (int64, error)
 	CountByGroupID(ctx context.Context, groupID int64) (int64, error)
+	CountActiveByGroupID(ctx context.Context, groupID int64) (int64, error)
 	ListKeysByUserID(ctx context.Context, userID int64) ([]string, error)
 	ListKeysByGroupID(ctx context.Context, groupID int64) ([]string, error)
 }
@@ -292,6 +294,12 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	}
 
 	if err := s.apiKeyRepo.Create(ctx, apiKey); err != nil {
+		// Ensure rate-limit/error accounting stays accurate even when conflicts are caused by soft-deleted records
+		// or by concurrent creates (race between ExistsByKey and Create).
+		if req.CustomKey != nil && *req.CustomKey != "" && errors.Is(err, ErrAPIKeyExists) {
+			s.incrementAPIKeyErrorCount(ctx, userID)
+			return nil, ErrAPIKeyExists
+		}
 		return nil, fmt.Errorf("create api key: %w", err)
 	}
 

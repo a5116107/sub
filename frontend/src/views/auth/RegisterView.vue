@@ -220,7 +220,7 @@
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.alreadyHaveAccount') }}
         <router-link
-          to="/login"
+          :to="loginLinkTo"
           class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signIn') }}
@@ -231,7 +231,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
@@ -240,6 +240,7 @@ import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import { getPublicSettings, validatePromoCode } from '@/api/auth'
+import { sanitizeUrl } from '@/utils/url'
 
 const { t } = useI18n()
 
@@ -249,6 +250,16 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const appStore = useAppStore()
+
+const safeRedirect = computed(() => {
+  const raw = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  return sanitizeUrl(raw, { allowRelative: true })
+})
+
+const loginLinkTo = computed(() => {
+  if (!safeRedirect.value) return '/login'
+  return { path: '/login', query: { redirect: safeRedirect.value } }
+})
 
 // ==================== State ====================
 
@@ -496,12 +507,17 @@ async function handleRegister(): Promise<void> {
           email: formData.email,
           password: formData.password,
           turnstile_token: turnstileToken.value,
-          promo_code: formData.promo_code || undefined
+          promo_code: formData.promo_code || undefined,
+          redirect: safeRedirect.value || undefined
         })
       )
 
       // Navigate to email verification page
-      await router.push('/email-verify')
+      if (safeRedirect.value) {
+        await router.push({ path: '/email-verify', query: { redirect: safeRedirect.value } })
+      } else {
+        await router.push('/email-verify')
+      }
       return
     }
 
@@ -517,7 +533,7 @@ async function handleRegister(): Promise<void> {
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))
 
     // Redirect to dashboard
-    await router.push('/dashboard')
+    await router.push(safeRedirect.value || '/dashboard')
   } catch (error: unknown) {
     // Reset Turnstile on error
     if (turnstileRef.value) {

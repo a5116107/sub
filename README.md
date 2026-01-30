@@ -92,13 +92,17 @@ sudo systemctl start sub2api
 # 2. Enable auto-start on boot
 sudo systemctl enable sub2api
 
-# 3. Open Setup Wizard in browser
-# http://YOUR_SERVER_IP:8080
-```
+ # 3. Open Setup Wizard in browser
+ # http://YOUR_SERVER_IP:8080
+ ```
 
-The Setup Wizard will guide you through:
-- Database configuration
-- Redis configuration
+Security note (first-run):
+- Setup write endpoints (`/setup/install`, `/setup/test-db`, `/setup/test-redis`) are blocked from non-localhost access unless you configure `SETUP_TOKEN`.
+- If `SETUP_TOKEN` is set, enter it in the Setup Wizard (or send `X-Setup-Token: <token>` in your requests).
+
+ The Setup Wizard will guide you through:
+ - Database configuration
+ - Redis configuration
 - Admin account creation
 
 #### Upgrade
@@ -198,6 +202,15 @@ docker-compose logs -f sub2api
 #### Access
 
 Open `http://YOUR_SERVER_IP:8080` in your browser.
+
+#### Development (Frontend + Backend with Docker)
+
+If you want to run frontend (Vite) and backend (Go) as separate containers for local development, use:
+
+```bash
+cd deploy
+docker compose -f docker-compose.dev.yml up -d --build
+```
 
 #### Upgrade
 

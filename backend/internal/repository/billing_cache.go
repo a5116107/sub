@@ -29,12 +29,13 @@ func billingSubKey(userID, groupID int64) string {
 }
 
 const (
-	subFieldStatus       = "status"
-	subFieldExpiresAt    = "expires_at"
-	subFieldDailyUsage   = "daily_usage"
-	subFieldWeeklyUsage  = "weekly_usage"
-	subFieldMonthlyUsage = "monthly_usage"
-	subFieldVersion      = "version"
+	subFieldStatus        = "status"
+	subFieldExpiresAt     = "expires_at"
+	subFieldDailyUsage    = "daily_usage"
+	subFieldWeeklyUsage   = "weekly_usage"
+	subFieldMonthlyUsage  = "monthly_usage"
+	subFieldReservedUsage = "reserved_usage"
+	subFieldVersion       = "version"
 )
 
 var (
@@ -59,6 +60,71 @@ var (
 		redis.call('HINCRBYFLOAT', KEYS[1], 'weekly_usage', cost)
 		redis.call('HINCRBYFLOAT', KEYS[1], 'monthly_usage', cost)
 		redis.call('EXPIRE', KEYS[1], ARGV[2])
+		return 1
+	`)
+
+	reserveSubUsageScript = redis.NewScript(`
+		local exists = redis.call('EXISTS', KEYS[1])
+		if exists == 0 then
+			return 0
+		end
+
+		local reserve = tonumber(ARGV[1])
+		if reserve == nil or reserve <= 0 then
+			return 0
+		end
+
+		local ttl = tonumber(ARGV[2])
+		local dailyLimit = tonumber(ARGV[3])
+		local weeklyLimit = tonumber(ARGV[4])
+		local monthlyLimit = tonumber(ARGV[5])
+
+		local dailyUsage = tonumber(redis.call('HGET', KEYS[1], 'daily_usage') or '0')
+		local weeklyUsage = tonumber(redis.call('HGET', KEYS[1], 'weekly_usage') or '0')
+		local monthlyUsage = tonumber(redis.call('HGET', KEYS[1], 'monthly_usage') or '0')
+		local reserved = tonumber(redis.call('HGET', KEYS[1], 'reserved_usage') or '0')
+
+		if dailyLimit ~= nil and dailyLimit >= 0 and (dailyUsage + reserved + reserve) > dailyLimit then
+			return -1
+		end
+		if weeklyLimit ~= nil and weeklyLimit >= 0 and (weeklyUsage + reserved + reserve) > weeklyLimit then
+			return -2
+		end
+		if monthlyLimit ~= nil and monthlyLimit >= 0 and (monthlyUsage + reserved + reserve) > monthlyLimit then
+			return -3
+		end
+
+		redis.call('HINCRBYFLOAT', KEYS[1], 'reserved_usage', reserve)
+		redis.call('EXPIRE', KEYS[1], ttl)
+		return 1
+	`)
+
+	finalizeSubUsageScript = redis.NewScript(`
+		local exists = redis.call('EXISTS', KEYS[1])
+		if exists == 0 then
+			return 0
+		end
+
+		local reservedDelta = tonumber(ARGV[1])
+		local actual = tonumber(ARGV[2])
+		local ttl = tonumber(ARGV[3])
+
+		if reservedDelta ~= nil and reservedDelta > 0 then
+			local reserved = tonumber(redis.call('HGET', KEYS[1], 'reserved_usage') or '0')
+			local newReserved = reserved - reservedDelta
+			if newReserved < 0 then
+				newReserved = 0
+			end
+			redis.call('HSET', KEYS[1], 'reserved_usage', newReserved)
+		end
+
+		if actual ~= nil and actual > 0 then
+			redis.call('HINCRBYFLOAT', KEYS[1], 'daily_usage', actual)
+			redis.call('HINCRBYFLOAT', KEYS[1], 'weekly_usage', actual)
+			redis.call('HINCRBYFLOAT', KEYS[1], 'monthly_usage', actual)
+		end
+
+		redis.call('EXPIRE', KEYS[1], ttl)
 		return 1
 	`)
 )
@@ -138,6 +204,10 @@ func (c *billingCache) parseSubscriptionCache(data map[string]string) (*service.
 		result.MonthlyUsage, _ = strconv.ParseFloat(monthlyStr, 64)
 	}
 
+	if reservedStr, ok := data[subFieldReservedUsage]; ok {
+		result.ReservedUsage, _ = strconv.ParseFloat(reservedStr, 64)
+	}
+
 	if versionStr, ok := data[subFieldVersion]; ok {
 		result.Version, _ = strconv.ParseInt(versionStr, 10, 64)
 	}
@@ -160,6 +230,9 @@ func (c *billingCache) SetSubscriptionCache(ctx context.Context, userID, groupID
 		subFieldMonthlyUsage: data.MonthlyUsage,
 		subFieldVersion:      data.Version,
 	}
+	if data.ReservedUsage != 0 {
+		fields[subFieldReservedUsage] = data.ReservedUsage
+	}
 
 	pipe := c.rdb.Pipeline()
 	pipe.HSet(ctx, key, fields)
@@ -173,6 +246,49 @@ func (c *billingCache) UpdateSubscriptionUsage(ctx context.Context, userID, grou
 	_, err := updateSubUsageScript.Run(ctx, c.rdb, []string{key}, cost, int(billingCacheTTL.Seconds())).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		log.Printf("Warning: update subscription usage cache failed for user %d group %d: %v", userID, groupID, err)
+	}
+	return nil
+}
+
+func (c *billingCache) ReserveSubscriptionUsage(ctx context.Context, userID, groupID int64, reserveUSD float64, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64) (int, error) {
+	key := billingSubKey(userID, groupID)
+
+	limitArg := func(v *float64) float64 {
+		if v == nil || *v <= 0 {
+			return -1
+		}
+		return *v
+	}
+
+	// Return codes:
+	//  1  ok
+	//  0  key missing (caller should refresh cache)
+	// -1  daily exceeded
+	// -2  weekly exceeded
+	// -3  monthly exceeded
+	res, err := reserveSubUsageScript.Run(
+		ctx,
+		c.rdb,
+		[]string{key},
+		reserveUSD,
+		int(billingCacheTTL.Seconds()),
+		limitArg(dailyLimitUSD),
+		limitArg(weeklyLimitUSD),
+		limitArg(monthlyLimitUSD),
+	).Int()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		log.Printf("Warning: reserve subscription usage cache failed for user %d group %d: %v", userID, groupID, err)
+		return 0, err
+	}
+	return res, nil
+}
+
+func (c *billingCache) FinalizeSubscriptionUsage(ctx context.Context, userID, groupID int64, reservedUSD, actualUSD float64) error {
+	key := billingSubKey(userID, groupID)
+	_, err := finalizeSubUsageScript.Run(ctx, c.rdb, []string{key}, reservedUSD, actualUSD, int(billingCacheTTL.Seconds())).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		log.Printf("Warning: finalize subscription usage cache failed for user %d group %d: %v", userID, groupID, err)
+		return err
 	}
 	return nil
 }

@@ -16,6 +16,10 @@ export interface SystemSettings {
   password_reset_enabled: boolean
   totp_enabled: boolean // TOTP 双因素认证
   totp_encryption_key_configured: boolean // TOTP 加密密钥是否已配置
+  // Referral settings
+  referral_inviter_bonus: number
+  referral_invitee_bonus: number
+  referral_commission_rate: number
   // Default settings
   default_balance: number
   default_concurrency: number
@@ -27,6 +31,9 @@ export interface SystemSettings {
   contact_info: string
   doc_url: string
   home_content: string
+  landing_pricing_enabled: boolean
+  landing_pricing_config: string
+  subscriptions_enabled: boolean
   hide_ccs_import_button: boolean
   purchase_subscription_enabled: boolean
   purchase_subscription_url: string
@@ -73,6 +80,9 @@ export interface UpdateSettingsRequest {
   promo_code_enabled?: boolean
   password_reset_enabled?: boolean
   totp_enabled?: boolean // TOTP 双因素认证
+  referral_inviter_bonus?: number
+  referral_invitee_bonus?: number
+  referral_commission_rate?: number
   default_balance?: number
   default_concurrency?: number
   site_name?: string
@@ -82,6 +92,9 @@ export interface UpdateSettingsRequest {
   contact_info?: string
   doc_url?: string
   home_content?: string
+  landing_pricing_enabled?: boolean
+  landing_pricing_config?: string
+  subscriptions_enabled?: boolean
   hide_ccs_import_button?: boolean
   purchase_subscription_enabled?: boolean
   purchase_subscription_url?: string

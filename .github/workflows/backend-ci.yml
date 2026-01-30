@@ -3,6 +3,16 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      e2e_base_url:
+        description: "Base URL for e2e tests (e.g. https://preprod.example.com)"
+        required: false
+        default: "http://localhost:8080"
+      e2e_endpoint_prefix:
+        description: "Endpoint prefix for e2e tests (\"\" for mixed mode, or \"/antigravity\")"
+        required: false
+        default: "/antigravity"
 
 permissions:
   contents: read
@@ -45,3 +55,109 @@ jobs:
           version: v2.7
           args: --timeout=5m
           working-directory: backend
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        working-directory: frontend
+        run: pnpm run lint:check
+      - name: Unit tests
+        working-directory: frontend
+        run: pnpm run test:run
+      - name: Build frontend
+        working-directory: frontend
+        run: pnpm run build
+
+  rate-limiter-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache: true
+      - name: Verify Go version
+        run: |
+          go version | grep -q 'go1.25.5'
+      - name: Rate limiter integration test (requires Docker)
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          go test -v -tags=integration ./internal/middleware -run '^TestRateLimiter' -count=1 | tee /tmp/rate_limiter_integration.out
+          if grep -q '^--- SKIP:' /tmp/rate_limiter_integration.out; then
+            echo "Rate limiter integration tests were skipped; ensure Docker/testcontainers are available."
+            exit 1
+          fi
+
+  tlsfingerprint-network:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache: true
+      - name: Verify Go version
+        run: |
+          go version | grep -q 'go1.25.5'
+      - name: TLS fingerprint network tests
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          go test -v ./internal/pkg/tlsfingerprint -run 'TestDialerBasicConnection|TestJA3Fingerprint' -count=1 | tee /tmp/tlsfingerprint.out
+          if grep -q '^--- SKIP:' /tmp/tlsfingerprint.out; then
+            echo "TLS fingerprint tests were skipped; do not use -short for this job."
+            exit 1
+          fi
+
+  e2e-gateway:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ inputs.e2e_base_url }}
+      ENDPOINT_PREFIX: ${{ inputs.e2e_endpoint_prefix }}
+      E2E_CLAUDE_API_KEY: ${{ secrets.E2E_CLAUDE_API_KEY }}
+      E2E_GEMINI_API_KEY: ${{ secrets.E2E_GEMINI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          check-latest: false
+          cache: true
+      - name: Verify Go version
+        run: |
+          go version | grep -q 'go1.25.5'
+      - name: Verify e2e secrets
+        run: |
+          if [ -z "${E2E_CLAUDE_API_KEY:-}" ] || [ -z "${E2E_GEMINI_API_KEY:-}" ]; then
+            echo "Missing E2E_CLAUDE_API_KEY and/or E2E_GEMINI_API_KEY secrets."
+            exit 1
+          fi
+      - name: E2E gateway tests (Antigravity)
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          go test -v -tags=e2e ./internal/integration -count=1 | tee /tmp/e2e_gateway.out
+          if grep -q '^--- SKIP:' /tmp/e2e_gateway.out; then
+            echo "E2E tests contained skips; review output and environment (ENDPOINT_PREFIX/limits/account availability)."
+            exit 1
+          fi

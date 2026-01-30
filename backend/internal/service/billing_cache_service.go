@@ -22,12 +22,13 @@ var (
 
 // subscriptionCacheData 订阅缓存数据结构（内部使用）
 type subscriptionCacheData struct {
-	Status       string
-	ExpiresAt    time.Time
-	DailyUsage   float64
-	WeeklyUsage  float64
-	MonthlyUsage float64
-	Version      int64
+	Status        string
+	ExpiresAt     time.Time
+	DailyUsage    float64
+	WeeklyUsage   float64
+	MonthlyUsage  float64
+	ReservedUsage float64
+	Version       int64
 }
 
 // 缓存写入任务类型
@@ -353,23 +354,25 @@ func (s *BillingCacheService) GetSubscriptionStatus(ctx context.Context, userID,
 
 func (s *BillingCacheService) convertFromPortsData(data *SubscriptionCacheData) *subscriptionCacheData {
 	return &subscriptionCacheData{
-		Status:       data.Status,
-		ExpiresAt:    data.ExpiresAt,
-		DailyUsage:   data.DailyUsage,
-		WeeklyUsage:  data.WeeklyUsage,
-		MonthlyUsage: data.MonthlyUsage,
-		Version:      data.Version,
+		Status:        data.Status,
+		ExpiresAt:     data.ExpiresAt,
+		DailyUsage:    data.DailyUsage,
+		WeeklyUsage:   data.WeeklyUsage,
+		MonthlyUsage:  data.MonthlyUsage,
+		ReservedUsage: data.ReservedUsage,
+		Version:       data.Version,
 	}
 }
 
 func (s *BillingCacheService) convertToPortsData(data *subscriptionCacheData) *SubscriptionCacheData {
 	return &SubscriptionCacheData{
-		Status:       data.Status,
-		ExpiresAt:    data.ExpiresAt,
-		DailyUsage:   data.DailyUsage,
-		WeeklyUsage:  data.WeeklyUsage,
-		MonthlyUsage: data.MonthlyUsage,
-		Version:      data.Version,
+		Status:        data.Status,
+		ExpiresAt:     data.ExpiresAt,
+		DailyUsage:    data.DailyUsage,
+		WeeklyUsage:   data.WeeklyUsage,
+		MonthlyUsage:  data.MonthlyUsage,
+		ReservedUsage: data.ReservedUsage,
+		Version:       data.Version,
 	}
 }
 
@@ -381,13 +384,32 @@ func (s *BillingCacheService) getSubscriptionFromDB(ctx context.Context, userID,
 	}
 
 	return &subscriptionCacheData{
-		Status:       sub.Status,
-		ExpiresAt:    sub.ExpiresAt,
-		DailyUsage:   sub.DailyUsageUSD,
-		WeeklyUsage:  sub.WeeklyUsageUSD,
-		MonthlyUsage: sub.MonthlyUsageUSD,
-		Version:      sub.UpdatedAt.Unix(),
+		Status:        sub.Status,
+		ExpiresAt:     sub.ExpiresAt,
+		DailyUsage:    sub.DailyUsageUSD,
+		WeeklyUsage:   sub.WeeklyUsageUSD,
+		MonthlyUsage:  sub.MonthlyUsageUSD,
+		ReservedUsage: 0,
+		Version:       sub.UpdatedAt.Unix(),
 	}, nil
+}
+
+// getSubscriptionStatusEnsureCache returns subscription status and ensures a cache key exists (for reservation).
+func (s *BillingCacheService) getSubscriptionStatusEnsureCache(ctx context.Context, userID, groupID int64) (*subscriptionCacheData, error) {
+	if s.cache == nil {
+		return s.getSubscriptionFromDB(ctx, userID, groupID)
+	}
+	cacheData, err := s.cache.GetSubscriptionCache(ctx, userID, groupID)
+	if err == nil && cacheData != nil {
+		return s.convertFromPortsData(cacheData), nil
+	}
+	data, err := s.getSubscriptionFromDB(ctx, userID, groupID)
+	if err != nil {
+		return nil, err
+	}
+	// Synchronous cache set: reservation needs the Redis key to exist.
+	s.setSubscriptionCache(ctx, userID, groupID, data)
+	return data, nil
 }
 
 // setSubscriptionCache 设置订阅缓存
@@ -467,6 +489,119 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	return s.checkBalanceEligibility(ctx, user.ID)
 }
 
+type SubscriptionUsageReservation struct {
+	UserID    int64
+	GroupID   int64
+	AmountUSD float64
+}
+
+// CheckBillingEligibilityAndReserve checks eligibility and reserves subscription quota (USD) atomically.
+//
+// For subscription mode, this provides concurrency-safe enforcement and prevents single-request overage
+// by reserving an estimated max cost before forwarding upstream.
+func (s *BillingCacheService) CheckBillingEligibilityAndReserve(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, reserveUSD float64) (*SubscriptionUsageReservation, error) {
+	// 简易模式：跳过所有计费检查
+	if s.cfg.RunMode == config.RunModeSimple {
+		return nil, nil
+	}
+	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
+		return nil, ErrBillingServiceUnavailable
+	}
+
+	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
+	if !isSubscriptionMode {
+		return nil, s.checkBalanceEligibility(ctx, user.ID)
+	}
+
+	if reserveUSD <= 0 {
+		return nil, ErrBillingServiceUnavailable
+	}
+
+	err := s.reserveSubscriptionEligibility(ctx, user.ID, group, subscription, reserveUSD)
+	if err != nil {
+		return nil, err
+	}
+	return &SubscriptionUsageReservation{UserID: user.ID, GroupID: group.ID, AmountUSD: reserveUSD}, nil
+}
+
+func (s *BillingCacheService) reserveSubscriptionEligibility(ctx context.Context, userID int64, group *Group, subscription *UserSubscription, reserveUSD float64) error {
+	if s.cache == nil {
+		return ErrBillingServiceUnavailable
+	}
+
+	subData, err := s.getSubscriptionStatusEnsureCache(ctx, userID, group.ID)
+	if err != nil {
+		if s.circuitBreaker != nil {
+			s.circuitBreaker.OnFailure(err)
+		}
+		log.Printf("ALERT: billing subscription check failed for user %d group %d: %v", userID, group.ID, err)
+		return ErrBillingServiceUnavailable.WithCause(err)
+	}
+	if s.circuitBreaker != nil {
+		s.circuitBreaker.OnSuccess()
+	}
+
+	// 检查订阅状态
+	if subData.Status != SubscriptionStatusActive {
+		return ErrSubscriptionInvalid
+	}
+	if time.Now().After(subData.ExpiresAt) {
+		return ErrSubscriptionInvalid
+	}
+
+	// Atomic check+reserve inside Redis to avoid concurrency overshoot.
+	code, err := s.cache.ReserveSubscriptionUsage(ctx, userID, group.ID, reserveUSD, group.DailyLimitUSD, group.WeeklyLimitUSD, group.MonthlyLimitUSD)
+	if err != nil {
+		if s.circuitBreaker != nil {
+			s.circuitBreaker.OnFailure(err)
+		}
+		return ErrBillingServiceUnavailable.WithCause(err)
+	}
+
+	switch code {
+	case 1:
+		return nil
+	case 0:
+		// Key missing: refresh cache synchronously then retry once.
+		s.setSubscriptionCache(ctx, userID, group.ID, subData)
+		code2, err2 := s.cache.ReserveSubscriptionUsage(ctx, userID, group.ID, reserveUSD, group.DailyLimitUSD, group.WeeklyLimitUSD, group.MonthlyLimitUSD)
+		if err2 != nil {
+			if s.circuitBreaker != nil {
+				s.circuitBreaker.OnFailure(err2)
+			}
+			return ErrBillingServiceUnavailable.WithCause(err2)
+		}
+		switch code2 {
+		case 1:
+			return nil
+		case -1:
+			return ErrDailyLimitExceeded
+		case -2:
+			return ErrWeeklyLimitExceeded
+		case -3:
+			return ErrMonthlyLimitExceeded
+		default:
+			return ErrBillingServiceUnavailable
+		}
+	case -1:
+		return ErrDailyLimitExceeded
+	case -2:
+		return ErrWeeklyLimitExceeded
+	case -3:
+		return ErrMonthlyLimitExceeded
+	default:
+		return ErrBillingServiceUnavailable
+	}
+}
+
+// FinalizeSubscriptionReservation converts reserved quota into actual usage (or releases on failure).
+func (s *BillingCacheService) FinalizeSubscriptionReservation(ctx context.Context, userID, groupID int64, reservedUSD, actualUSD float64) error {
+	if s.cache == nil {
+		return nil
+	}
+	return s.cache.FinalizeSubscriptionUsage(ctx, userID, groupID, reservedUSD, actualUSD)
+}
+
 // checkBalanceEligibility 检查余额模式资格
 func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userID int64) error {
 	balance, err := s.GetUserBalance(ctx, userID)
@@ -513,16 +648,16 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 		return ErrSubscriptionInvalid
 	}
 
-	// 检查限额（使用传入的Group限额配置）
-	if group.HasDailyLimit() && subData.DailyUsage >= *group.DailyLimitUSD {
+	// 检查限额（包含 in-flight 保留额度）
+	if group.HasDailyLimit() && (subData.DailyUsage+subData.ReservedUsage) >= *group.DailyLimitUSD {
 		return ErrDailyLimitExceeded
 	}
 
-	if group.HasWeeklyLimit() && subData.WeeklyUsage >= *group.WeeklyLimitUSD {
+	if group.HasWeeklyLimit() && (subData.WeeklyUsage+subData.ReservedUsage) >= *group.WeeklyLimitUSD {
 		return ErrWeeklyLimitExceeded
 	}
 
-	if group.HasMonthlyLimit() && subData.MonthlyUsage >= *group.MonthlyLimitUSD {
+	if group.HasMonthlyLimit() && (subData.MonthlyUsage+subData.ReservedUsage) >= *group.MonthlyLimitUSD {
 		return ErrMonthlyLimitExceeded
 	}
 

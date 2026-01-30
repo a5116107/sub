@@ -15,6 +15,11 @@ type UsageLogRepository interface {
 	// Create creates a usage log and returns whether it was actually inserted.
 	// inserted is false when the insert was skipped due to conflict (idempotent retries).
 	Create(ctx context.Context, log *UsageLog) (inserted bool, err error)
+
+	// CreateBillingUsageEntry creates an idempotent billing ledger entry tied to a usage log.
+	// inserted is false when the entry already exists (usage_log_id conflict).
+	CreateBillingUsageEntry(ctx context.Context, entry *BillingUsageEntry) (inserted bool, err error)
+	MarkBillingUsageEntryApplied(ctx context.Context, id int64) error
 	GetByID(ctx context.Context, id int64) (*UsageLog, error)
 	Delete(ctx context.Context, id int64) error
 

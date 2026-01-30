@@ -1,9 +1,12 @@
 package setup
 
 import (
+	"crypto/subtle"
 	"fmt"
+	"net"
 	"net/http"
 	"net/mail"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -58,8 +61,45 @@ func setupGuard() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
+		// Bootstrap protection:
+		// - If SETUP_TOKEN is configured, require it for any write-capable setup endpoint.
+		// - If no token is configured, only allow loopback access (operator can SSH tunnel / local access).
+		//
+		// This prevents “setup takeover” when the setup server is reachable before installation is completed.
+		setupToken := strings.TrimSpace(os.Getenv("SETUP_TOKEN"))
+		if setupToken == "" {
+			setupToken = strings.TrimSpace(os.Getenv("SUB2API_SETUP_TOKEN"))
+		}
+		if setupToken != "" {
+			provided := strings.TrimSpace(c.GetHeader("X-Setup-Token"))
+			if provided == "" {
+				if auth := strings.TrimSpace(c.GetHeader("Authorization")); strings.HasPrefix(auth, "Bearer ") {
+					provided = strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+				}
+			}
+			if provided == "" || !secureEqual(provided, setupToken) {
+				response.Error(c, http.StatusUnauthorized, "Setup token is required")
+				c.Abort()
+				return
+			}
+		} else {
+			ip := net.ParseIP(strings.TrimSpace(c.ClientIP()))
+			if ip == nil || !ip.IsLoopback() {
+				response.Error(c, http.StatusUnauthorized, "Setup is only available from localhost unless SETUP_TOKEN is configured")
+				c.Abort()
+				return
+			}
+		}
 		c.Next()
 	}
+}
+
+func secureEqual(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
 // validateHostname checks if a hostname/IP is safe (no injection characters)

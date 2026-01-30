@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -9,6 +10,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -119,6 +121,9 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				user.FieldBalance,
 				user.FieldConcurrency,
 			)
+			q.WithUserAllowedGroups(func(q *dbent.UserAllowedGroupQuery) {
+				q.Select(userallowedgroup.FieldGroupID)
+			})
 		}).
 		WithGroup(func(q *dbent.GroupQuery) {
 			q.Select(
@@ -267,7 +272,8 @@ func (r *apiKeyRepository) CountByUserID(ctx context.Context, userID int64) (int
 }
 
 func (r *apiKeyRepository) ExistsByKey(ctx context.Context, key string) (bool, error) {
-	count, err := r.activeQuery().Where(apikey.KeyEQ(key)).Count(ctx)
+	// ExistsByKey should reflect DB uniqueness, including soft-deleted records.
+	count, err := r.client.APIKey.Query().Where(apikey.KeyEQ(key)).Count(ctx)
 	return count > 0, err
 }
 
@@ -335,6 +341,11 @@ func (r *apiKeyRepository) CountByGroupID(ctx context.Context, groupID int64) (i
 	return int64(count), err
 }
 
+func (r *apiKeyRepository) CountActiveByGroupID(ctx context.Context, groupID int64) (int64, error) {
+	count, err := r.activeQuery().Where(apikey.GroupIDEQ(groupID), apikey.StatusEQ(service.StatusActive)).Count(ctx)
+	return int64(count), err
+}
+
 func (r *apiKeyRepository) ListKeysByUserID(ctx context.Context, userID int64) ([]string, error) {
 	keys, err := r.activeQuery().
 		Where(apikey.UserIDEQ(userID)).
@@ -386,22 +397,36 @@ func userEntityToService(u *dbent.User) *service.User {
 	if u == nil {
 		return nil
 	}
-	return &service.User{
-		ID:                  u.ID,
-		Email:               u.Email,
-		Username:            u.Username,
-		Notes:               u.Notes,
-		PasswordHash:        u.PasswordHash,
-		Role:                u.Role,
-		Balance:             u.Balance,
-		Concurrency:         u.Concurrency,
-		Status:              u.Status,
+	out := &service.User{
+		ID:              u.ID,
+		Email:           u.Email,
+		Username:        u.Username,
+		Notes:           u.Notes,
+		PasswordHash:    u.PasswordHash,
+		Role:            u.Role,
+		Balance:         u.Balance,
+		Concurrency:     u.Concurrency,
+		Status:          u.Status,
+		InviteCode:      u.InviteCode,
+		InvitedByUserID: u.InvitedByUserID,
+		InvitedAt:       u.InvitedAt,
 		TotpSecretEncrypted: u.TotpSecretEncrypted,
 		TotpEnabled:         u.TotpEnabled,
 		TotpEnabledAt:       u.TotpEnabledAt,
 		CreatedAt:           u.CreatedAt,
 		UpdatedAt:           u.UpdatedAt,
 	}
+	if len(u.Edges.UserAllowedGroups) > 0 {
+		ids := make([]int64, 0, len(u.Edges.UserAllowedGroups))
+		for _, rel := range u.Edges.UserAllowedGroups {
+			if rel != nil {
+				ids = append(ids, rel.GroupID)
+			}
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		out.AllowedGroups = ids
+	}
+	return out
 }
 
 func groupEntityToService(g *dbent.Group) *service.Group {

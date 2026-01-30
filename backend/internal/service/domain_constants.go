@@ -21,6 +21,8 @@ const (
 	PlatformAnthropic   = "anthropic"
 	PlatformOpenAI      = "openai"
 	PlatformGemini      = "gemini"
+	PlatformQwen        = "qwen"
+	PlatformIFlow       = "iflow"
 	PlatformAntigravity = "antigravity"
 )
 
@@ -48,6 +50,7 @@ const (
 const (
 	AdjustmentTypeAdminBalance     = "admin_balance"     // 管理员调整余额
 	AdjustmentTypeAdminConcurrency = "admin_concurrency" // 管理员调整并发数
+	AdjustmentTypePaymentBalance   = "payment_balance"   // 支付充值（第三方回调入账）
 )
 
 // Group subscription type constants
@@ -74,6 +77,11 @@ const (
 	SettingKeyPromoCodeEnabled     = "promo_code_enabled"     // 是否启用优惠码功能
 	SettingKeyPasswordResetEnabled = "password_reset_enabled" // 是否启用忘记密码功能（需要先开启邮件验证）
 
+	// 邀请/返利设置
+	SettingKeyReferralInviterBonus   = "referral_inviter_bonus"   // 邀请人注册奖励余额
+	SettingKeyReferralInviteeBonus   = "referral_invitee_bonus"   // 被邀请人注册奖励余额
+	SettingKeyReferralCommissionRate = "referral_commission_rate" // 返利比例（0-1，按实际扣费额）
+
 	// 邮件服务设置
 	SettingKeySMTPHost     = "smtp_host"      // SMTP服务器地址
 	SettingKeySMTPPort     = "smtp_port"      // SMTP端口
@@ -98,14 +106,17 @@ const (
 	SettingKeyLinuxDoConnectRedirectURL  = "linuxdo_connect_redirect_url"
 
 	// OEM设置
-	SettingKeySiteName                    = "site_name"                     // 网站名称
-	SettingKeySiteLogo                    = "site_logo"                     // 网站Logo (base64)
-	SettingKeySiteSubtitle                = "site_subtitle"                 // 网站副标题
-	SettingKeyAPIBaseURL                  = "api_base_url"                  // API端点地址（用于客户端配置和导入）
-	SettingKeyContactInfo                 = "contact_info"                  // 客服联系方式
-	SettingKeyDocURL                      = "doc_url"                       // 文档链接
-	SettingKeyHomeContent                 = "home_content"                  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
-	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮
+	SettingKeySiteName            = "site_name"     // 网站名称
+	SettingKeySiteLogo            = "site_logo"     // 网站Logo (base64)
+	SettingKeySiteSubtitle        = "site_subtitle" // 网站副标题
+	SettingKeyAPIBaseURL          = "api_base_url"  // API端点地址（用于客户端配置和导入）
+	SettingKeyContactInfo         = "contact_info"  // 客服联系方式
+	SettingKeyDocURL              = "doc_url"       // 文档链接
+	SettingKeyHomeContent         = "home_content"  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
+	SettingKeyLandingPricingConfig  = "landing_pricing_config"  // Landing 页定价配置（JSON）
+	SettingKeyLandingPricingEnabled = "landing_pricing_enabled" // 是否启用 Landing / Pricing（订阅套餐展示）
+	SettingKeySubscriptionsEnabled  = "subscriptions_enabled"   // 是否启用订阅功能（用户/管理端订阅相关入口与 API）
+	SettingKeyHideCcsImportButton   = "hide_ccs_import_button"  // 是否隐藏 API Keys 页面的导入 CCS 按钮
 	SettingKeyPurchaseSubscriptionEnabled = "purchase_subscription_enabled" // 是否展示“购买订阅”页面入口
 	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // “购买订阅”页面 URL（作为 iframe src）
 

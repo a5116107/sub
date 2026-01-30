@@ -57,6 +57,20 @@ func (_c *UsageLogCreate) SetModel(v string) *UsageLogCreate {
 	return _c
 }
 
+// SetBilledModel sets the "billed_model" field.
+func (_c *UsageLogCreate) SetBilledModel(v string) *UsageLogCreate {
+	_c.mutation.SetBilledModel(v)
+	return _c
+}
+
+// SetNillableBilledModel sets the "billed_model" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableBilledModel(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetBilledModel(*v)
+	}
+	return _c
+}
+
 // SetGroupID sets the "group_id" field.
 func (_c *UsageLogCreate) SetGroupID(v int64) *UsageLogCreate {
 	_c.mutation.SetGroupID(v)
@@ -564,6 +578,11 @@ func (_c *UsageLogCreate) check() error {
 			return &ValidationError{Name: "model", err: fmt.Errorf(`ent: validator failed for field "UsageLog.model": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.BilledModel(); ok {
+		if err := usagelog.BilledModelValidator(v); err != nil {
+			return &ValidationError{Name: "billed_model", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billed_model": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.InputTokens(); !ok {
 		return &ValidationError{Name: "input_tokens", err: errors.New(`ent: missing required field "UsageLog.input_tokens"`)}
 	}
@@ -673,6 +692,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Model(); ok {
 		_spec.SetField(usagelog.FieldModel, field.TypeString, value)
 		_node.Model = value
+	}
+	if value, ok := _c.mutation.BilledModel(); ok {
+		_spec.SetField(usagelog.FieldBilledModel, field.TypeString, value)
+		_node.BilledModel = &value
 	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
@@ -960,6 +983,24 @@ func (u *UsageLogUpsert) SetModel(v string) *UsageLogUpsert {
 // UpdateModel sets the "model" field to the value that was provided on create.
 func (u *UsageLogUpsert) UpdateModel() *UsageLogUpsert {
 	u.SetExcluded(usagelog.FieldModel)
+	return u
+}
+
+// SetBilledModel sets the "billed_model" field.
+func (u *UsageLogUpsert) SetBilledModel(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldBilledModel, v)
+	return u
+}
+
+// UpdateBilledModel sets the "billed_model" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateBilledModel() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldBilledModel)
+	return u
+}
+
+// ClearBilledModel clears the value of the "billed_model" field.
+func (u *UsageLogUpsert) ClearBilledModel() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldBilledModel)
 	return u
 }
 
@@ -1519,6 +1560,27 @@ func (u *UsageLogUpsertOne) SetModel(v string) *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) UpdateModel() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.UpdateModel()
+	})
+}
+
+// SetBilledModel sets the "billed_model" field.
+func (u *UsageLogUpsertOne) SetBilledModel(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBilledModel(v)
+	})
+}
+
+// UpdateBilledModel sets the "billed_model" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateBilledModel() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBilledModel()
+	})
+}
+
+// ClearBilledModel clears the value of the "billed_model" field.
+func (u *UsageLogUpsertOne) ClearBilledModel() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearBilledModel()
 	})
 }
 
@@ -2318,6 +2380,27 @@ func (u *UsageLogUpsertBulk) SetModel(v string) *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) UpdateModel() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.UpdateModel()
+	})
+}
+
+// SetBilledModel sets the "billed_model" field.
+func (u *UsageLogUpsertBulk) SetBilledModel(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBilledModel(v)
+	})
+}
+
+// UpdateBilledModel sets the "billed_model" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateBilledModel() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBilledModel()
+	})
+}
+
+// ClearBilledModel clears the value of the "billed_model" field.
+func (u *UsageLogUpsertBulk) ClearBilledModel() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearBilledModel()
 	})
 }
 

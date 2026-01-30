@@ -70,12 +70,12 @@
       <!-- Platform Selection - Segmented Control Style -->
       <div>
         <label class="input-label">{{ t('admin.accounts.platform') }}</label>
-        <div class="mt-2 flex rounded-lg bg-gray-100 p-1 dark:bg-dark-700" data-tour="account-form-platform">
+        <div class="mt-2 flex flex-wrap rounded-lg bg-gray-100 p-1 dark:bg-dark-700" data-tour="account-form-platform">
           <button
             type="button"
             @click="form.platform = 'anthropic'"
             :class="[
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              'flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
               form.platform === 'anthropic'
                 ? 'bg-white text-orange-600 shadow-sm dark:bg-dark-600 dark:text-orange-400'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
@@ -88,7 +88,7 @@
             type="button"
             @click="form.platform = 'openai'"
             :class="[
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              'flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
               form.platform === 'openai'
                 ? 'bg-white text-green-600 shadow-sm dark:bg-dark-600 dark:text-green-400'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
@@ -113,7 +113,7 @@
             type="button"
             @click="form.platform = 'gemini'"
             :class="[
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              'flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
               form.platform === 'gemini'
                 ? 'bg-white text-blue-600 shadow-sm dark:bg-dark-600 dark:text-blue-400'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
@@ -136,9 +136,35 @@
           </button>
           <button
             type="button"
+            @click="form.platform = 'qwen'"
+            :class="[
+              'flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              form.platform === 'qwen'
+                ? 'bg-white text-red-600 shadow-sm dark:bg-dark-600 dark:text-red-400'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+            ]"
+          >
+            <Icon name="fire" size="sm" />
+            Qwen
+          </button>
+          <button
+            type="button"
+            @click="form.platform = 'iflow'"
+            :class="[
+              'flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              form.platform === 'iflow'
+                ? 'bg-white text-cyan-600 shadow-sm dark:bg-dark-600 dark:text-cyan-400'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+            ]"
+          >
+            <Icon name="swap" size="sm" />
+            iFlow
+          </button>
+          <button
+            type="button"
             @click="form.platform = 'antigravity'"
             :class="[
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
+              'flex flex-1 min-w-[140px] items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-all',
               form.platform === 'antigravity'
                 ? 'bg-white text-purple-600 shadow-sm dark:bg-dark-600 dark:text-purple-400'
                 : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
@@ -271,6 +297,79 @@
               <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.responsesApi') }}</span>
             </div>
           </button>
+        </div>
+      </div>
+
+      <!-- Account Type Selection (Qwen) -->
+      <div v-if="form.platform === 'qwen'">
+        <label class="input-label">{{ t('admin.accounts.accountType') }}</label>
+        <div class="mt-2 grid grid-cols-2 gap-3" data-tour="account-form-type">
+          <button
+            type="button"
+            @click="accountCategory = 'oauth-based'"
+            :class="[
+              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
+              accountCategory === 'oauth-based'
+                ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                : 'border-gray-200 hover:border-red-300 dark:border-dark-600 dark:hover:border-red-700'
+            ]"
+          >
+            <div
+              :class="[
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                accountCategory === 'oauth-based'
+                  ? 'bg-red-500 text-white'
+                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
+              ]"
+            >
+              <Icon name="link" size="sm" />
+            </div>
+            <div class="min-w-0">
+              <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                {{ t('admin.accounts.qwen.accountType.oauthTitle') }}
+              </span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.qwen.accountType.oauthDesc') }}
+              </span>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            @click="accountCategory = 'apikey'"
+            :class="[
+              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
+              accountCategory === 'apikey'
+                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                : 'border-gray-200 hover:border-purple-300 dark:border-dark-600 dark:hover:border-purple-700'
+            ]"
+          >
+            <div
+              :class="[
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                accountCategory === 'apikey'
+                  ? 'bg-purple-500 text-white'
+                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
+              ]"
+            >
+              <Icon name="key" size="sm" />
+            </div>
+            <div class="min-w-0">
+              <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                {{ t('admin.accounts.qwen.accountType.apiKeyTitle') }}
+              </span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.qwen.accountType.apiKeyDesc') }}
+              </span>
+            </div>
+          </button>
+        </div>
+
+        <div
+          v-if="accountCategory === 'oauth-based'"
+          class="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-800/40 dark:bg-red-900/20 dark:text-red-200"
+        >
+          <p>{{ t('admin.accounts.qwen.deviceFlowNote') }}</p>
         </div>
       </div>
 
@@ -672,6 +771,10 @@
                 ? 'https://api.openai.com'
                 : form.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
+                  : form.platform === 'qwen'
+                    ? 'https://portal.qwen.ai/v1'
+                    : form.platform === 'iflow'
+                      ? 'https://apis.iflow.cn/v1'
                   : 'https://api.anthropic.com'
             "
           />
@@ -689,6 +792,10 @@
                 ? 'sk-proj-...'
                 : form.platform === 'gemini'
                   ? 'AIza...'
+                  : form.platform === 'qwen'
+                    ? 'qwen-...'
+                    : form.platform === 'iflow'
+                      ? 'iflow-...'
                   : 'sk-ant-...'
             "
           />
@@ -1482,7 +1589,110 @@
 
     <!-- Step 2: OAuth Authorization -->
     <div v-else class="space-y-5">
+      <div
+        v-if="form.platform === 'qwen'"
+        class="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800/40 dark:bg-red-900/20"
+      >
+        <div class="flex items-start gap-4">
+          <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-red-500">
+            <Icon name="fire" size="md" class="text-white" />
+          </div>
+          <div class="flex-1">
+            <h4 class="mb-3 font-semibold text-red-900 dark:text-red-200">
+              {{ t('admin.accounts.oauth.qwen.deviceFlowTitle') }}
+            </h4>
+            <p class="mb-4 text-sm text-red-800 dark:text-red-300">
+              {{ t('admin.accounts.oauth.qwen.deviceFlowDesc') }}
+            </p>
+
+            <button
+              v-if="!qwenDeviceFlow"
+              type="button"
+              class="btn btn-primary w-full"
+              :disabled="qwenDeviceFlowLoading"
+              @click="handleStartQwenDeviceFlow"
+            >
+              <svg
+                v-if="qwenDeviceFlowLoading"
+                class="-ml-1 mr-2 h-4 w-4 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              {{ qwenDeviceFlowLoading ? t('admin.accounts.oauth.qwen.starting') : t('admin.accounts.oauth.qwen.start') }}
+            </button>
+
+            <div
+              v-else
+              class="rounded-lg border border-red-300 bg-white/80 p-4 dark:border-red-700 dark:bg-gray-800/80"
+            >
+              <div class="flex flex-col gap-3">
+                <div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ t('admin.accounts.oauth.qwen.userCodeLabel') }}
+                  </div>
+                  <div class="mt-1">
+                    <code
+                      class="inline-flex rounded bg-gray-100 px-2 py-1 font-mono text-sm text-gray-900 dark:bg-dark-700 dark:text-gray-100"
+                    >
+                      {{ qwenDeviceFlow.user_code }}
+                    </code>
+                  </div>
+                </div>
+                <div>
+                  <div class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ t('admin.accounts.oauth.qwen.verifyUrlLabel') }}
+                  </div>
+                  <div class="mt-1 break-all text-sm">
+                    <a
+                      :href="
+                        qwenDeviceFlow.verification_uri_complete ||
+                        qwenDeviceFlow.verification_uri
+                      "
+                      target="_blank"
+                      rel="noreferrer"
+                      class="text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      {{
+                        qwenDeviceFlow.verification_uri_complete ||
+                        qwenDeviceFlow.verification_uri
+                      }}
+                    </a>
+                  </div>
+                  <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                    {{ t('admin.accounts.oauth.qwen.afterAuthHint') }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="qwenDeviceFlowError"
+              class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-700 dark:bg-red-900/30"
+            >
+              <p class="whitespace-pre-line text-sm text-red-600 dark:text-red-400">
+                {{ qwenDeviceFlowError }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <OAuthAuthorizationFlow
+        v-else
         ref="oauthFlowRef"
         :add-method="form.platform === 'anthropic' ? addMethod : 'oauth'"
         :auth-url="currentAuthUrl"
@@ -1497,6 +1707,8 @@
         :show-project-id="geminiOAuthType === 'code_assist'"
         @generate-url="handleGenerateUrl"
         @cookie-auth="handleCookieAuth"
+        @update:authCode="handleOAuthAuthCodeUpdate"
+        @update:inputMethod="handleOAuthInputMethodUpdate"
       />
 
     </div>
@@ -1547,7 +1759,36 @@
           {{ t('common.back') }}
         </button>
         <button
-          v-if="isManualInputMethod"
+          v-if="form.platform === 'qwen'"
+          type="button"
+          :disabled="qwenDeviceFlowLoading || !qwenDeviceFlow"
+          class="btn btn-primary"
+          @click="handleCompleteQwenDeviceFlow"
+        >
+          <svg
+            v-if="qwenDeviceFlowLoading"
+            class="-ml-1 mr-2 h-4 w-4 animate-spin"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            ></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          {{ qwenDeviceFlowLoading ? t('admin.accounts.oauth.verifying') : t('admin.accounts.oauth.completeAuth') }}
+        </button>
+        <button
+          v-else-if="isManualInputMethod"
           type="button"
           :disabled="!canExchangeCode"
           class="btn btn-primary"
@@ -1816,6 +2057,7 @@ import {
 import { useOpenAIOAuth } from '@/composables/useOpenAIOAuth'
 import { useGeminiOAuth } from '@/composables/useGeminiOAuth'
 import { useAntigravityOAuth } from '@/composables/useAntigravityOAuth'
+import { useQwenOAuth } from '@/composables/useQwenOAuth'
 import type { Proxy, AdminGroup, AccountPlatform, AccountType } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -1843,6 +2085,7 @@ const oauthStepTitle = computed(() => {
   if (form.platform === 'openai') return t('admin.accounts.oauth.openai.title')
   if (form.platform === 'gemini') return t('admin.accounts.oauth.gemini.title')
   if (form.platform === 'antigravity') return t('admin.accounts.oauth.antigravity.title')
+  if (form.platform === 'qwen') return t('admin.accounts.oauth.qwen.title')
   return t('admin.accounts.oauth.title')
 })
 
@@ -1850,12 +2093,16 @@ const oauthStepTitle = computed(() => {
 const baseUrlHint = computed(() => {
   if (form.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (form.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
+  if (form.platform === 'qwen') return t('admin.accounts.qwen.baseUrlHint')
+  if (form.platform === 'iflow') return t('admin.accounts.iflow.baseUrlHint')
   return t('admin.accounts.baseUrlHint')
 })
 
 const apiKeyHint = computed(() => {
   if (form.platform === 'openai') return t('admin.accounts.openai.apiKeyHint')
   if (form.platform === 'gemini') return t('admin.accounts.gemini.apiKeyHint')
+  if (form.platform === 'qwen') return t('admin.accounts.qwen.apiKeyHint')
+  if (form.platform === 'iflow') return t('admin.accounts.iflow.apiKeyHint')
   return t('admin.accounts.apiKeyHint')
 })
 
@@ -1878,6 +2125,11 @@ const oauth = useAccountOAuth() // For Anthropic OAuth
 const openaiOAuth = useOpenAIOAuth() // For OpenAI OAuth
 const geminiOAuth = useGeminiOAuth() // For Gemini OAuth
 const antigravityOAuth = useAntigravityOAuth() // For Antigravity OAuth
+const qwenOAuth = useQwenOAuth() // For Qwen device flow
+
+const qwenDeviceFlow = computed(() => qwenOAuth.deviceFlow.value)
+const qwenDeviceFlowLoading = computed(() => qwenOAuth.loading.value)
+const qwenDeviceFlowError = computed(() => qwenOAuth.error.value)
 
 // Computed: current OAuth state for template binding
 const currentAuthUrl = computed(() => {
@@ -1910,6 +2162,16 @@ const currentOAuthError = computed(() => {
 
 // Refs
 const oauthFlowRef = ref<OAuthFlowExposed | null>(null)
+const oauthAuthCode = ref('')
+const oauthInputMethod = ref<AuthInputMethod>('manual')
+
+const handleOAuthAuthCodeUpdate = (code: string) => {
+  oauthAuthCode.value = code
+}
+
+const handleOAuthInputMethodUpdate = (method: AuthInputMethod) => {
+  oauthInputMethod.value = method
+}
 
 // Model mapping type
 interface ModelMapping {
@@ -2040,7 +2302,7 @@ const form = reactive({
 const isOAuthFlow = computed(() => accountCategory.value === 'oauth-based')
 
 const isManualInputMethod = computed(() => {
-  return oauthFlowRef.value?.inputMethod === 'manual'
+  return oauthInputMethod.value === 'manual'
 })
 
 const expiresAtInput = computed({
@@ -2051,7 +2313,7 @@ const expiresAtInput = computed({
 })
 
 const canExchangeCode = computed(() => {
-  const authCode = oauthFlowRef.value?.authCode || ''
+  const authCode = oauthAuthCode.value || ''
   if (form.platform === 'openai') {
     return authCode.trim() && openaiOAuth.sessionId.value && !openaiOAuth.loading.value
   }
@@ -2100,6 +2362,10 @@ watch(
         ? 'https://api.openai.com'
         : newPlatform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
+          : newPlatform === 'qwen'
+            ? 'https://portal.qwen.ai/v1'
+            : newPlatform === 'iflow'
+              ? 'https://apis.iflow.cn/v1'
           : 'https://api.anthropic.com'
     // Clear model-related settings
     allowedModels.value = []
@@ -2112,11 +2378,24 @@ watch(
     if (newPlatform === 'antigravity') {
       accountCategory.value = 'oauth-based'
     }
+    // iFlow only supports API Key onboarding (MVP)
+    if (newPlatform === 'iflow') {
+      accountCategory.value = 'apikey'
+    }
+    // Qwen defaults to device flow onboarding
+    if (newPlatform === 'qwen') {
+      accountCategory.value = 'oauth-based'
+    }
+    // Non-anthropic platforms should not use setup-token
+    if (newPlatform !== 'anthropic') {
+      addMethod.value = 'oauth'
+    }
     // Reset OAuth states
     oauth.resetState()
     openaiOAuth.resetState()
     geminiOAuth.resetState()
     antigravityOAuth.resetState()
+    qwenOAuth.resetState()
   }
 )
 
@@ -2353,6 +2632,9 @@ const resetForm = () => {
   openaiOAuth.resetState()
   geminiOAuth.resetState()
   antigravityOAuth.resetState()
+  qwenOAuth.resetState()
+  oauthAuthCode.value = ''
+  oauthInputMethod.value = 'manual'
   oauthFlowRef.value?.reset()
 }
 
@@ -2368,6 +2650,10 @@ const handleSubmit = async () => {
       return
     }
     step.value = 2
+    // Qwen uses OAuth device flow; start it eagerly for better UX.
+    if (form.platform === 'qwen' && !qwenOAuth.deviceFlow.value) {
+      await qwenOAuth.startDeviceFlow(form.proxy_id)
+    }
     return
   }
 
@@ -2383,6 +2669,10 @@ const handleSubmit = async () => {
       ? 'https://api.openai.com'
       : form.platform === 'gemini'
         ? 'https://generativelanguage.googleapis.com'
+        : form.platform === 'qwen'
+          ? 'https://portal.qwen.ai/v1'
+          : form.platform === 'iflow'
+            ? 'https://apis.iflow.cn/v1'
         : 'https://api.anthropic.com'
 
   // Build credentials with optional model mapping
@@ -2439,6 +2729,9 @@ const goBackToBasicInfo = () => {
   openaiOAuth.resetState()
   geminiOAuth.resetState()
   antigravityOAuth.resetState()
+  qwenOAuth.resetState()
+  oauthAuthCode.value = ''
+  oauthInputMethod.value = 'manual'
   oauthFlowRef.value?.reset()
 }
 
@@ -2457,6 +2750,24 @@ const handleGenerateUrl = async () => {
   } else {
     await oauth.generateAuthUrl(addMethod.value, form.proxy_id)
   }
+}
+
+const handleStartQwenDeviceFlow = async () => {
+  await qwenOAuth.startDeviceFlow(form.proxy_id)
+}
+
+const handleCompleteQwenDeviceFlow = async () => {
+  const account = await qwenOAuth.createAccountFromDeviceFlow({
+    name: form.name.trim() || 'Qwen OAuth Account',
+    proxyId: form.proxy_id,
+    concurrency: form.concurrency,
+    priority: form.priority,
+    groupIds: form.group_ids
+  })
+  if (!account) return
+  appStore.showSuccess(t('admin.accounts.accountCreated'))
+  emit('created')
+  handleClose()
 }
 
 const formatDateTimeLocal = formatDateTimeLocalInput
@@ -2651,7 +2962,7 @@ const handleAnthropicExchange = async (authCode: string) => {
 
 // 主入口：根据平台路由到对应处理函数
 const handleExchangeCode = async () => {
-  const authCode = oauthFlowRef.value?.authCode || ''
+  const authCode = oauthAuthCode.value || ''
 
   switch (form.platform) {
     case 'openai':

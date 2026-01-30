@@ -227,6 +227,17 @@ func (s *APIKeyRepoSuite) TestExistsByKey() {
 	s.Require().False(notExists)
 }
 
+func (s *APIKeyRepoSuite) TestExistsByKey_IncludesSoftDeleted() {
+	user := s.mustCreateUser("exists-soft@test.com")
+	key := s.mustCreateApiKey(user.ID, "sk-exists-soft", "K", nil)
+
+	s.Require().NoError(s.repo.Delete(s.ctx, key.ID), "Delete")
+
+	exists, err := s.repo.ExistsByKey(s.ctx, "sk-exists-soft")
+	s.Require().NoError(err, "ExistsByKey after delete")
+	s.Require().True(exists, "expected ExistsByKey to include soft-deleted records")
+}
+
 // --- SearchAPIKeys ---
 
 func (s *APIKeyRepoSuite) TestSearchAPIKeys() {
