@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
@@ -241,6 +242,73 @@ func (_u *UserUpdate) ClearTotpEnabledAt() *UserUpdate {
 	return _u
 }
 
+// SetInviteCode sets the "invite_code" field.
+func (_u *UserUpdate) SetInviteCode(v string) *UserUpdate {
+	_u.mutation.SetInviteCode(v)
+	return _u
+}
+
+// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInviteCode(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetInviteCode(*v)
+	}
+	return _u
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (_u *UserUpdate) ClearInviteCode() *UserUpdate {
+	_u.mutation.ClearInviteCode()
+	return _u
+}
+
+// SetInvitedByUserID sets the "invited_by_user_id" field.
+func (_u *UserUpdate) SetInvitedByUserID(v int64) *UserUpdate {
+	_u.mutation.ResetInvitedByUserID()
+	_u.mutation.SetInvitedByUserID(v)
+	return _u
+}
+
+// SetNillableInvitedByUserID sets the "invited_by_user_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInvitedByUserID(v *int64) *UserUpdate {
+	if v != nil {
+		_u.SetInvitedByUserID(*v)
+	}
+	return _u
+}
+
+// AddInvitedByUserID adds value to the "invited_by_user_id" field.
+func (_u *UserUpdate) AddInvitedByUserID(v int64) *UserUpdate {
+	_u.mutation.AddInvitedByUserID(v)
+	return _u
+}
+
+// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
+func (_u *UserUpdate) ClearInvitedByUserID() *UserUpdate {
+	_u.mutation.ClearInvitedByUserID()
+	return _u
+}
+
+// SetInvitedAt sets the "invited_at" field.
+func (_u *UserUpdate) SetInvitedAt(v time.Time) *UserUpdate {
+	_u.mutation.SetInvitedAt(v)
+	return _u
+}
+
+// SetNillableInvitedAt sets the "invited_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInvitedAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetInvitedAt(*v)
+	}
+	return _u
+}
+
+// ClearInvitedAt clears the value of the "invited_at" field.
+func (_u *UserUpdate) ClearInvitedAt() *UserUpdate {
+	_u.mutation.ClearInvitedAt()
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdate) AddAPIKeyIDs(ids ...int64) *UserUpdate {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -269,6 +337,21 @@ func (_u *UserUpdate) AddRedeemCodes(v ...*RedeemCode) *UserUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.AddRedeemCodeIDs(ids...)
+}
+
+// AddPaymentOrderIDs adds the "payment_orders" edge to the PaymentOrder entity by IDs.
+func (_u *UserUpdate) AddPaymentOrderIDs(ids ...int64) *UserUpdate {
+	_u.mutation.AddPaymentOrderIDs(ids...)
+	return _u
+}
+
+// AddPaymentOrders adds the "payment_orders" edges to the PaymentOrder entity.
+func (_u *UserUpdate) AddPaymentOrders(v ...*PaymentOrder) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddPaymentOrderIDs(ids...)
 }
 
 // AddSubscriptionIDs adds the "subscriptions" edge to the UserSubscription entity by IDs.
@@ -406,6 +489,27 @@ func (_u *UserUpdate) RemoveRedeemCodes(v ...*RedeemCode) *UserUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveRedeemCodeIDs(ids...)
+}
+
+// ClearPaymentOrders clears all "payment_orders" edges to the PaymentOrder entity.
+func (_u *UserUpdate) ClearPaymentOrders() *UserUpdate {
+	_u.mutation.ClearPaymentOrders()
+	return _u
+}
+
+// RemovePaymentOrderIDs removes the "payment_orders" edge to PaymentOrder entities by IDs.
+func (_u *UserUpdate) RemovePaymentOrderIDs(ids ...int64) *UserUpdate {
+	_u.mutation.RemovePaymentOrderIDs(ids...)
+	return _u
+}
+
+// RemovePaymentOrders removes "payment_orders" edges to PaymentOrder entities.
+func (_u *UserUpdate) RemovePaymentOrders(v ...*PaymentOrder) *UserUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemovePaymentOrderIDs(ids...)
 }
 
 // ClearSubscriptions clears all "subscriptions" edges to the UserSubscription entity.
@@ -603,6 +707,11 @@ func (_u *UserUpdate) check() error {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.InviteCode(); ok {
+		if err := user.InviteCodeValidator(v); err != nil {
+			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -671,6 +780,27 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.TotpEnabledAtCleared() {
 		_spec.ClearField(user.FieldTotpEnabledAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.InviteCode(); ok {
+		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
+	}
+	if _u.mutation.InviteCodeCleared() {
+		_spec.ClearField(user.FieldInviteCode, field.TypeString)
+	}
+	if value, ok := _u.mutation.InvitedByUserID(); ok {
+		_spec.SetField(user.FieldInvitedByUserID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInvitedByUserID(); ok {
+		_spec.AddField(user.FieldInvitedByUserID, field.TypeInt64, value)
+	}
+	if _u.mutation.InvitedByUserIDCleared() {
+		_spec.ClearField(user.FieldInvitedByUserID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.InvitedAt(); ok {
+		_spec.SetField(user.FieldInvitedAt, field.TypeTime, value)
+	}
+	if _u.mutation.InvitedAtCleared() {
+		_spec.ClearField(user.FieldInvitedAt, field.TypeTime)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -755,6 +885,51 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.PaymentOrdersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.PaymentOrdersTable,
+			Columns: []string{user.PaymentOrdersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(paymentorder.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedPaymentOrdersIDs(); len(nodes) > 0 && !_u.mutation.PaymentOrdersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.PaymentOrdersTable,
+			Columns: []string{user.PaymentOrdersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(paymentorder.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PaymentOrdersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.PaymentOrdersTable,
+			Columns: []string{user.PaymentOrdersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(paymentorder.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -1270,6 +1445,73 @@ func (_u *UserUpdateOne) ClearTotpEnabledAt() *UserUpdateOne {
 	return _u
 }
 
+// SetInviteCode sets the "invite_code" field.
+func (_u *UserUpdateOne) SetInviteCode(v string) *UserUpdateOne {
+	_u.mutation.SetInviteCode(v)
+	return _u
+}
+
+// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInviteCode(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetInviteCode(*v)
+	}
+	return _u
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (_u *UserUpdateOne) ClearInviteCode() *UserUpdateOne {
+	_u.mutation.ClearInviteCode()
+	return _u
+}
+
+// SetInvitedByUserID sets the "invited_by_user_id" field.
+func (_u *UserUpdateOne) SetInvitedByUserID(v int64) *UserUpdateOne {
+	_u.mutation.ResetInvitedByUserID()
+	_u.mutation.SetInvitedByUserID(v)
+	return _u
+}
+
+// SetNillableInvitedByUserID sets the "invited_by_user_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInvitedByUserID(v *int64) *UserUpdateOne {
+	if v != nil {
+		_u.SetInvitedByUserID(*v)
+	}
+	return _u
+}
+
+// AddInvitedByUserID adds value to the "invited_by_user_id" field.
+func (_u *UserUpdateOne) AddInvitedByUserID(v int64) *UserUpdateOne {
+	_u.mutation.AddInvitedByUserID(v)
+	return _u
+}
+
+// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
+func (_u *UserUpdateOne) ClearInvitedByUserID() *UserUpdateOne {
+	_u.mutation.ClearInvitedByUserID()
+	return _u
+}
+
+// SetInvitedAt sets the "invited_at" field.
+func (_u *UserUpdateOne) SetInvitedAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetInvitedAt(v)
+	return _u
+}
+
+// SetNillableInvitedAt sets the "invited_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInvitedAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetInvitedAt(*v)
+	}
+	return _u
+}
+
+// ClearInvitedAt clears the value of the "invited_at" field.
+func (_u *UserUpdateOne) ClearInvitedAt() *UserUpdateOne {
+	_u.mutation.ClearInvitedAt()
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdateOne) AddAPIKeyIDs(ids ...int64) *UserUpdateOne {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -1298,6 +1540,21 @@ func (_u *UserUpdateOne) AddRedeemCodes(v ...*RedeemCode) *UserUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.AddRedeemCodeIDs(ids...)
+}
+
+// AddPaymentOrderIDs adds the "payment_orders" edge to the PaymentOrder entity by IDs.
+func (_u *UserUpdateOne) AddPaymentOrderIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.AddPaymentOrderIDs(ids...)
+	return _u
+}
+
+// AddPaymentOrders adds the "payment_orders" edges to the PaymentOrder entity.
+func (_u *UserUpdateOne) AddPaymentOrders(v ...*PaymentOrder) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddPaymentOrderIDs(ids...)
 }
 
 // AddSubscriptionIDs adds the "subscriptions" edge to the UserSubscription entity by IDs.
@@ -1435,6 +1692,27 @@ func (_u *UserUpdateOne) RemoveRedeemCodes(v ...*RedeemCode) *UserUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveRedeemCodeIDs(ids...)
+}
+
+// ClearPaymentOrders clears all "payment_orders" edges to the PaymentOrder entity.
+func (_u *UserUpdateOne) ClearPaymentOrders() *UserUpdateOne {
+	_u.mutation.ClearPaymentOrders()
+	return _u
+}
+
+// RemovePaymentOrderIDs removes the "payment_orders" edge to PaymentOrder entities by IDs.
+func (_u *UserUpdateOne) RemovePaymentOrderIDs(ids ...int64) *UserUpdateOne {
+	_u.mutation.RemovePaymentOrderIDs(ids...)
+	return _u
+}
+
+// RemovePaymentOrders removes "payment_orders" edges to PaymentOrder entities.
+func (_u *UserUpdateOne) RemovePaymentOrders(v ...*PaymentOrder) *UserUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemovePaymentOrderIDs(ids...)
 }
 
 // ClearSubscriptions clears all "subscriptions" edges to the UserSubscription entity.
@@ -1645,6 +1923,11 @@ func (_u *UserUpdateOne) check() error {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.InviteCode(); ok {
+		if err := user.InviteCodeValidator(v); err != nil {
+			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1731,6 +2014,27 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if _u.mutation.TotpEnabledAtCleared() {
 		_spec.ClearField(user.FieldTotpEnabledAt, field.TypeTime)
 	}
+	if value, ok := _u.mutation.InviteCode(); ok {
+		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
+	}
+	if _u.mutation.InviteCodeCleared() {
+		_spec.ClearField(user.FieldInviteCode, field.TypeString)
+	}
+	if value, ok := _u.mutation.InvitedByUserID(); ok {
+		_spec.SetField(user.FieldInvitedByUserID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInvitedByUserID(); ok {
+		_spec.AddField(user.FieldInvitedByUserID, field.TypeInt64, value)
+	}
+	if _u.mutation.InvitedByUserIDCleared() {
+		_spec.ClearField(user.FieldInvitedByUserID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.InvitedAt(); ok {
+		_spec.SetField(user.FieldInvitedAt, field.TypeTime, value)
+	}
+	if _u.mutation.InvitedAtCleared() {
+		_spec.ClearField(user.FieldInvitedAt, field.TypeTime)
+	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1814,6 +2118,51 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.PaymentOrdersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.PaymentOrdersTable,
+			Columns: []string{user.PaymentOrdersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(paymentorder.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedPaymentOrdersIDs(); len(nodes) > 0 && !_u.mutation.PaymentOrdersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.PaymentOrdersTable,
+			Columns: []string{user.PaymentOrdersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(paymentorder.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.PaymentOrdersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.PaymentOrdersTable,
+			Columns: []string{user.PaymentOrdersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(paymentorder.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

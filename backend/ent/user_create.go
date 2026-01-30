@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -209,6 +210,48 @@ func (_c *UserCreate) SetNillableTotpEnabledAt(v *time.Time) *UserCreate {
 	return _c
 }
 
+// SetInviteCode sets the "invite_code" field.
+func (_c *UserCreate) SetInviteCode(v string) *UserCreate {
+	_c.mutation.SetInviteCode(v)
+	return _c
+}
+
+// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
+func (_c *UserCreate) SetNillableInviteCode(v *string) *UserCreate {
+	if v != nil {
+		_c.SetInviteCode(*v)
+	}
+	return _c
+}
+
+// SetInvitedByUserID sets the "invited_by_user_id" field.
+func (_c *UserCreate) SetInvitedByUserID(v int64) *UserCreate {
+	_c.mutation.SetInvitedByUserID(v)
+	return _c
+}
+
+// SetNillableInvitedByUserID sets the "invited_by_user_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableInvitedByUserID(v *int64) *UserCreate {
+	if v != nil {
+		_c.SetInvitedByUserID(*v)
+	}
+	return _c
+}
+
+// SetInvitedAt sets the "invited_at" field.
+func (_c *UserCreate) SetInvitedAt(v time.Time) *UserCreate {
+	_c.mutation.SetInvitedAt(v)
+	return _c
+}
+
+// SetNillableInvitedAt sets the "invited_at" field if the given value is not nil.
+func (_c *UserCreate) SetNillableInvitedAt(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetInvitedAt(*v)
+	}
+	return _c
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_c *UserCreate) AddAPIKeyIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddAPIKeyIDs(ids...)
@@ -237,6 +280,21 @@ func (_c *UserCreate) AddRedeemCodes(v ...*RedeemCode) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddRedeemCodeIDs(ids...)
+}
+
+// AddPaymentOrderIDs adds the "payment_orders" edge to the PaymentOrder entity by IDs.
+func (_c *UserCreate) AddPaymentOrderIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddPaymentOrderIDs(ids...)
+	return _c
+}
+
+// AddPaymentOrders adds the "payment_orders" edges to the PaymentOrder entity.
+func (_c *UserCreate) AddPaymentOrders(v ...*PaymentOrder) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddPaymentOrderIDs(ids...)
 }
 
 // AddSubscriptionIDs adds the "subscriptions" edge to the UserSubscription entity by IDs.
@@ -471,6 +529,11 @@ func (_c *UserCreate) check() error {
 	if _, ok := _c.mutation.TotpEnabled(); !ok {
 		return &ValidationError{Name: "totp_enabled", err: errors.New(`ent: missing required field "User.totp_enabled"`)}
 	}
+	if v, ok := _c.mutation.InviteCode(); ok {
+		if err := user.InviteCodeValidator(v); err != nil {
+			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -554,6 +617,18 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldTotpEnabledAt, field.TypeTime, value)
 		_node.TotpEnabledAt = &value
 	}
+	if value, ok := _c.mutation.InviteCode(); ok {
+		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
+		_node.InviteCode = &value
+	}
+	if value, ok := _c.mutation.InvitedByUserID(); ok {
+		_spec.SetField(user.FieldInvitedByUserID, field.TypeInt64, value)
+		_node.InvitedByUserID = &value
+	}
+	if value, ok := _c.mutation.InvitedAt(); ok {
+		_spec.SetField(user.FieldInvitedAt, field.TypeTime, value)
+		_node.InvitedAt = &value
+	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -579,6 +654,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(redeemcode.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.PaymentOrdersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.PaymentOrdersTable,
+			Columns: []string{user.PaymentOrdersColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(paymentorder.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -924,6 +1015,66 @@ func (u *UserUpsert) ClearTotpEnabledAt() *UserUpsert {
 	return u
 }
 
+// SetInviteCode sets the "invite_code" field.
+func (u *UserUpsert) SetInviteCode(v string) *UserUpsert {
+	u.Set(user.FieldInviteCode, v)
+	return u
+}
+
+// UpdateInviteCode sets the "invite_code" field to the value that was provided on create.
+func (u *UserUpsert) UpdateInviteCode() *UserUpsert {
+	u.SetExcluded(user.FieldInviteCode)
+	return u
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (u *UserUpsert) ClearInviteCode() *UserUpsert {
+	u.SetNull(user.FieldInviteCode)
+	return u
+}
+
+// SetInvitedByUserID sets the "invited_by_user_id" field.
+func (u *UserUpsert) SetInvitedByUserID(v int64) *UserUpsert {
+	u.Set(user.FieldInvitedByUserID, v)
+	return u
+}
+
+// UpdateInvitedByUserID sets the "invited_by_user_id" field to the value that was provided on create.
+func (u *UserUpsert) UpdateInvitedByUserID() *UserUpsert {
+	u.SetExcluded(user.FieldInvitedByUserID)
+	return u
+}
+
+// AddInvitedByUserID adds v to the "invited_by_user_id" field.
+func (u *UserUpsert) AddInvitedByUserID(v int64) *UserUpsert {
+	u.Add(user.FieldInvitedByUserID, v)
+	return u
+}
+
+// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
+func (u *UserUpsert) ClearInvitedByUserID() *UserUpsert {
+	u.SetNull(user.FieldInvitedByUserID)
+	return u
+}
+
+// SetInvitedAt sets the "invited_at" field.
+func (u *UserUpsert) SetInvitedAt(v time.Time) *UserUpsert {
+	u.Set(user.FieldInvitedAt, v)
+	return u
+}
+
+// UpdateInvitedAt sets the "invited_at" field to the value that was provided on create.
+func (u *UserUpsert) UpdateInvitedAt() *UserUpsert {
+	u.SetExcluded(user.FieldInvitedAt)
+	return u
+}
+
+// ClearInvitedAt clears the value of the "invited_at" field.
+func (u *UserUpsert) ClearInvitedAt() *UserUpsert {
+	u.SetNull(user.FieldInvitedAt)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1183,6 +1334,76 @@ func (u *UserUpsertOne) UpdateTotpEnabledAt() *UserUpsertOne {
 func (u *UserUpsertOne) ClearTotpEnabledAt() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearTotpEnabledAt()
+	})
+}
+
+// SetInviteCode sets the "invite_code" field.
+func (u *UserUpsertOne) SetInviteCode(v string) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInviteCode(v)
+	})
+}
+
+// UpdateInviteCode sets the "invite_code" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateInviteCode() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInviteCode()
+	})
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (u *UserUpsertOne) ClearInviteCode() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInviteCode()
+	})
+}
+
+// SetInvitedByUserID sets the "invited_by_user_id" field.
+func (u *UserUpsertOne) SetInvitedByUserID(v int64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInvitedByUserID(v)
+	})
+}
+
+// AddInvitedByUserID adds v to the "invited_by_user_id" field.
+func (u *UserUpsertOne) AddInvitedByUserID(v int64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddInvitedByUserID(v)
+	})
+}
+
+// UpdateInvitedByUserID sets the "invited_by_user_id" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateInvitedByUserID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInvitedByUserID()
+	})
+}
+
+// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
+func (u *UserUpsertOne) ClearInvitedByUserID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInvitedByUserID()
+	})
+}
+
+// SetInvitedAt sets the "invited_at" field.
+func (u *UserUpsertOne) SetInvitedAt(v time.Time) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInvitedAt(v)
+	})
+}
+
+// UpdateInvitedAt sets the "invited_at" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateInvitedAt() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInvitedAt()
+	})
+}
+
+// ClearInvitedAt clears the value of the "invited_at" field.
+func (u *UserUpsertOne) ClearInvitedAt() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInvitedAt()
 	})
 }
 
@@ -1611,6 +1832,76 @@ func (u *UserUpsertBulk) UpdateTotpEnabledAt() *UserUpsertBulk {
 func (u *UserUpsertBulk) ClearTotpEnabledAt() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearTotpEnabledAt()
+	})
+}
+
+// SetInviteCode sets the "invite_code" field.
+func (u *UserUpsertBulk) SetInviteCode(v string) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInviteCode(v)
+	})
+}
+
+// UpdateInviteCode sets the "invite_code" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateInviteCode() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInviteCode()
+	})
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (u *UserUpsertBulk) ClearInviteCode() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInviteCode()
+	})
+}
+
+// SetInvitedByUserID sets the "invited_by_user_id" field.
+func (u *UserUpsertBulk) SetInvitedByUserID(v int64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInvitedByUserID(v)
+	})
+}
+
+// AddInvitedByUserID adds v to the "invited_by_user_id" field.
+func (u *UserUpsertBulk) AddInvitedByUserID(v int64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddInvitedByUserID(v)
+	})
+}
+
+// UpdateInvitedByUserID sets the "invited_by_user_id" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateInvitedByUserID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInvitedByUserID()
+	})
+}
+
+// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
+func (u *UserUpsertBulk) ClearInvitedByUserID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInvitedByUserID()
+	})
+}
+
+// SetInvitedAt sets the "invited_at" field.
+func (u *UserUpsertBulk) SetInvitedAt(v time.Time) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInvitedAt(v)
+	})
+}
+
+// UpdateInvitedAt sets the "invited_at" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateInvitedAt() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInvitedAt()
+	})
+}
+
+// ClearInvitedAt clears the value of the "invited_at" field.
+func (u *UserUpsertBulk) ClearInvitedAt() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInvitedAt()
 	})
 }
 
