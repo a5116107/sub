@@ -253,8 +253,8 @@ func TestAPIContracts(t *testing.T) {
 						DailyUsageUSD: 2.5,
 						// include group to avoid groupRepo lookup in GetSubscriptionProgress
 						Group: &service.Group{
-							ID:           10,
-							Name:         "Group One",
+							ID:            10,
+							Name:          "Group One",
 							DailyLimitUSD: ptr(10.0),
 						},
 						DailyWindowStart: &windowStart,
@@ -679,7 +679,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService)
 	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil)
-	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	jwtAuth := func(c *gin.Context) {
 		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{

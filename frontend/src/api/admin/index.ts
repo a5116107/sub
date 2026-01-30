@@ -15,6 +15,7 @@ import systemAPI from './system'
 import subscriptionsAPI from './subscriptions'
 import usageAPI from './usage'
 import geminiAPI from './gemini'
+import openaiAPI from './openai'
 import qwenAPI from './qwen'
 import antigravityAPI from './antigravity'
 import userAttributesAPI from './userAttributes'
@@ -36,6 +37,7 @@ export const adminAPI = {
   subscriptions: subscriptionsAPI,
   usage: usageAPI,
   gemini: geminiAPI,
+  openai: openaiAPI,
   qwen: qwenAPI,
   antigravity: antigravityAPI,
   userAttributes: userAttributesAPI,
@@ -55,6 +57,7 @@ export {
   subscriptionsAPI,
   usageAPI,
   geminiAPI,
+  openaiAPI,
   qwenAPI,
   antigravityAPI,
   userAttributesAPI,

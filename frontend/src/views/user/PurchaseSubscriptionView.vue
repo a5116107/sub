@@ -4,10 +4,10 @@
       <div class="flex items-start justify-between gap-4">
         <div>
           <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t('purchase.title') }}
+            {{ t('purchaseSubscription.title') }}
           </h2>
           <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-            {{ t('purchase.description') }}
+            {{ t('purchaseSubscription.description') }}
           </p>
         </div>
 
@@ -20,7 +20,7 @@
             class="btn btn-secondary btn-sm"
           >
             <Icon name="externalLink" size="sm" class="mr-1.5" :stroke-width="2" />
-            {{ t('purchase.openInNewTab') }}
+            {{ t('purchaseSubscription.openInNewTab') }}
           </a>
         </div>
       </div>
@@ -43,10 +43,10 @@
               <Icon name="creditCard" size="lg" class="text-gray-400" />
             </div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('purchase.notEnabledTitle') }}
+              {{ t('purchaseSubscription.notEnabledTitle') }}
             </h3>
             <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-              {{ t('purchase.notEnabledDesc') }}
+              {{ t('purchaseSubscription.notEnabledDesc') }}
             </p>
           </div>
         </div>
@@ -62,10 +62,10 @@
               <Icon name="link" size="lg" class="text-gray-400" />
             </div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('purchase.notConfiguredTitle') }}
+              {{ t('purchaseSubscription.notConfiguredTitle') }}
             </h3>
             <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-              {{ t('purchase.notConfiguredDesc') }}
+              {{ t('purchaseSubscription.notConfiguredDesc') }}
             </p>
           </div>
         </div>

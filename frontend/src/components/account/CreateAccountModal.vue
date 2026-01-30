@@ -1675,6 +1675,29 @@
                   <p class="mt-2 text-xs text-gray-600 dark:text-gray-400">
                     {{ t('admin.accounts.oauth.qwen.afterAuthHint') }}
                   </p>
+
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      v-if="!qwenTokenInfo"
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      :disabled="qwenDeviceFlowLoading || !qwenDeviceFlow"
+                      @click="handlePollQwenDeviceFlow"
+                    >
+                      {{
+                        qwenDeviceFlowLoading
+                          ? t('admin.accounts.oauth.qwen.checking')
+                          : t('admin.accounts.oauth.qwen.checkAuth')
+                      }}
+                    </button>
+                    <div
+                      v-else
+                      class="inline-flex items-center gap-2 rounded-md bg-green-50 px-2 py-1 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-300"
+                    >
+                      <Icon name="check" size="sm" />
+                      {{ t('admin.accounts.oauth.qwen.authorized') }}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2128,6 +2151,7 @@ const antigravityOAuth = useAntigravityOAuth() // For Antigravity OAuth
 const qwenOAuth = useQwenOAuth() // For Qwen device flow
 
 const qwenDeviceFlow = computed(() => qwenOAuth.deviceFlow.value)
+const qwenTokenInfo = computed(() => qwenOAuth.tokenInfo.value)
 const qwenDeviceFlowLoading = computed(() => qwenOAuth.loading.value)
 const qwenDeviceFlowError = computed(() => qwenOAuth.error.value)
 
@@ -2756,18 +2780,18 @@ const handleStartQwenDeviceFlow = async () => {
   await qwenOAuth.startDeviceFlow(form.proxy_id)
 }
 
+const handlePollQwenDeviceFlow = async () => {
+  const info = await qwenOAuth.pollDeviceFlowTokenOnce()
+  if (info) {
+    appStore.showSuccess(t('admin.accounts.oauth.qwen.authorized'))
+  }
+}
+
 const handleCompleteQwenDeviceFlow = async () => {
-  const account = await qwenOAuth.createAccountFromDeviceFlow({
-    name: form.name.trim() || 'Qwen OAuth Account',
-    proxyId: form.proxy_id,
-    concurrency: form.concurrency,
-    priority: form.priority,
-    groupIds: form.group_ids
-  })
-  if (!account) return
-  appStore.showSuccess(t('admin.accounts.accountCreated'))
-  emit('created')
-  handleClose()
+  const tokenInfo = qwenOAuth.tokenInfo.value || (await qwenOAuth.pollDeviceFlowTokenOnce())
+  if (!tokenInfo) return
+  const credentials = qwenOAuth.buildCredentials(tokenInfo)
+  await createAccountAndFinish('qwen', 'oauth', credentials)
 }
 
 const formatDateTimeLocal = formatDateTimeLocalInput

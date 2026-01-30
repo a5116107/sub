@@ -37,6 +37,7 @@ type AccountHandler struct {
 	adminService            service.AdminService
 	oauthService            *service.OAuthService
 	openaiOAuthService      *service.OpenAIOAuthService
+	qwenOAuthService        *service.QwenOAuthService
 	geminiOAuthService      *service.GeminiOAuthService
 	antigravityOAuthService *service.AntigravityOAuthService
 	rateLimitService        *service.RateLimitService
@@ -53,6 +54,7 @@ func NewAccountHandler(
 	adminService service.AdminService,
 	oauthService *service.OAuthService,
 	openaiOAuthService *service.OpenAIOAuthService,
+	qwenOAuthService *service.QwenOAuthService,
 	geminiOAuthService *service.GeminiOAuthService,
 	antigravityOAuthService *service.AntigravityOAuthService,
 	rateLimitService *service.RateLimitService,
@@ -67,6 +69,7 @@ func NewAccountHandler(
 		adminService:            adminService,
 		oauthService:            oauthService,
 		openaiOAuthService:      openaiOAuthService,
+		qwenOAuthService:        qwenOAuthService,
 		geminiOAuthService:      geminiOAuthService,
 		antigravityOAuthService: antigravityOAuthService,
 		rateLimitService:        rateLimitService,
@@ -515,6 +518,19 @@ func (h *AccountHandler) Refresh(c *gin.Context) {
 		newCredentials = h.openaiOAuthService.BuildAccountCredentials(tokenInfo)
 
 		// Preserve non-token settings from existing credentials
+		for k, v := range account.Credentials {
+			if _, exists := newCredentials[k]; !exists {
+				newCredentials[k] = v
+			}
+		}
+	} else if account.Platform == service.PlatformQwen {
+		tokenInfo, err := h.qwenOAuthService.RefreshAccountToken(c.Request.Context(), account)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+
+		newCredentials = h.qwenOAuthService.BuildAccountCredentials(tokenInfo)
 		for k, v := range account.Credentials {
 			if _, exists := newCredentials[k]; !exists {
 				newCredentials[k] = v

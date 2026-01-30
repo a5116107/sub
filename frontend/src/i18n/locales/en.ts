@@ -1615,7 +1615,10 @@ export default {
           starting: 'Starting...',
           userCodeLabel: 'User Code',
           verifyUrlLabel: 'Verification URL',
-          afterAuthHint: 'After authorization, click “Complete Authorization” below to create the account.'
+          afterAuthHint: 'After authorization, click “Complete Authorization” below to create the account.',
+          checkAuth: 'Check Authorization',
+          checking: 'Checking...',
+          authorized: 'Authorized'
         },
         // Gemini specific
 	        gemini: {
@@ -3226,7 +3229,7 @@ export default {
   },
 
   // Purchase Subscription Page
-  purchase: {
+  purchaseSubscription: {
     title: 'Purchase Subscription',
     description: 'Purchase a subscription via the embedded page',
     openInNewTab: 'Open in new tab',

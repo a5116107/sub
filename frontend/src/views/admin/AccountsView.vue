@@ -733,7 +733,13 @@ const handleViewStats = (a: Account) => { statsAcc.value = a; showStats.value = 
 const handleReAuth = (a: Account) => { reAuthAcc.value = a; showReAuth.value = true }
 const handleRefresh = async (a: Account) => {
   try {
-    await adminAPI.accounts.refreshCredentials(a.id)
+    if (a.platform === 'qwen') {
+      await adminAPI.qwen.refreshAccountToken(a.id)
+    } else if (a.platform === 'openai') {
+      await adminAPI.openai.refreshAccountToken(a.id)
+    } else {
+      await adminAPI.accounts.refreshCredentials(a.id)
+    }
     appStore.showSuccess(t('admin.accounts.tokenRefreshed'))
     load()
   } catch (error: any) {

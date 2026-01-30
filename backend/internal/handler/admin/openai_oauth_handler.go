@@ -12,15 +12,21 @@ import (
 
 // OpenAIOAuthHandler handles OpenAI OAuth-related operations
 type OpenAIOAuthHandler struct {
-	openaiOAuthService *service.OpenAIOAuthService
-	adminService       service.AdminService
+	openaiOAuthService    *service.OpenAIOAuthService
+	adminService          service.AdminService
+	tokenCacheInvalidator service.TokenCacheInvalidator
 }
 
 // NewOpenAIOAuthHandler creates a new OpenAI OAuth handler
-func NewOpenAIOAuthHandler(openaiOAuthService *service.OpenAIOAuthService, adminService service.AdminService) *OpenAIOAuthHandler {
+func NewOpenAIOAuthHandler(
+	openaiOAuthService *service.OpenAIOAuthService,
+	adminService service.AdminService,
+	tokenCacheInvalidator service.TokenCacheInvalidator,
+) *OpenAIOAuthHandler {
 	return &OpenAIOAuthHandler{
-		openaiOAuthService: openaiOAuthService,
-		adminService:       adminService,
+		openaiOAuthService:    openaiOAuthService,
+		adminService:          adminService,
+		tokenCacheInvalidator: tokenCacheInvalidator,
 	}
 }
 
@@ -162,6 +168,11 @@ func (h *OpenAIOAuthHandler) RefreshAccountToken(c *gin.Context) {
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
+	}
+
+	// Ensure gateway uses refreshed token immediately.
+	if h.tokenCacheInvalidator != nil {
+		_ = h.tokenCacheInvalidator.InvalidateToken(c.Request.Context(), updatedAccount)
 	}
 
 	response.Success(c, dto.AccountFromService(updatedAccount))

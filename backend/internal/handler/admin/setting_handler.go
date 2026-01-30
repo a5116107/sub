@@ -148,17 +148,17 @@ type UpdateSettingsRequest struct {
 	LinuxDoConnectRedirectURL  string `json:"linuxdo_connect_redirect_url"`
 
 	// OEM设置
-	SiteName              string `json:"site_name"`
-	SiteLogo              string `json:"site_logo"`
-	SiteSubtitle          string `json:"site_subtitle"`
-	APIBaseURL            string `json:"api_base_url"`
-	ContactInfo           string `json:"contact_info"`
-	DocURL                string `json:"doc_url"`
-	HomeContent           string `json:"home_content"`
-	LandingPricingEnabled bool   `json:"landing_pricing_enabled"`
-	LandingPricingConfig  string `json:"landing_pricing_config"`
-	SubscriptionsEnabled  bool   `json:"subscriptions_enabled"`
-	HideCcsImportButton   bool   `json:"hide_ccs_import_button"`
+	SiteName                    string  `json:"site_name"`
+	SiteLogo                    string  `json:"site_logo"`
+	SiteSubtitle                string  `json:"site_subtitle"`
+	APIBaseURL                  string  `json:"api_base_url"`
+	ContactInfo                 string  `json:"contact_info"`
+	DocURL                      string  `json:"doc_url"`
+	HomeContent                 string  `json:"home_content"`
+	LandingPricingEnabled       bool    `json:"landing_pricing_enabled"`
+	LandingPricingConfig        string  `json:"landing_pricing_config"`
+	SubscriptionsEnabled        bool    `json:"subscriptions_enabled"`
+	HideCcsImportButton         bool    `json:"hide_ccs_import_button"`
 	PurchaseSubscriptionEnabled *bool   `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     *string `json:"purchase_subscription_url"`
 
@@ -331,39 +331,39 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	settings := &service.SystemSettings{
-		RegistrationEnabled:    req.RegistrationEnabled,
-		EmailVerifyEnabled:     req.EmailVerifyEnabled,
-		PromoCodeEnabled:       req.PromoCodeEnabled,
-		PasswordResetEnabled:   req.PasswordResetEnabled,
-		TotpEnabled:            req.TotpEnabled,
-		ReferralInviterBonus:   req.ReferralInviterBonus,
-		ReferralInviteeBonus:   req.ReferralInviteeBonus,
-		ReferralCommissionRate: req.ReferralCommissionRate,
-		SMTPHost:               req.SMTPHost,
-		SMTPPort:               req.SMTPPort,
-		SMTPUsername:           req.SMTPUsername,
-		SMTPPassword:           req.SMTPPassword,
-		SMTPFrom:               req.SMTPFrom,
-		SMTPFromName:           req.SMTPFromName,
-		SMTPUseTLS:             req.SMTPUseTLS,
-		TurnstileEnabled:       req.TurnstileEnabled,
-		TurnstileSiteKey:       req.TurnstileSiteKey,
-		TurnstileSecretKey:     req.TurnstileSecretKey,
-		LinuxDoConnectEnabled:  req.LinuxDoConnectEnabled,
-		LinuxDoConnectClientID: req.LinuxDoConnectClientID,
-		LinuxDoConnectClientSecret: req.LinuxDoConnectClientSecret,
-		LinuxDoConnectRedirectURL:  req.LinuxDoConnectRedirectURL,
-		SiteName:                   req.SiteName,
-		SiteLogo:                   req.SiteLogo,
-		SiteSubtitle:               req.SiteSubtitle,
-		APIBaseURL:                 req.APIBaseURL,
-		ContactInfo:                req.ContactInfo,
-		DocURL:                     req.DocURL,
-		HomeContent:                req.HomeContent,
-		LandingPricingEnabled:      req.LandingPricingEnabled,
-		LandingPricingConfig:       req.LandingPricingConfig,
-		SubscriptionsEnabled:       req.SubscriptionsEnabled,
-		HideCcsImportButton:        req.HideCcsImportButton,
+		RegistrationEnabled:         req.RegistrationEnabled,
+		EmailVerifyEnabled:          req.EmailVerifyEnabled,
+		PromoCodeEnabled:            req.PromoCodeEnabled,
+		PasswordResetEnabled:        req.PasswordResetEnabled,
+		TotpEnabled:                 req.TotpEnabled,
+		ReferralInviterBonus:        req.ReferralInviterBonus,
+		ReferralInviteeBonus:        req.ReferralInviteeBonus,
+		ReferralCommissionRate:      req.ReferralCommissionRate,
+		SMTPHost:                    req.SMTPHost,
+		SMTPPort:                    req.SMTPPort,
+		SMTPUsername:                req.SMTPUsername,
+		SMTPPassword:                req.SMTPPassword,
+		SMTPFrom:                    req.SMTPFrom,
+		SMTPFromName:                req.SMTPFromName,
+		SMTPUseTLS:                  req.SMTPUseTLS,
+		TurnstileEnabled:            req.TurnstileEnabled,
+		TurnstileSiteKey:            req.TurnstileSiteKey,
+		TurnstileSecretKey:          req.TurnstileSecretKey,
+		LinuxDoConnectEnabled:       req.LinuxDoConnectEnabled,
+		LinuxDoConnectClientID:      req.LinuxDoConnectClientID,
+		LinuxDoConnectClientSecret:  req.LinuxDoConnectClientSecret,
+		LinuxDoConnectRedirectURL:   req.LinuxDoConnectRedirectURL,
+		SiteName:                    req.SiteName,
+		SiteLogo:                    req.SiteLogo,
+		SiteSubtitle:                req.SiteSubtitle,
+		APIBaseURL:                  req.APIBaseURL,
+		ContactInfo:                 req.ContactInfo,
+		DocURL:                      req.DocURL,
+		HomeContent:                 req.HomeContent,
+		LandingPricingEnabled:       req.LandingPricingEnabled,
+		LandingPricingConfig:        req.LandingPricingConfig,
+		SubscriptionsEnabled:        req.SubscriptionsEnabled,
+		HideCcsImportButton:         req.HideCcsImportButton,
 		PurchaseSubscriptionEnabled: purchaseEnabled,
 		PurchaseSubscriptionURL:     purchaseURL,
 		DefaultConcurrency:          req.DefaultConcurrency,

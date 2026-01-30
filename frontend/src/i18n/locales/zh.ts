@@ -1742,7 +1742,10 @@ export default {
           starting: '启动中...',
           userCodeLabel: '验证码（User Code）',
           verifyUrlLabel: '验证链接（Verification URL）',
-          afterAuthHint: '完成授权后，点击下方「完成授权」创建账号。'
+          afterAuthHint: '完成授权后，点击下方「完成授权」创建账号。',
+          checkAuth: '检查授权状态',
+          checking: '检查中...',
+          authorized: '已授权'
         },
         // Gemini specific
 	        gemini: {
@@ -3376,7 +3379,7 @@ export default {
   },
 
   // Purchase Subscription Page
-  purchase: {
+  purchaseSubscription: {
     title: '购买订阅',
     description: '通过内嵌页面完成订阅购买',
     openInNewTab: '新窗口打开',
