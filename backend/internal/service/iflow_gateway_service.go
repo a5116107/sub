@@ -174,7 +174,7 @@ func (s *IFlowGatewayService) ForwardChatCompletions(ctx context.Context, c *gin
 			return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
 		}
 		if c != nil {
-			writeOpenAIError(c, http.StatusBadGateway, "Upstream request failed: "+safeErr)
+			writeOpenAIError(c, http.StatusBadGateway, "Upstream request failed")
 		}
 		return nil, fmt.Errorf("upstream request failed: %w", err)
 	}

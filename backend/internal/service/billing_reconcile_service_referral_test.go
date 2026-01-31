@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -38,6 +39,8 @@ func (s *reconcileUsageLogRepoStub) MarkBillingUsageEntryApplied(ctx context.Con
 
 func TestBillingReconcileService_ReconcileOnce_AppliesReferralCommissionBestEffort(t *testing.T) {
 	t.Parallel()
+
+	now := time.Now()
 
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherRegexp))
 	if err != nil {
@@ -84,6 +87,48 @@ func TestBillingReconcileService_ReconcileOnce_AppliesReferralCommissionBestEffo
 		)
 	mock.ExpectExec(`UPDATE[\s\S]+api_keys[\s\S]+quota_used_usd[\s\S]+`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	// ent UpdateOne(...).Exec fetches the updated row (Save returns a node).
+	mock.ExpectQuery(`SELECT[\s\S]+FROM "api_keys" WHERE "id" = \$1`).
+		WithArgs(int64(3)).
+		WillReturnRows(
+			sqlmock.NewRows([]string{
+				"id",
+				"created_at",
+				"updated_at",
+				"deleted_at",
+				"user_id",
+				"key",
+				"name",
+				"group_id",
+				"status",
+				"ip_whitelist",
+				"ip_blacklist",
+				"allow_balance",
+				"allow_subscription",
+				"subscription_strict",
+				"expires_at",
+				"quota_limit_usd",
+				"quota_used_usd",
+			}).AddRow(
+				int64(3),
+				now,
+				now,
+				nil, // deleted_at
+				int64(10),
+				"k",
+				"key-1",
+				int64(1),
+				StatusActive,
+				[]byte("[]"),
+				[]byte("[]"),
+				true,
+				true,
+				false,
+				nil, // expires_at
+				nil, // quota_limit_usd
+				10.0,
+			),
+		)
 	mock.ExpectCommit()
 
 	// Rate cache fetch (non-tx query).
