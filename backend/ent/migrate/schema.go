@@ -20,7 +20,13 @@ var (
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
 		{Name: "ip_whitelist", Type: field.TypeJSON, Nullable: true},
 		{Name: "ip_blacklist", Type: field.TypeJSON, Nullable: true},
-		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "allow_balance", Type: field.TypeBool, Default: true},
+		{Name: "allow_subscription", Type: field.TypeBool, Default: true},
+		{Name: "subscription_strict", Type: field.TypeBool, Default: false},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "quota_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "quota_used_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
+		{Name: "group_id", Type: field.TypeInt64},
 		{Name: "user_id", Type: field.TypeInt64},
 	}
 	// APIKeysTable holds the schema information for the "api_keys" table.
@@ -31,13 +37,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "api_keys_groups_api_keys",
-				Columns:    []*schema.Column{APIKeysColumns[9]},
+				Columns:    []*schema.Column{APIKeysColumns[15]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "api_keys_users_api_keys",
-				Columns:    []*schema.Column{APIKeysColumns[10]},
+				Columns:    []*schema.Column{APIKeysColumns[16]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -46,12 +52,12 @@ var (
 			{
 				Name:    "apikey_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[10]},
+				Columns: []*schema.Column{APIKeysColumns[16]},
 			},
 			{
 				Name:    "apikey_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[9]},
+				Columns: []*schema.Column{APIKeysColumns[15]},
 			},
 			{
 				Name:    "apikey_status",
@@ -221,6 +227,7 @@ var (
 		{Name: "weekly_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "monthly_limit_usd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "default_validity_days", Type: field.TypeInt, Default: 30},
+		{Name: "user_concurrency", Type: field.TypeInt, Default: 0},
 		{Name: "image_price_1k", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "image_price_2k", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "image_price_4k", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},

@@ -105,6 +105,8 @@ type CreateGroupInput struct {
 	DailyLimitUSD    *float64 // 日限额 (USD)
 	WeeklyLimitUSD   *float64 // 周限额 (USD)
 	MonthlyLimitUSD  *float64 // 月限额 (USD)
+	// UserConcurrency: 分组维度并发（0 表示不覆盖用户默认并发）
+	UserConcurrency int
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	ImagePrice1K    *float64
 	ImagePrice2K    *float64
@@ -127,6 +129,8 @@ type UpdateGroupInput struct {
 	DailyLimitUSD    *float64 // 日限额 (USD)
 	WeeklyLimitUSD   *float64 // 周限额 (USD)
 	MonthlyLimitUSD  *float64 // 月限额 (USD)
+	// UserConcurrency: 分组维度并发（0 表示不覆盖用户默认并发）
+	UserConcurrency *int
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	ImagePrice1K    *float64
 	ImagePrice2K    *float64
@@ -608,6 +612,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		DailyLimitUSD:    dailyLimit,
 		WeeklyLimitUSD:   weeklyLimit,
 		MonthlyLimitUSD:  monthlyLimit,
+		UserConcurrency:  normalizeGroupUserConcurrency(input.UserConcurrency),
 		ImagePrice1K:     imagePrice1K,
 		ImagePrice2K:     imagePrice2K,
 		ImagePrice4K:     imagePrice4K,
@@ -635,6 +640,13 @@ func normalizePrice(price *float64) *float64 {
 		return nil
 	}
 	return price
+}
+
+func normalizeGroupUserConcurrency(concurrency int) int {
+	if concurrency < 0 {
+		return 0
+	}
+	return concurrency
 }
 
 // validateFallbackGroup 校验降级分组的有效性
@@ -703,6 +715,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	// 订阅相关字段
 	if input.SubscriptionType != "" {
 		group.SubscriptionType = input.SubscriptionType
+	}
+	if input.UserConcurrency != nil {
+		group.UserConcurrency = normalizeGroupUserConcurrency(*input.UserConcurrency)
 	}
 	// 限额字段：0 和 nil 都表示"无限制"，正数表示具体限额
 	if input.DailyLimitUSD != nil {

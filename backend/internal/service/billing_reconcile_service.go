@@ -153,6 +153,7 @@ func (s *BillingReconcileService) ReconcileOnce(ctx context.Context, batchSize i
 		id             int64
 		usageLogID     int64
 		userID         int64
+		apiKeyID       int64
 		inviterUserID  sql.NullInt64
 		subscriptionID sql.NullInt64
 		billingType    int16
@@ -165,6 +166,7 @@ func (s *BillingReconcileService) ReconcileOnce(ctx context.Context, batchSize i
 			b.id,
 			b.usage_log_id,
 			b.user_id,
+			b.api_key_id,
 			u.invited_by_user_id,
 			b.subscription_id,
 			b.billing_type,
@@ -188,7 +190,7 @@ func (s *BillingReconcileService) ReconcileOnce(ctx context.Context, batchSize i
 	candidates := make([]row, 0, batchSize)
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.usageLogID, &r.userID, &r.inviterUserID, &r.subscriptionID, &r.billingType, &r.deltaUSD, &r.groupID); err != nil {
+		if err := rows.Scan(&r.id, &r.usageLogID, &r.userID, &r.apiKeyID, &r.inviterUserID, &r.subscriptionID, &r.billingType, &r.deltaUSD, &r.groupID); err != nil {
 			return BillingReconcileResult{}, err
 		}
 		candidates = append(candidates, r)
@@ -240,6 +242,11 @@ func (s *BillingReconcileService) ReconcileOnce(ctx context.Context, batchSize i
 				result.Errors++
 				continue
 			}
+			if entry.apiKeyID > 0 {
+				if err := tx.APIKey.UpdateOneID(entry.apiKeyID).AddQuotaUsedUsd(entry.deltaUSD).Exec(txCtx); err != nil {
+					log.Printf("[BillingReconcile] update api key quota failed: api_key_id=%d delta=%.6f err=%v", entry.apiKeyID, entry.deltaUSD, err)
+				}
+			}
 			result.Applied++
 			cacheUpdates = append(cacheUpdates, cacheUpdate{
 				userID:      entry.userID,
@@ -277,6 +284,11 @@ func (s *BillingReconcileService) ReconcileOnce(ctx context.Context, batchSize i
 			if err := s.usageLogRepo.MarkBillingUsageEntryApplied(txCtx, entryID); err != nil {
 				result.Errors++
 				continue
+			}
+			if entry.apiKeyID > 0 {
+				if err := tx.APIKey.UpdateOneID(entry.apiKeyID).AddQuotaUsedUsd(entry.deltaUSD).Exec(txCtx); err != nil {
+					log.Printf("[BillingReconcile] update api key quota failed: api_key_id=%d delta=%.6f err=%v", entry.apiKeyID, entry.deltaUSD, err)
+				}
 			}
 			result.Applied++
 			var gid *int64

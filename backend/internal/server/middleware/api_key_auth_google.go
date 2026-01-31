@@ -3,8 +3,10 @@ package middleware
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -73,6 +75,18 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			return
 		}
 
+		// Enforce API key expiration
+		if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
+			abortWithGoogleError(c, 401, "API key has expired")
+			return
+		}
+
+		// Enforce API key quota limit (USD)
+		if apiKey.QuotaLimitUSD != nil && apiKey.QuotaUsedUSD >= *apiKey.QuotaLimitUSD {
+			abortWithGoogleError(c, 429, "API key quota limit exceeded")
+			return
+		}
+
 		// Enforce AllowedGroups as runtime ACL (revocation must take effect promptly).
 		//
 		// For subscription-type groups, the active subscription is the entitlement source.
@@ -88,7 +102,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			c.Set(string(ContextKeyAPIKey), apiKey)
 			c.Set(string(ContextKeyUser), AuthSubject{
 				UserID:      apiKey.User.ID,
-				Concurrency: apiKey.User.Concurrency,
+				Concurrency: computeSubjectConcurrency(apiKey.User.Concurrency, apiKey.Group),
 			})
 			c.Set(string(ContextKeyUserRole), apiKey.User.Role)
 			setGroupContext(c, apiKey.Group)
@@ -97,28 +111,56 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-		if isSubscriptionType && subscriptionService != nil {
-			subscription, err := subscriptionService.GetActiveSubscription(
+		subscriptionReady := false
+		subscriptionFound := false
+		if isSubscriptionType && apiKey.AllowSubscription && subscriptionService != nil {
+			subscription, subErr := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
 				apiKey.Group.ID,
 			)
-			if err != nil {
-				abortWithGoogleError(c, 403, "No active subscription found for this group")
+			if subErr == nil {
+				subscriptionFound = true
+				if err := subscriptionService.ValidateSubscription(c.Request.Context(), subscription); err != nil {
+					subErr = err
+				} else {
+					_ = subscriptionService.CheckAndActivateWindow(c.Request.Context(), subscription)
+					_ = subscriptionService.CheckAndResetWindows(c.Request.Context(), subscription)
+					if err := subscriptionService.CheckUsageLimits(c.Request.Context(), subscription, apiKey.Group, 0); err != nil {
+						subErr = err
+					} else {
+						c.Set(string(ContextKeySubscription), subscription)
+						subscriptionReady = true
+					}
+				}
+			}
+			if subErr != nil && !subscriptionReady {
+				// If strict subscription is enabled and the user has an active subscription,
+				// never fall back to balance.
+				if subscriptionFound && apiKey.SubscriptionStrict {
+					msg := infraerrors.Message(subErr)
+					if msg == "" || msg == infraerrors.UnknownMessage {
+						msg = subErr.Error()
+					}
+					abortWithGoogleError(c, infraerrors.Code(subErr), msg)
+					return
+				}
+				if !apiKey.AllowBalance {
+					msg := infraerrors.Message(subErr)
+					if msg == "" || msg == infraerrors.UnknownMessage {
+						msg = subErr.Error()
+					}
+					abortWithGoogleError(c, infraerrors.Code(subErr), msg)
+					return
+				}
+			}
+		}
+
+		if !subscriptionReady {
+			if !apiKey.AllowBalance {
+				abortWithGoogleError(c, 403, "This API key is not allowed to use subscription quota or balance")
 				return
 			}
-			if err := subscriptionService.ValidateSubscription(c.Request.Context(), subscription); err != nil {
-				abortWithGoogleError(c, 403, err.Error())
-				return
-			}
-			_ = subscriptionService.CheckAndActivateWindow(c.Request.Context(), subscription)
-			_ = subscriptionService.CheckAndResetWindows(c.Request.Context(), subscription)
-			if err := subscriptionService.CheckUsageLimits(c.Request.Context(), subscription, apiKey.Group, 0); err != nil {
-				abortWithGoogleError(c, 429, err.Error())
-				return
-			}
-			c.Set(string(ContextKeySubscription), subscription)
-		} else {
 			if apiKey.User.Balance <= 0 {
 				abortWithGoogleError(c, 403, "Insufficient account balance")
 				return
@@ -128,7 +170,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      apiKey.User.ID,
-			Concurrency: apiKey.User.Concurrency,
+			Concurrency: computeSubjectConcurrency(apiKey.User.Concurrency, apiKey.Group),
 		})
 		c.Set(string(ContextKeyUserRole), apiKey.User.Role)
 		setGroupContext(c, apiKey.Group)

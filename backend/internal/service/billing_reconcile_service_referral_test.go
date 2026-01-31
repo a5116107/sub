@@ -64,6 +64,7 @@ func TestBillingReconcileService_ReconcileOnce_AppliesReferralCommissionBestEffo
 				"id",
 				"usage_log_id",
 				"user_id",
+				"api_key_id",
 				"invited_by_user_id",
 				"subscription_id",
 				"billing_type",
@@ -73,6 +74,7 @@ func TestBillingReconcileService_ReconcileOnce_AppliesReferralCommissionBestEffo
 				int64(1),        // id
 				int64(100),      // usage_log_id
 				int64(10),       // user_id (invitee)
+				int64(3),        // api_key_id
 				int64(20),       // invited_by_user_id (inviter)
 				sql.NullInt64{}, // subscription_id
 				int16(0),        // billing_type (balance)
@@ -80,6 +82,8 @@ func TestBillingReconcileService_ReconcileOnce_AppliesReferralCommissionBestEffo
 				sql.NullInt64{}, // group_id
 			),
 		)
+	mock.ExpectExec(`UPDATE[\s\S]+api_keys[\s\S]+quota_used_usd[\s\S]+`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
 	// Rate cache fetch (non-tx query).

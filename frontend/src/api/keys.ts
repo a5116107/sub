@@ -48,23 +48,42 @@ export async function getById(id: number): Promise<ApiKey> {
  */
 export async function create(
   name: string,
-  groupId?: number | null,
-  customKey?: string,
-  ipWhitelist?: string[],
-  ipBlacklist?: string[]
+  groupId: number,
+  options?: {
+    customKey?: string
+    ipWhitelist?: string[]
+    ipBlacklist?: string[]
+    allowBalance?: boolean
+    allowSubscription?: boolean
+    subscriptionStrict?: boolean
+    expiresAt?: string | null
+    quotaLimitUsd?: number | null
+  }
 ): Promise<ApiKey> {
-  const payload: CreateApiKeyRequest = { name }
-  if (groupId !== undefined) {
-    payload.group_id = groupId
+  const payload: CreateApiKeyRequest = { name, group_id: groupId }
+  if (options?.customKey) {
+    payload.custom_key = options.customKey
   }
-  if (customKey) {
-    payload.custom_key = customKey
+  if (options?.ipWhitelist && options.ipWhitelist.length > 0) {
+    payload.ip_whitelist = options.ipWhitelist
   }
-  if (ipWhitelist && ipWhitelist.length > 0) {
-    payload.ip_whitelist = ipWhitelist
+  if (options?.ipBlacklist && options.ipBlacklist.length > 0) {
+    payload.ip_blacklist = options.ipBlacklist
   }
-  if (ipBlacklist && ipBlacklist.length > 0) {
-    payload.ip_blacklist = ipBlacklist
+  if (options?.allowBalance !== undefined) {
+    payload.allow_balance = options.allowBalance
+  }
+  if (options?.allowSubscription !== undefined) {
+    payload.allow_subscription = options.allowSubscription
+  }
+  if (options?.subscriptionStrict !== undefined) {
+    payload.subscription_strict = options.subscriptionStrict
+  }
+  if (options?.expiresAt !== undefined) {
+    payload.expires_at = options.expiresAt
+  }
+  if (options?.quotaLimitUsd !== undefined) {
+    payload.quota_limit_usd = options.quotaLimitUsd
   }
 
   const { data } = await apiClient.post<ApiKey>('/keys', payload)

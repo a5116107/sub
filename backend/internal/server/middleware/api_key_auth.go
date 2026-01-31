@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
@@ -103,6 +104,18 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			return
 		}
 
+		// Enforce API key expiration
+		if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
+			AbortWithError(c, 401, "API_KEY_EXPIRED", "API key has expired")
+			return
+		}
+
+		// Enforce API key quota limit (USD)
+		if apiKey.QuotaLimitUSD != nil && apiKey.QuotaUsedUSD >= *apiKey.QuotaLimitUSD {
+			AbortWithError(c, 403, "API_KEY_QUOTA_EXCEEDED", "API key quota limit exceeded")
+			return
+		}
+
 		// Enforce AllowedGroups as runtime ACL (revocation must take effect promptly).
 		//
 		// For subscription-type groups, "allowed groups" is not the entitlement source: the active subscription is.
@@ -118,7 +131,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			c.Set(string(ContextKeyAPIKey), apiKey)
 			c.Set(string(ContextKeyUser), AuthSubject{
 				UserID:      apiKey.User.ID,
-				Concurrency: apiKey.User.Concurrency,
+				Concurrency: computeSubjectConcurrency(apiKey.User.Concurrency, apiKey.Group),
 			})
 			c.Set(string(ContextKeyUserRole), apiKey.User.Role)
 			setGroupContext(c, apiKey.Group)
@@ -129,44 +142,54 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		// 判断计费方式：订阅模式 vs 余额模式
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
-		if isSubscriptionType && subscriptionService != nil {
-			// 订阅模式：验证订阅
-			subscription, err := subscriptionService.GetActiveSubscription(
-				c.Request.Context(),
-				apiKey.User.ID,
-				apiKey.Group.ID,
-			)
-			if err != nil {
-				AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
+		subscriptionReady := false
+		subscriptionFound := false
+		if isSubscriptionType && apiKey.AllowSubscription && subscriptionService != nil {
+			// 订阅模式：验证订阅（失败则按策略可回退余额）
+			subscription, subErr := subscriptionService.GetActiveSubscription(c.Request.Context(), apiKey.User.ID, apiKey.Group.ID)
+			if subErr == nil {
+				subscriptionFound = true
+				if err := subscriptionService.ValidateSubscription(c.Request.Context(), subscription); err != nil {
+					subErr = err
+				} else {
+					// 激活滑动窗口（首次使用时）
+					if err := subscriptionService.CheckAndActivateWindow(c.Request.Context(), subscription); err != nil {
+						log.Printf("Failed to activate subscription windows: %v", err)
+					}
+					// 检查并重置过期窗口
+					if err := subscriptionService.CheckAndResetWindows(c.Request.Context(), subscription); err != nil {
+						log.Printf("Failed to reset subscription windows: %v", err)
+					}
+					// 预检查用量限制（使用0作为额外费用进行预检查）
+					if err := subscriptionService.CheckUsageLimits(c.Request.Context(), subscription, apiKey.Group, 0); err != nil {
+						subErr = err
+					} else {
+						c.Set(string(ContextKeySubscription), subscription)
+						subscriptionReady = true
+					}
+				}
+			}
+			if subErr != nil && !subscriptionReady {
+				// If strict subscription is enabled and the user has an active subscription,
+				// never fall back to balance.
+				if subscriptionFound && apiKey.SubscriptionStrict {
+					AbortWithError(c, 403, "SUBSCRIPTION_REQUIRED", subErr.Error())
+					return
+				}
+				if !apiKey.AllowBalance {
+					// If balance is disabled, subscription must succeed.
+					AbortWithError(c, 403, "SUBSCRIPTION_INVALID", subErr.Error())
+					return
+				}
+			}
+		}
+
+		if !subscriptionReady {
+			// 余额模式：检查是否允许使用余额
+			if !apiKey.AllowBalance {
+				AbortWithError(c, 403, "BILLING_NOT_ALLOWED", "This API key is not allowed to use subscription quota or balance")
 				return
 			}
-
-			// 验证订阅状态（是否过期、暂停等）
-			if err := subscriptionService.ValidateSubscription(c.Request.Context(), subscription); err != nil {
-				AbortWithError(c, 403, "SUBSCRIPTION_INVALID", err.Error())
-				return
-			}
-
-			// 激活滑动窗口（首次使用时）
-			if err := subscriptionService.CheckAndActivateWindow(c.Request.Context(), subscription); err != nil {
-				log.Printf("Failed to activate subscription windows: %v", err)
-			}
-
-			// 检查并重置过期窗口
-			if err := subscriptionService.CheckAndResetWindows(c.Request.Context(), subscription); err != nil {
-				log.Printf("Failed to reset subscription windows: %v", err)
-			}
-
-			// 预检查用量限制（使用0作为额外费用进行预检查）
-			if err := subscriptionService.CheckUsageLimits(c.Request.Context(), subscription, apiKey.Group, 0); err != nil {
-				AbortWithError(c, 429, "USAGE_LIMIT_EXCEEDED", err.Error())
-				return
-			}
-
-			// 将订阅信息存入上下文
-			c.Set(string(ContextKeySubscription), subscription)
-		} else {
-			// 余额模式：检查用户余额
 			if apiKey.User.Balance <= 0 {
 				AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
 				return
@@ -177,7 +200,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      apiKey.User.ID,
-			Concurrency: apiKey.User.Concurrency,
+			Concurrency: computeSubjectConcurrency(apiKey.User.Concurrency, apiKey.Group),
 		})
 		c.Set(string(ContextKeyUserRole), apiKey.User.Role)
 		setGroupContext(c, apiKey.Group)

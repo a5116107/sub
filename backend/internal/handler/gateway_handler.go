@@ -146,9 +146,17 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 获取订阅信息（可能为nil）- 提前获取用于后续检查
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 
+	// Concurrency is tracked per (user_id, group_id). Group may be nil.
+	groupID := int64(0)
+	if apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	} else if apiKey.Group != nil {
+		groupID = apiKey.Group.ID
+	}
+
 	// 0. 检查wait队列是否已满
 	maxWait := service.CalculateMaxWait(subject.Concurrency)
-	canWait, err := h.concurrencyHelper.IncrementWaitCount(c.Request.Context(), subject.UserID, maxWait)
+	canWait, err := h.concurrencyHelper.IncrementWaitCount(c.Request.Context(), subject.UserID, groupID, maxWait)
 	waitCounted := false
 	if err != nil {
 		log.Printf("Increment wait count failed: %v", err)
@@ -163,12 +171,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// Ensure we decrement if we exit before acquiring the user slot.
 	defer func() {
 		if waitCounted {
-			h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID)
+			h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID, groupID)
 		}
 	}()
 
 	// 1. 首先获取用户并发槽位
-	userReleaseFunc, err := h.concurrencyHelper.AcquireUserSlotWithWait(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted)
+	userReleaseFunc, err := h.concurrencyHelper.AcquireUserSlotWithWait(c, subject.UserID, groupID, subject.Concurrency, reqStream, &streamStarted)
 	if err != nil {
 		log.Printf("User concurrency acquire failed: %v", err)
 		h.handleConcurrencyError(c, err, "user", streamStarted)
@@ -176,7 +184,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 	// User slot acquired: no longer waiting in the queue.
 	if waitCounted {
-		h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID)
+		h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID, groupID)
 		waitCounted = false
 	}
 	// 在请求结束或 Context 取消时确保释放槽位，避免客户端断开造成泄漏

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,13 +47,13 @@ func (r *spyUserSubscriptionRepo) ResetMonthlyUsage(_ context.Context, _ int64, 
 	return nil
 }
 
-func TestSubscriptionService_CheckAndActivateWindow_UsesRollingStart(t *testing.T) {
+func TestSubscriptionService_CheckAndActivateWindow_UsesStartOfDayForDailyWindow(t *testing.T) {
 	t.Parallel()
 
 	repo := &spyUserSubscriptionRepo{}
 	svc := NewSubscriptionService(nil, repo, nil)
 
-	activateAt := time.Date(2026, 1, 27, 15, 4, 5, 123456789, time.UTC)
+	activateAt := time.Date(2026, 1, 27, 15, 4, 5, 123456789, time.Local)
 	svc.now = func() time.Time { return activateAt }
 
 	sub := &UserSubscription{ID: 42}
@@ -60,7 +61,7 @@ func TestSubscriptionService_CheckAndActivateWindow_UsesRollingStart(t *testing.
 
 	require.True(t, repo.activateCalled)
 	require.Equal(t, int64(42), repo.activateID)
-	require.Equal(t, activateAt, repo.activateStart)
+	require.Equal(t, timezone.StartOfDay(activateAt), repo.activateStart)
 }
 
 func TestSubscriptionService_CheckAndActivateWindow_SkipsWhenActivated(t *testing.T) {
@@ -78,16 +79,16 @@ func TestSubscriptionService_CheckAndActivateWindow_SkipsWhenActivated(t *testin
 	require.False(t, repo.activateCalled)
 }
 
-func TestSubscriptionService_CheckAndResetWindows_UsesRollingStart(t *testing.T) {
+func TestSubscriptionService_CheckAndResetWindows_ResetsDailyAtStartOfDay(t *testing.T) {
 	t.Parallel()
 
 	repo := &spyUserSubscriptionRepo{}
 	svc := NewSubscriptionService(nil, repo, nil)
 
-	resetAt := time.Now()
-	svc.now = func() time.Time { return resetAt }
+	now := time.Date(2026, 1, 28, 10, 0, 0, 0, time.Local)
+	svc.now = func() time.Time { return now }
 
-	oldDaily := time.Now().Add(-25 * time.Hour)
+	oldDaily := time.Date(2026, 1, 27, 23, 0, 0, 0, time.Local)
 	sub := &UserSubscription{
 		ID:               7,
 		DailyWindowStart: &oldDaily,
@@ -98,11 +99,11 @@ func TestSubscriptionService_CheckAndResetWindows_UsesRollingStart(t *testing.T)
 
 	require.True(t, repo.resetDailyCalled)
 	require.Equal(t, int64(7), repo.resetDailyID)
-	require.Equal(t, resetAt, repo.resetDailyStart)
+	require.Equal(t, timezone.StartOfDay(now), repo.resetDailyStart)
 	require.False(t, repo.resetWeeklyCalled)
 	require.False(t, repo.resetMonthlyCalled)
 
 	require.NotNil(t, sub.DailyWindowStart)
-	require.Equal(t, resetAt, *sub.DailyWindowStart)
+	require.Equal(t, timezone.StartOfDay(now), *sub.DailyWindowStart)
 	require.Equal(t, float64(0), sub.DailyUsageUSD)
 }

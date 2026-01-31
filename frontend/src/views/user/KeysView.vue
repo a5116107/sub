@@ -247,6 +247,119 @@
           </Select>
         </div>
 
+        <!-- Billing Policy / Quota -->
+        <div class="space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800/60">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-sm font-medium text-gray-900 dark:text-white">{{ t('keys.billingPolicy') }}</div>
+              <div class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
+                {{ t('keys.billingPolicyHint') }}
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label class="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900">
+              <input v-model="formData.allow_subscription" type="checkbox" class="mt-1" />
+              <div class="min-w-0">
+                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ t('keys.allowSubscription') }}</div>
+                <div class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
+                  {{ t('keys.allowSubscriptionHint') }}
+                </div>
+              </div>
+            </label>
+            <label class="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900">
+              <input v-model="formData.allow_balance" type="checkbox" class="mt-1" />
+              <div class="min-w-0">
+                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ t('keys.allowBalance') }}</div>
+                <div class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
+                  {{ t('keys.allowBalanceHint') }}
+                </div>
+              </div>
+            </label>
+          </div>
+
+          <label
+            class="flex items-start gap-3 rounded-lg border border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900"
+            :class="!formData.allow_subscription ? 'opacity-60' : ''"
+          >
+            <input
+              v-model="formData.subscription_strict"
+              type="checkbox"
+              class="mt-1"
+              :disabled="!formData.allow_subscription"
+            />
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-gray-900 dark:text-white">{{ t('keys.subscriptionStrict') }}</div>
+              <div class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
+                {{ t('keys.subscriptionStrictHint') }}
+              </div>
+            </div>
+          </label>
+
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div class="space-y-2 rounded-lg border border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900">
+              <div class="flex items-center justify-between">
+                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ t('keys.quotaLimitUsd') }}</div>
+                <button
+                  type="button"
+                  @click="formData.enable_quota_limit = !formData.enable_quota_limit"
+                  :class="[
+                    'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                    formData.enable_quota_limit ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+                  ]"
+                >
+                  <span
+                    :class="[
+                      'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                      formData.enable_quota_limit ? 'translate-x-4' : 'translate-x-0'
+                    ]"
+                  />
+                </button>
+              </div>
+              <input
+                v-if="formData.enable_quota_limit"
+                v-model="formData.quota_limit_usd"
+                type="number"
+                min="0"
+                step="0.01"
+                class="input"
+                :placeholder="t('keys.quotaLimitUsdPlaceholder')"
+              />
+              <div class="text-xs text-gray-500 dark:text-dark-400">{{ t('keys.quotaLimitUsdHint') }}</div>
+            </div>
+
+            <div class="space-y-2 rounded-lg border border-gray-200 bg-white p-3 dark:border-dark-700 dark:bg-dark-900">
+              <div class="flex items-center justify-between">
+                <div class="text-sm font-medium text-gray-900 dark:text-white">{{ t('keys.expiresAt') }}</div>
+                <button
+                  type="button"
+                  @click="formData.enable_expires_at = !formData.enable_expires_at"
+                  :class="[
+                    'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none',
+                    formData.enable_expires_at ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+                  ]"
+                >
+                  <span
+                    :class="[
+                      'pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                      formData.enable_expires_at ? 'translate-x-4' : 'translate-x-0'
+                    ]"
+                  />
+                </button>
+              </div>
+              <input
+                v-if="formData.enable_expires_at"
+                v-model="formData.expires_at"
+                type="datetime-local"
+                class="input"
+                :placeholder="t('keys.expiresAtPlaceholder')"
+              />
+              <div class="text-xs text-gray-500 dark:text-dark-400">{{ t('keys.expiresAtHint') }}</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Custom Key Section (only for create) -->
         <div v-if="!showEditModal" class="space-y-3">
           <div class="flex items-center justify-between">
@@ -459,12 +572,11 @@
         <div class="max-h-64 overflow-y-auto p-1.5">
           <button
             v-for="option in groupOptions"
-            :key="option.value ?? 'null'"
+            :key="option.value"
             @click="changeGroup(selectedKeyForGroup!, option.value)"
             :class="[
               'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors',
-              selectedKeyForGroup?.group_id === option.value ||
-              (!selectedKeyForGroup?.group_id && option.value === null)
+              selectedKeyForGroup?.group_id === option.value
                 ? 'bg-primary-50 dark:bg-primary-900/20'
                 : 'hover:bg-gray-100 dark:hover:bg-dark-700'
             ]"
@@ -477,8 +589,7 @@
               :rate-multiplier="option.rate"
               :description="option.description"
               :selected="
-                selectedKeyForGroup?.group_id === option.value ||
-                (!selectedKeyForGroup?.group_id && option.value === null)
+                selectedKeyForGroup?.group_id === option.value
               "
             />
           </button>
@@ -489,7 +600,7 @@
 </template>
 
 <script setup lang="ts">
-	import { ref, computed, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
+	import { ref, computed, onMounted, onUnmounted, watch, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
@@ -583,12 +694,28 @@ const formData = ref({
   name: '',
   group_id: null as number | null,
   status: 'active' as 'active' | 'inactive',
+  allow_balance: true,
+  allow_subscription: true,
+  subscription_strict: false,
+  enable_quota_limit: false,
+  quota_limit_usd: '',
+  enable_expires_at: false,
+  expires_at: '',
   use_custom_key: false,
   custom_key: '',
   enable_ip_restriction: false,
   ip_whitelist: '',
   ip_blacklist: ''
 })
+
+watch(
+  () => formData.value.allow_subscription,
+  (enabled) => {
+    if (!enabled) {
+      formData.value.subscription_strict = false
+    }
+  }
+)
 
 // 自定义Key验证
 const customKeyError = computed(() => {
@@ -626,6 +753,20 @@ const groupOptions = computed(() =>
 const maskKey = (key: string): string => {
   if (key.length <= 12) return key
   return `${key.slice(0, 8)}...${key.slice(-4)}`
+}
+
+const toDateTimeLocal = (iso?: string | null): string => {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+const toISOFromDateTimeLocal = (value: string): string | null => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString()
 }
 
 const copyToClipboard = async (text: string, keyId: number) => {
@@ -724,10 +865,19 @@ const handlePageSizeChange = (pageSize: number) => {
 const editKey = (key: ApiKey) => {
   selectedKey.value = key
   const hasIPRestriction = (key.ip_whitelist?.length > 0) || (key.ip_blacklist?.length > 0)
+  const hasQuotaLimit = key.quota_limit_usd !== null && key.quota_limit_usd !== undefined
+  const hasExpiresAt = !!key.expires_at
   formData.value = {
     name: key.name,
     group_id: key.group_id,
     status: key.status,
+    allow_balance: key.allow_balance,
+    allow_subscription: key.allow_subscription,
+    subscription_strict: key.subscription_strict,
+    enable_quota_limit: hasQuotaLimit,
+    quota_limit_usd: hasQuotaLimit ? String(key.quota_limit_usd) : '',
+    enable_expires_at: hasExpiresAt,
+    expires_at: hasExpiresAt ? toDateTimeLocal(key.expires_at) : '',
     use_custom_key: false,
     custom_key: '',
     enable_ip_restriction: hasIPRestriction,
@@ -801,6 +951,17 @@ const handleSubmit = async () => {
     appStore.showError(t('keys.groupRequired'))
     return
   }
+  const groupId = formData.value.group_id
+
+  // Validate billing policy
+  if (!formData.value.allow_balance && !formData.value.allow_subscription) {
+    appStore.showError(t('keys.billingPolicyInvalid'))
+    return
+  }
+  if (formData.value.subscription_strict && !formData.value.allow_subscription) {
+    appStore.showError(t('keys.subscriptionStrictInvalid'))
+    return
+  }
 
   // Validate custom key if enabled
   if (!showEditModal.value && formData.value.use_custom_key) {
@@ -820,20 +981,71 @@ const handleSubmit = async () => {
   const ipWhitelist = formData.value.enable_ip_restriction ? parseIPList(formData.value.ip_whitelist) : []
   const ipBlacklist = formData.value.enable_ip_restriction ? parseIPList(formData.value.ip_blacklist) : []
 
+  // Parse quota/expiry fields
+  let quotaLimitUsd: number | null | undefined = undefined
+  let clearQuotaLimitUsd = false
+  if (formData.value.enable_quota_limit) {
+    const parsed = Number(formData.value.quota_limit_usd)
+    if (Number.isNaN(parsed) || parsed < 0) {
+      appStore.showError(t('keys.quotaLimitUsdInvalid'))
+      return
+    }
+    quotaLimitUsd = parsed
+  } else if (showEditModal.value && selectedKey.value?.quota_limit_usd !== null && selectedKey.value?.quota_limit_usd !== undefined) {
+    clearQuotaLimitUsd = true
+  }
+
+  let expiresAt: string | null | undefined = undefined
+  let clearExpiresAt = false
+  if (formData.value.enable_expires_at) {
+    if (!formData.value.expires_at) {
+      appStore.showError(t('keys.expiresAtInvalid'))
+      return
+    }
+    const iso = toISOFromDateTimeLocal(formData.value.expires_at)
+    if (!iso) {
+      appStore.showError(t('keys.expiresAtInvalid'))
+      return
+    }
+    if (new Date(iso).getTime() <= Date.now()) {
+      appStore.showError(t('keys.expiresAtMustBeFuture'))
+      return
+    }
+    expiresAt = iso
+  } else if (showEditModal.value && selectedKey.value?.expires_at) {
+    clearExpiresAt = true
+  }
+
   submitting.value = true
   try {
     if (showEditModal.value && selectedKey.value) {
       await keysAPI.update(selectedKey.value.id, {
         name: formData.value.name,
-        group_id: formData.value.group_id,
+        group_id: groupId,
         status: formData.value.status,
         ip_whitelist: ipWhitelist,
-        ip_blacklist: ipBlacklist
+        ip_blacklist: ipBlacklist,
+        allow_balance: formData.value.allow_balance,
+        allow_subscription: formData.value.allow_subscription,
+        subscription_strict: formData.value.subscription_strict,
+        expires_at: expiresAt,
+        clear_expires_at: clearExpiresAt,
+        quota_limit_usd: quotaLimitUsd,
+        clear_quota_limit_usd: clearQuotaLimitUsd
       })
       appStore.showSuccess(t('keys.keyUpdatedSuccess'))
     } else {
       const customKey = formData.value.use_custom_key ? formData.value.custom_key : undefined
-      await keysAPI.create(formData.value.name, formData.value.group_id, customKey, ipWhitelist, ipBlacklist)
+      await keysAPI.create(formData.value.name, groupId, {
+        customKey,
+        ipWhitelist,
+        ipBlacklist,
+        allowBalance: formData.value.allow_balance,
+        allowSubscription: formData.value.allow_subscription,
+        subscriptionStrict: formData.value.subscription_strict,
+        expiresAt,
+        quotaLimitUsd
+      })
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
       if (onboardingStore.isCurrentStep('[data-tour="key-form-submit"]')) {
@@ -879,6 +1091,13 @@ const closeModals = () => {
     name: '',
     group_id: null,
     status: 'active',
+    allow_balance: true,
+    allow_subscription: true,
+    subscription_strict: false,
+    enable_quota_limit: false,
+    quota_limit_usd: '',
+    enable_expires_at: false,
+    expires_at: '',
     use_custom_key: false,
     custom_key: '',
     enable_ip_restriction: false,

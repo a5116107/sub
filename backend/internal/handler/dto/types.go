@@ -36,6 +36,12 @@ type APIKey struct {
 	Status      string    `json:"status"`
 	IPWhitelist []string  `json:"ip_whitelist"`
 	IPBlacklist []string  `json:"ip_blacklist"`
+	AllowBalance      bool       `json:"allow_balance"`
+	AllowSubscription bool       `json:"allow_subscription"`
+	SubscriptionStrict bool      `json:"subscription_strict"`
+	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	QuotaLimitUSD     *float64   `json:"quota_limit_usd,omitempty"`
+	QuotaUsedUSD      float64    `json:"quota_used_usd"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 
@@ -56,6 +62,7 @@ type Group struct {
 	DailyLimitUSD    *float64 `json:"daily_limit_usd"`
 	WeeklyLimitUSD   *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD  *float64 `json:"monthly_limit_usd"`
+	UserConcurrency  int      `json:"user_concurrency"`
 
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	ImagePrice1K *float64 `json:"image_price_1k"`

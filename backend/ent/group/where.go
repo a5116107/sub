@@ -125,6 +125,11 @@ func DefaultValidityDays(v int) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldDefaultValidityDays, v))
 }
 
+// UserConcurrency applies equality check predicate on the "user_concurrency" field. It's identical to UserConcurrencyEQ.
+func UserConcurrency(v int) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldUserConcurrency, v))
+}
+
 // ImagePrice1k applies equality check predicate on the "image_price_1k" field. It's identical to ImagePrice1kEQ.
 func ImagePrice1k(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldImagePrice1k, v))
@@ -858,6 +863,46 @@ func DefaultValidityDaysLT(v int) predicate.Group {
 // DefaultValidityDaysLTE applies the LTE predicate on the "default_validity_days" field.
 func DefaultValidityDaysLTE(v int) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldDefaultValidityDays, v))
+}
+
+// UserConcurrencyEQ applies the EQ predicate on the "user_concurrency" field.
+func UserConcurrencyEQ(v int) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldUserConcurrency, v))
+}
+
+// UserConcurrencyNEQ applies the NEQ predicate on the "user_concurrency" field.
+func UserConcurrencyNEQ(v int) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldUserConcurrency, v))
+}
+
+// UserConcurrencyIn applies the In predicate on the "user_concurrency" field.
+func UserConcurrencyIn(vs ...int) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldUserConcurrency, vs...))
+}
+
+// UserConcurrencyNotIn applies the NotIn predicate on the "user_concurrency" field.
+func UserConcurrencyNotIn(vs ...int) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldUserConcurrency, vs...))
+}
+
+// UserConcurrencyGT applies the GT predicate on the "user_concurrency" field.
+func UserConcurrencyGT(v int) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldUserConcurrency, v))
+}
+
+// UserConcurrencyGTE applies the GTE predicate on the "user_concurrency" field.
+func UserConcurrencyGTE(v int) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldUserConcurrency, v))
+}
+
+// UserConcurrencyLT applies the LT predicate on the "user_concurrency" field.
+func UserConcurrencyLT(v int) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldUserConcurrency, v))
+}
+
+// UserConcurrencyLTE applies the LTE predicate on the "user_concurrency" field.
+func UserConcurrencyLTE(v int) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldUserConcurrency, v))
 }
 
 // ImagePrice1kEQ applies the EQ predicate on the "image_price_1k" field.

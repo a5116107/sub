@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -30,12 +31,20 @@ func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 }
 
 func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) error {
+	if key.GroupID == nil || *key.GroupID <= 0 {
+		return fmt.Errorf("create api key: missing group_id")
+	}
 	builder := r.client.APIKey.Create().
 		SetUserID(key.UserID).
 		SetKey(key.Key).
 		SetName(key.Name).
+		SetGroupID(*key.GroupID).
 		SetStatus(key.Status).
-		SetNillableGroupID(key.GroupID)
+		SetAllowBalance(key.AllowBalance).
+		SetAllowSubscription(key.AllowSubscription).
+		SetSubscriptionStrict(key.SubscriptionStrict).
+		SetNillableExpiresAt(key.ExpiresAt).
+		SetNillableQuotaLimitUsd(key.QuotaLimitUSD)
 
 	if len(key.IPWhitelist) > 0 {
 		builder.SetIPWhitelist(key.IPWhitelist)
@@ -112,6 +121,12 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldStatus,
 			apikey.FieldIPWhitelist,
 			apikey.FieldIPBlacklist,
+			apikey.FieldAllowBalance,
+			apikey.FieldAllowSubscription,
+			apikey.FieldSubscriptionStrict,
+			apikey.FieldExpiresAt,
+			apikey.FieldQuotaLimitUsd,
+			apikey.FieldQuotaUsedUsd,
 		).
 		WithUser(func(q *dbent.UserQuery) {
 			q.Select(
@@ -130,12 +145,14 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldID,
 				group.FieldName,
 				group.FieldPlatform,
+				group.FieldIsExclusive,
 				group.FieldStatus,
 				group.FieldSubscriptionType,
 				group.FieldRateMultiplier,
 				group.FieldDailyLimitUsd,
 				group.FieldWeeklyLimitUsd,
 				group.FieldMonthlyLimitUsd,
+				group.FieldUserConcurrency,
 				group.FieldImagePrice1k,
 				group.FieldImagePrice2k,
 				group.FieldImagePrice4k,
@@ -166,12 +183,16 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		Where(apikey.IDEQ(key.ID), apikey.DeletedAtIsNil()).
 		SetName(key.Name).
 		SetStatus(key.Status).
+		SetAllowBalance(key.AllowBalance).
+		SetAllowSubscription(key.AllowSubscription).
+		SetSubscriptionStrict(key.SubscriptionStrict).
+		SetNillableExpiresAt(key.ExpiresAt).
+		SetNillableQuotaLimitUsd(key.QuotaLimitUSD).
 		SetUpdatedAt(now)
-	if key.GroupID != nil {
-		builder.SetGroupID(*key.GroupID)
-	} else {
-		builder.ClearGroupID()
+	if key.GroupID == nil || *key.GroupID <= 0 {
+		return fmt.Errorf("update api key: missing group_id")
 	}
+	builder.SetGroupID(*key.GroupID)
 
 	// IP 限制字段
 	if len(key.IPWhitelist) > 0 {
@@ -326,15 +347,6 @@ func (r *apiKeyRepository) SearchAPIKeys(ctx context.Context, userID int64, keyw
 	return outKeys, nil
 }
 
-// ClearGroupIDByGroupID 将指定分组的所有 API Key 的 group_id 设为 nil
-func (r *apiKeyRepository) ClearGroupIDByGroupID(ctx context.Context, groupID int64) (int64, error) {
-	n, err := r.client.APIKey.Update().
-		Where(apikey.GroupIDEQ(groupID), apikey.DeletedAtIsNil()).
-		ClearGroupID().
-		Save(ctx)
-	return int64(n), err
-}
-
 // CountByGroupID 获取分组的 API Key 数量
 func (r *apiKeyRepository) CountByGroupID(ctx context.Context, groupID int64) (int64, error) {
 	count, err := r.activeQuery().Where(apikey.GroupIDEQ(groupID)).Count(ctx)
@@ -372,6 +384,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 	if m == nil {
 		return nil
 	}
+	gid := m.GroupID
 	out := &service.APIKey{
 		ID:          m.ID,
 		UserID:      m.UserID,
@@ -382,7 +395,13 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		IPBlacklist: m.IPBlacklist,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
-		GroupID:     m.GroupID,
+		GroupID:     &gid,
+		AllowBalance:      m.AllowBalance,
+		AllowSubscription: m.AllowSubscription,
+		SubscriptionStrict: m.SubscriptionStrict,
+		ExpiresAt:         m.ExpiresAt,
+		QuotaLimitUSD:     m.QuotaLimitUsd,
+		QuotaUsedUSD:      m.QuotaUsedUsd,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
@@ -446,6 +465,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		DailyLimitUSD:       g.DailyLimitUsd,
 		WeeklyLimitUSD:      g.WeeklyLimitUsd,
 		MonthlyLimitUSD:     g.MonthlyLimitUsd,
+		UserConcurrency:     g.UserConcurrency,
 		ImagePrice1K:        g.ImagePrice1k,
 		ImagePrice2K:        g.ImagePrice2k,
 		ImagePrice4K:        g.ImagePrice4k,

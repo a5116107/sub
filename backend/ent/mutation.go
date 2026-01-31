@@ -65,30 +65,38 @@ const (
 // APIKeyMutation represents an operation that mutates the APIKey nodes in the graph.
 type APIKeyMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *int64
-	created_at         *time.Time
-	updated_at         *time.Time
-	deleted_at         *time.Time
-	key                *string
-	name               *string
-	status             *string
-	ip_whitelist       *[]string
-	appendip_whitelist []string
-	ip_blacklist       *[]string
-	appendip_blacklist []string
-	clearedFields      map[string]struct{}
-	user               *int64
-	cleareduser        bool
-	group              *int64
-	clearedgroup       bool
-	usage_logs         map[int64]struct{}
-	removedusage_logs  map[int64]struct{}
-	clearedusage_logs  bool
-	done               bool
-	oldValue           func(context.Context) (*APIKey, error)
-	predicates         []predicate.APIKey
+	op                  Op
+	typ                 string
+	id                  *int64
+	created_at          *time.Time
+	updated_at          *time.Time
+	deleted_at          *time.Time
+	key                 *string
+	name                *string
+	status              *string
+	ip_whitelist        *[]string
+	appendip_whitelist  []string
+	ip_blacklist        *[]string
+	appendip_blacklist  []string
+	allow_balance       *bool
+	allow_subscription  *bool
+	subscription_strict *bool
+	expires_at          *time.Time
+	quota_limit_usd     *float64
+	addquota_limit_usd  *float64
+	quota_used_usd      *float64
+	addquota_used_usd   *float64
+	clearedFields       map[string]struct{}
+	user                *int64
+	cleareduser         bool
+	group               *int64
+	clearedgroup        bool
+	usage_logs          map[int64]struct{}
+	removedusage_logs   map[int64]struct{}
+	clearedusage_logs   bool
+	done                bool
+	oldValue            func(context.Context) (*APIKey, error)
+	predicates          []predicate.APIKey
 }
 
 var _ ent.Mutation = (*APIKeyMutation)(nil)
@@ -435,7 +443,7 @@ func (m *APIKeyMutation) GroupID() (r int64, exists bool) {
 // OldGroupID returns the old "group_id" field's value of the APIKey entity.
 // If the APIKey object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *APIKeyMutation) OldGroupID(ctx context.Context) (v *int64, err error) {
+func (m *APIKeyMutation) OldGroupID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
 	}
@@ -449,22 +457,9 @@ func (m *APIKeyMutation) OldGroupID(ctx context.Context) (v *int64, err error) {
 	return oldValue.GroupID, nil
 }
 
-// ClearGroupID clears the value of the "group_id" field.
-func (m *APIKeyMutation) ClearGroupID() {
-	m.group = nil
-	m.clearedFields[apikey.FieldGroupID] = struct{}{}
-}
-
-// GroupIDCleared returns if the "group_id" field was cleared in this mutation.
-func (m *APIKeyMutation) GroupIDCleared() bool {
-	_, ok := m.clearedFields[apikey.FieldGroupID]
-	return ok
-}
-
 // ResetGroupID resets all changes to the "group_id" field.
 func (m *APIKeyMutation) ResetGroupID() {
 	m.group = nil
-	delete(m.clearedFields, apikey.FieldGroupID)
 }
 
 // SetStatus sets the "status" field.
@@ -633,6 +628,289 @@ func (m *APIKeyMutation) ResetIPBlacklist() {
 	delete(m.clearedFields, apikey.FieldIPBlacklist)
 }
 
+// SetAllowBalance sets the "allow_balance" field.
+func (m *APIKeyMutation) SetAllowBalance(b bool) {
+	m.allow_balance = &b
+}
+
+// AllowBalance returns the value of the "allow_balance" field in the mutation.
+func (m *APIKeyMutation) AllowBalance() (r bool, exists bool) {
+	v := m.allow_balance
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllowBalance returns the old "allow_balance" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldAllowBalance(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllowBalance is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllowBalance requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllowBalance: %w", err)
+	}
+	return oldValue.AllowBalance, nil
+}
+
+// ResetAllowBalance resets all changes to the "allow_balance" field.
+func (m *APIKeyMutation) ResetAllowBalance() {
+	m.allow_balance = nil
+}
+
+// SetAllowSubscription sets the "allow_subscription" field.
+func (m *APIKeyMutation) SetAllowSubscription(b bool) {
+	m.allow_subscription = &b
+}
+
+// AllowSubscription returns the value of the "allow_subscription" field in the mutation.
+func (m *APIKeyMutation) AllowSubscription() (r bool, exists bool) {
+	v := m.allow_subscription
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAllowSubscription returns the old "allow_subscription" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldAllowSubscription(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAllowSubscription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAllowSubscription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAllowSubscription: %w", err)
+	}
+	return oldValue.AllowSubscription, nil
+}
+
+// ResetAllowSubscription resets all changes to the "allow_subscription" field.
+func (m *APIKeyMutation) ResetAllowSubscription() {
+	m.allow_subscription = nil
+}
+
+// SetSubscriptionStrict sets the "subscription_strict" field.
+func (m *APIKeyMutation) SetSubscriptionStrict(b bool) {
+	m.subscription_strict = &b
+}
+
+// SubscriptionStrict returns the value of the "subscription_strict" field in the mutation.
+func (m *APIKeyMutation) SubscriptionStrict() (r bool, exists bool) {
+	v := m.subscription_strict
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionStrict returns the old "subscription_strict" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldSubscriptionStrict(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionStrict is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionStrict requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionStrict: %w", err)
+	}
+	return oldValue.SubscriptionStrict, nil
+}
+
+// ResetSubscriptionStrict resets all changes to the "subscription_strict" field.
+func (m *APIKeyMutation) ResetSubscriptionStrict() {
+	m.subscription_strict = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *APIKeyMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *APIKeyMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (m *APIKeyMutation) ClearExpiresAt() {
+	m.expires_at = nil
+	m.clearedFields[apikey.FieldExpiresAt] = struct{}{}
+}
+
+// ExpiresAtCleared returns if the "expires_at" field was cleared in this mutation.
+func (m *APIKeyMutation) ExpiresAtCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldExpiresAt]
+	return ok
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *APIKeyMutation) ResetExpiresAt() {
+	m.expires_at = nil
+	delete(m.clearedFields, apikey.FieldExpiresAt)
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (m *APIKeyMutation) SetQuotaLimitUsd(f float64) {
+	m.quota_limit_usd = &f
+	m.addquota_limit_usd = nil
+}
+
+// QuotaLimitUsd returns the value of the "quota_limit_usd" field in the mutation.
+func (m *APIKeyMutation) QuotaLimitUsd() (r float64, exists bool) {
+	v := m.quota_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQuotaLimitUsd returns the old "quota_limit_usd" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldQuotaLimitUsd(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQuotaLimitUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQuotaLimitUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQuotaLimitUsd: %w", err)
+	}
+	return oldValue.QuotaLimitUsd, nil
+}
+
+// AddQuotaLimitUsd adds f to the "quota_limit_usd" field.
+func (m *APIKeyMutation) AddQuotaLimitUsd(f float64) {
+	if m.addquota_limit_usd != nil {
+		*m.addquota_limit_usd += f
+	} else {
+		m.addquota_limit_usd = &f
+	}
+}
+
+// AddedQuotaLimitUsd returns the value that was added to the "quota_limit_usd" field in this mutation.
+func (m *APIKeyMutation) AddedQuotaLimitUsd() (r float64, exists bool) {
+	v := m.addquota_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearQuotaLimitUsd clears the value of the "quota_limit_usd" field.
+func (m *APIKeyMutation) ClearQuotaLimitUsd() {
+	m.quota_limit_usd = nil
+	m.addquota_limit_usd = nil
+	m.clearedFields[apikey.FieldQuotaLimitUsd] = struct{}{}
+}
+
+// QuotaLimitUsdCleared returns if the "quota_limit_usd" field was cleared in this mutation.
+func (m *APIKeyMutation) QuotaLimitUsdCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldQuotaLimitUsd]
+	return ok
+}
+
+// ResetQuotaLimitUsd resets all changes to the "quota_limit_usd" field.
+func (m *APIKeyMutation) ResetQuotaLimitUsd() {
+	m.quota_limit_usd = nil
+	m.addquota_limit_usd = nil
+	delete(m.clearedFields, apikey.FieldQuotaLimitUsd)
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (m *APIKeyMutation) SetQuotaUsedUsd(f float64) {
+	m.quota_used_usd = &f
+	m.addquota_used_usd = nil
+}
+
+// QuotaUsedUsd returns the value of the "quota_used_usd" field in the mutation.
+func (m *APIKeyMutation) QuotaUsedUsd() (r float64, exists bool) {
+	v := m.quota_used_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldQuotaUsedUsd returns the old "quota_used_usd" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldQuotaUsedUsd(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldQuotaUsedUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldQuotaUsedUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldQuotaUsedUsd: %w", err)
+	}
+	return oldValue.QuotaUsedUsd, nil
+}
+
+// AddQuotaUsedUsd adds f to the "quota_used_usd" field.
+func (m *APIKeyMutation) AddQuotaUsedUsd(f float64) {
+	if m.addquota_used_usd != nil {
+		*m.addquota_used_usd += f
+	} else {
+		m.addquota_used_usd = &f
+	}
+}
+
+// AddedQuotaUsedUsd returns the value that was added to the "quota_used_usd" field in this mutation.
+func (m *APIKeyMutation) AddedQuotaUsedUsd() (r float64, exists bool) {
+	v := m.addquota_used_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetQuotaUsedUsd resets all changes to the "quota_used_usd" field.
+func (m *APIKeyMutation) ResetQuotaUsedUsd() {
+	m.quota_used_usd = nil
+	m.addquota_used_usd = nil
+}
+
 // ClearUser clears the "user" edge to the User entity.
 func (m *APIKeyMutation) ClearUser() {
 	m.cleareduser = true
@@ -668,7 +946,7 @@ func (m *APIKeyMutation) ClearGroup() {
 
 // GroupCleared reports if the "group" edge to the Group entity was cleared.
 func (m *APIKeyMutation) GroupCleared() bool {
-	return m.GroupIDCleared() || m.clearedgroup
+	return m.clearedgroup
 }
 
 // GroupIDs returns the "group" edge IDs in the mutation.
@@ -775,7 +1053,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 16)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -806,6 +1084,24 @@ func (m *APIKeyMutation) Fields() []string {
 	if m.ip_blacklist != nil {
 		fields = append(fields, apikey.FieldIPBlacklist)
 	}
+	if m.allow_balance != nil {
+		fields = append(fields, apikey.FieldAllowBalance)
+	}
+	if m.allow_subscription != nil {
+		fields = append(fields, apikey.FieldAllowSubscription)
+	}
+	if m.subscription_strict != nil {
+		fields = append(fields, apikey.FieldSubscriptionStrict)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, apikey.FieldExpiresAt)
+	}
+	if m.quota_limit_usd != nil {
+		fields = append(fields, apikey.FieldQuotaLimitUsd)
+	}
+	if m.quota_used_usd != nil {
+		fields = append(fields, apikey.FieldQuotaUsedUsd)
+	}
 	return fields
 }
 
@@ -834,6 +1130,18 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.IPWhitelist()
 	case apikey.FieldIPBlacklist:
 		return m.IPBlacklist()
+	case apikey.FieldAllowBalance:
+		return m.AllowBalance()
+	case apikey.FieldAllowSubscription:
+		return m.AllowSubscription()
+	case apikey.FieldSubscriptionStrict:
+		return m.SubscriptionStrict()
+	case apikey.FieldExpiresAt:
+		return m.ExpiresAt()
+	case apikey.FieldQuotaLimitUsd:
+		return m.QuotaLimitUsd()
+	case apikey.FieldQuotaUsedUsd:
+		return m.QuotaUsedUsd()
 	}
 	return nil, false
 }
@@ -863,6 +1171,18 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldIPWhitelist(ctx)
 	case apikey.FieldIPBlacklist:
 		return m.OldIPBlacklist(ctx)
+	case apikey.FieldAllowBalance:
+		return m.OldAllowBalance(ctx)
+	case apikey.FieldAllowSubscription:
+		return m.OldAllowSubscription(ctx)
+	case apikey.FieldSubscriptionStrict:
+		return m.OldSubscriptionStrict(ctx)
+	case apikey.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case apikey.FieldQuotaLimitUsd:
+		return m.OldQuotaLimitUsd(ctx)
+	case apikey.FieldQuotaUsedUsd:
+		return m.OldQuotaUsedUsd(ctx)
 	}
 	return nil, fmt.Errorf("unknown APIKey field %s", name)
 }
@@ -942,6 +1262,48 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetIPBlacklist(v)
 		return nil
+	case apikey.FieldAllowBalance:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllowBalance(v)
+		return nil
+	case apikey.FieldAllowSubscription:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAllowSubscription(v)
+		return nil
+	case apikey.FieldSubscriptionStrict:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionStrict(v)
+		return nil
+	case apikey.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case apikey.FieldQuotaLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQuotaLimitUsd(v)
+		return nil
+	case apikey.FieldQuotaUsedUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetQuotaUsedUsd(v)
+		return nil
 	}
 	return fmt.Errorf("unknown APIKey field %s", name)
 }
@@ -950,6 +1312,12 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *APIKeyMutation) AddedFields() []string {
 	var fields []string
+	if m.addquota_limit_usd != nil {
+		fields = append(fields, apikey.FieldQuotaLimitUsd)
+	}
+	if m.addquota_used_usd != nil {
+		fields = append(fields, apikey.FieldQuotaUsedUsd)
+	}
 	return fields
 }
 
@@ -958,6 +1326,10 @@ func (m *APIKeyMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case apikey.FieldQuotaLimitUsd:
+		return m.AddedQuotaLimitUsd()
+	case apikey.FieldQuotaUsedUsd:
+		return m.AddedQuotaUsedUsd()
 	}
 	return nil, false
 }
@@ -967,6 +1339,20 @@ func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *APIKeyMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case apikey.FieldQuotaLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddQuotaLimitUsd(v)
+		return nil
+	case apikey.FieldQuotaUsedUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddQuotaUsedUsd(v)
+		return nil
 	}
 	return fmt.Errorf("unknown APIKey numeric field %s", name)
 }
@@ -978,14 +1364,17 @@ func (m *APIKeyMutation) ClearedFields() []string {
 	if m.FieldCleared(apikey.FieldDeletedAt) {
 		fields = append(fields, apikey.FieldDeletedAt)
 	}
-	if m.FieldCleared(apikey.FieldGroupID) {
-		fields = append(fields, apikey.FieldGroupID)
-	}
 	if m.FieldCleared(apikey.FieldIPWhitelist) {
 		fields = append(fields, apikey.FieldIPWhitelist)
 	}
 	if m.FieldCleared(apikey.FieldIPBlacklist) {
 		fields = append(fields, apikey.FieldIPBlacklist)
+	}
+	if m.FieldCleared(apikey.FieldExpiresAt) {
+		fields = append(fields, apikey.FieldExpiresAt)
+	}
+	if m.FieldCleared(apikey.FieldQuotaLimitUsd) {
+		fields = append(fields, apikey.FieldQuotaLimitUsd)
 	}
 	return fields
 }
@@ -1004,14 +1393,17 @@ func (m *APIKeyMutation) ClearField(name string) error {
 	case apikey.FieldDeletedAt:
 		m.ClearDeletedAt()
 		return nil
-	case apikey.FieldGroupID:
-		m.ClearGroupID()
-		return nil
 	case apikey.FieldIPWhitelist:
 		m.ClearIPWhitelist()
 		return nil
 	case apikey.FieldIPBlacklist:
 		m.ClearIPBlacklist()
+		return nil
+	case apikey.FieldExpiresAt:
+		m.ClearExpiresAt()
+		return nil
+	case apikey.FieldQuotaLimitUsd:
+		m.ClearQuotaLimitUsd()
 		return nil
 	}
 	return fmt.Errorf("unknown APIKey nullable field %s", name)
@@ -1050,6 +1442,24 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldIPBlacklist:
 		m.ResetIPBlacklist()
+		return nil
+	case apikey.FieldAllowBalance:
+		m.ResetAllowBalance()
+		return nil
+	case apikey.FieldAllowSubscription:
+		m.ResetAllowSubscription()
+		return nil
+	case apikey.FieldSubscriptionStrict:
+		m.ResetSubscriptionStrict()
+		return nil
+	case apikey.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case apikey.FieldQuotaLimitUsd:
+		m.ResetQuotaLimitUsd()
+		return nil
+	case apikey.FieldQuotaUsedUsd:
+		m.ResetQuotaUsedUsd()
 		return nil
 	}
 	return fmt.Errorf("unknown APIKey field %s", name)
@@ -3862,6 +4272,8 @@ type GroupMutation struct {
 	addmonthly_limit_usd     *float64
 	default_validity_days    *int
 	adddefault_validity_days *int
+	user_concurrency         *int
+	adduser_concurrency      *int
 	image_price_1k           *float64
 	addimage_price_1k        *float64
 	image_price_2k           *float64
@@ -4667,6 +5079,62 @@ func (m *GroupMutation) ResetDefaultValidityDays() {
 	m.adddefault_validity_days = nil
 }
 
+// SetUserConcurrency sets the "user_concurrency" field.
+func (m *GroupMutation) SetUserConcurrency(i int) {
+	m.user_concurrency = &i
+	m.adduser_concurrency = nil
+}
+
+// UserConcurrency returns the value of the "user_concurrency" field in the mutation.
+func (m *GroupMutation) UserConcurrency() (r int, exists bool) {
+	v := m.user_concurrency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserConcurrency returns the old "user_concurrency" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldUserConcurrency(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserConcurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserConcurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserConcurrency: %w", err)
+	}
+	return oldValue.UserConcurrency, nil
+}
+
+// AddUserConcurrency adds i to the "user_concurrency" field.
+func (m *GroupMutation) AddUserConcurrency(i int) {
+	if m.adduser_concurrency != nil {
+		*m.adduser_concurrency += i
+	} else {
+		m.adduser_concurrency = &i
+	}
+}
+
+// AddedUserConcurrency returns the value that was added to the "user_concurrency" field in this mutation.
+func (m *GroupMutation) AddedUserConcurrency() (r int, exists bool) {
+	v := m.adduser_concurrency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetUserConcurrency resets all changes to the "user_concurrency" field.
+func (m *GroupMutation) ResetUserConcurrency() {
+	m.user_concurrency = nil
+	m.adduser_concurrency = nil
+}
+
 // SetImagePrice1k sets the "image_price_1k" field.
 func (m *GroupMutation) SetImagePrice1k(f float64) {
 	m.image_price_1k = &f
@@ -5426,7 +5894,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -5468,6 +5936,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.default_validity_days != nil {
 		fields = append(fields, group.FieldDefaultValidityDays)
+	}
+	if m.user_concurrency != nil {
+		fields = append(fields, group.FieldUserConcurrency)
 	}
 	if m.image_price_1k != nil {
 		fields = append(fields, group.FieldImagePrice1k)
@@ -5526,6 +5997,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.MonthlyLimitUsd()
 	case group.FieldDefaultValidityDays:
 		return m.DefaultValidityDays()
+	case group.FieldUserConcurrency:
+		return m.UserConcurrency()
 	case group.FieldImagePrice1k:
 		return m.ImagePrice1k()
 	case group.FieldImagePrice2k:
@@ -5577,6 +6050,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldMonthlyLimitUsd(ctx)
 	case group.FieldDefaultValidityDays:
 		return m.OldDefaultValidityDays(ctx)
+	case group.FieldUserConcurrency:
+		return m.OldUserConcurrency(ctx)
 	case group.FieldImagePrice1k:
 		return m.OldImagePrice1k(ctx)
 	case group.FieldImagePrice2k:
@@ -5698,6 +6173,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDefaultValidityDays(v)
 		return nil
+	case group.FieldUserConcurrency:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserConcurrency(v)
+		return nil
 	case group.FieldImagePrice1k:
 		v, ok := value.(float64)
 		if !ok {
@@ -5770,6 +6252,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.adddefault_validity_days != nil {
 		fields = append(fields, group.FieldDefaultValidityDays)
 	}
+	if m.adduser_concurrency != nil {
+		fields = append(fields, group.FieldUserConcurrency)
+	}
 	if m.addimage_price_1k != nil {
 		fields = append(fields, group.FieldImagePrice1k)
 	}
@@ -5800,6 +6285,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedMonthlyLimitUsd()
 	case group.FieldDefaultValidityDays:
 		return m.AddedDefaultValidityDays()
+	case group.FieldUserConcurrency:
+		return m.AddedUserConcurrency()
 	case group.FieldImagePrice1k:
 		return m.AddedImagePrice1k()
 	case group.FieldImagePrice2k:
@@ -5851,6 +6338,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddDefaultValidityDays(v)
+		return nil
+	case group.FieldUserConcurrency:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserConcurrency(v)
 		return nil
 	case group.FieldImagePrice1k:
 		v, ok := value.(float64)
@@ -6011,6 +6505,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldDefaultValidityDays:
 		m.ResetDefaultValidityDays()
+		return nil
+	case group.FieldUserConcurrency:
+		m.ResetUserConcurrency()
 		return nil
 	case group.FieldImagePrice1k:
 		m.ResetImagePrice1k()

@@ -33,13 +33,25 @@ type APIKey struct {
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// GroupID holds the value of the "group_id" field.
-	GroupID *int64 `json:"group_id,omitempty"`
+	GroupID int64 `json:"group_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// Allowed IPs/CIDRs, e.g. ["192.168.1.100", "10.0.0.0/8"]
 	IPWhitelist []string `json:"ip_whitelist,omitempty"`
 	// Blocked IPs/CIDRs
 	IPBlacklist []string `json:"ip_blacklist,omitempty"`
+	// Whether this API key is allowed to fall back to wallet balance billing
+	AllowBalance bool `json:"allow_balance,omitempty"`
+	// Whether this API key is allowed to use subscription quota when available
+	AllowSubscription bool `json:"allow_subscription,omitempty"`
+	// If true and user has an active subscription for this key's group, never fall back to balance
+	SubscriptionStrict bool `json:"subscription_strict,omitempty"`
+	// API key expiration time (optional)
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// Total USD quota limit for this API key (optional)
+	QuotaLimitUsd *float64 `json:"quota_limit_usd,omitempty"`
+	// Total USD consumed by this API key
+	QuotaUsedUsd float64 `json:"quota_used_usd,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the APIKeyQuery when eager-loading is set.
 	Edges        APIKeyEdges `json:"edges"`
@@ -97,11 +109,15 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case apikey.FieldIPWhitelist, apikey.FieldIPBlacklist:
 			values[i] = new([]byte)
+		case apikey.FieldAllowBalance, apikey.FieldAllowSubscription, apikey.FieldSubscriptionStrict:
+			values[i] = new(sql.NullBool)
+		case apikey.FieldQuotaLimitUsd, apikey.FieldQuotaUsedUsd:
+			values[i] = new(sql.NullFloat64)
 		case apikey.FieldID, apikey.FieldUserID, apikey.FieldGroupID:
 			values[i] = new(sql.NullInt64)
 		case apikey.FieldKey, apikey.FieldName, apikey.FieldStatus:
 			values[i] = new(sql.NullString)
-		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt:
+		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt, apikey.FieldExpiresAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -165,8 +181,7 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field group_id", values[i])
 			} else if value.Valid {
-				_m.GroupID = new(int64)
-				*_m.GroupID = value.Int64
+				_m.GroupID = value.Int64
 			}
 		case apikey.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -189,6 +204,44 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.IPBlacklist); err != nil {
 					return fmt.Errorf("unmarshal field ip_blacklist: %w", err)
 				}
+			}
+		case apikey.FieldAllowBalance:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field allow_balance", values[i])
+			} else if value.Valid {
+				_m.AllowBalance = value.Bool
+			}
+		case apikey.FieldAllowSubscription:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field allow_subscription", values[i])
+			} else if value.Valid {
+				_m.AllowSubscription = value.Bool
+			}
+		case apikey.FieldSubscriptionStrict:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_strict", values[i])
+			} else if value.Valid {
+				_m.SubscriptionStrict = value.Bool
+			}
+		case apikey.FieldExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field expires_at", values[i])
+			} else if value.Valid {
+				_m.ExpiresAt = new(time.Time)
+				*_m.ExpiresAt = value.Time
+			}
+		case apikey.FieldQuotaLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field quota_limit_usd", values[i])
+			} else if value.Valid {
+				_m.QuotaLimitUsd = new(float64)
+				*_m.QuotaLimitUsd = value.Float64
+			}
+		case apikey.FieldQuotaUsedUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field quota_used_usd", values[i])
+			} else if value.Valid {
+				_m.QuotaUsedUsd = value.Float64
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -261,10 +314,8 @@ func (_m *APIKey) String() string {
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
 	builder.WriteString(", ")
-	if v := _m.GroupID; v != nil {
-		builder.WriteString("group_id=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
+	builder.WriteString("group_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.GroupID))
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
@@ -274,6 +325,28 @@ func (_m *APIKey) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("ip_blacklist=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IPBlacklist))
+	builder.WriteString(", ")
+	builder.WriteString("allow_balance=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllowBalance))
+	builder.WriteString(", ")
+	builder.WriteString("allow_subscription=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AllowSubscription))
+	builder.WriteString(", ")
+	builder.WriteString("subscription_strict=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionStrict))
+	builder.WriteString(", ")
+	if v := _m.ExpiresAt; v != nil {
+		builder.WriteString("expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.QuotaLimitUsd; v != nil {
+		builder.WriteString("quota_limit_usd=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("quota_used_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.QuotaUsedUsd))
 	builder.WriteByte(')')
 	return builder.String()
 }

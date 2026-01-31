@@ -8,6 +8,7 @@ import (
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
 // MaxExpiresAt is the maximum allowed expiration date (year 2099)
@@ -477,43 +478,47 @@ func (s *SubscriptionService) CheckAndActivateWindow(ctx context.Context, sub *U
 		return nil
 	}
 
-	// 使用当前时间作为窗口起始时间（滚动窗口语义）
-	windowStart := s.now()
+	// 使用自然日 00:00 作为日窗口起始时间（Asia/Shanghai）
+	windowStart := timezone.StartOfDay(s.now())
 	return s.userSubRepo.ActivateWindows(ctx, sub.ID, windowStart)
 }
 
 // CheckAndResetWindows 检查并重置过期的窗口
 func (s *SubscriptionService) CheckAndResetWindows(ctx context.Context, sub *UserSubscription) error {
-	// 使用当前时间作为新窗口起始时间（滚动窗口语义）
-	windowStart := s.now()
+	now := s.now()
+	// 日窗口使用自然日 00:00 语义（Asia/Shanghai）
+	dailyWindowStart := timezone.StartOfDay(now)
+	// 周/月窗口暂保持滚动窗口语义（与历史行为一致）
+	weeklyWindowStart := now
+	monthlyWindowStart := now
 	needsInvalidateCache := false
 
 	// 日窗口重置（24小时）
 	if sub.NeedsDailyReset() {
-		if err := s.userSubRepo.ResetDailyUsage(ctx, sub.ID, windowStart); err != nil {
+		if err := s.userSubRepo.ResetDailyUsage(ctx, sub.ID, dailyWindowStart); err != nil {
 			return err
 		}
-		sub.DailyWindowStart = &windowStart
+		sub.DailyWindowStart = &dailyWindowStart
 		sub.DailyUsageUSD = 0
 		needsInvalidateCache = true
 	}
 
 	// 周窗口重置（7天）
 	if sub.NeedsWeeklyReset() {
-		if err := s.userSubRepo.ResetWeeklyUsage(ctx, sub.ID, windowStart); err != nil {
+		if err := s.userSubRepo.ResetWeeklyUsage(ctx, sub.ID, weeklyWindowStart); err != nil {
 			return err
 		}
-		sub.WeeklyWindowStart = &windowStart
+		sub.WeeklyWindowStart = &weeklyWindowStart
 		sub.WeeklyUsageUSD = 0
 		needsInvalidateCache = true
 	}
 
 	// 月窗口重置（30天）
 	if sub.NeedsMonthlyReset() {
-		if err := s.userSubRepo.ResetMonthlyUsage(ctx, sub.ID, windowStart); err != nil {
+		if err := s.userSubRepo.ResetMonthlyUsage(ctx, sub.ID, monthlyWindowStart); err != nil {
 			return err
 		}
-		sub.MonthlyWindowStart = &windowStart
+		sub.MonthlyWindowStart = &monthlyWindowStart
 		sub.MonthlyUsageUSD = 0
 		needsInvalidateCache = true
 	}
@@ -593,13 +598,14 @@ func (s *SubscriptionService) GetSubscriptionProgress(ctx context.Context, subsc
 	// 日进度
 	if group.HasDailyLimit() && sub.DailyWindowStart != nil {
 		limit := *group.DailyLimitUSD
-		resetsAt := sub.DailyWindowStart.Add(24 * time.Hour)
+		windowStart := timezone.StartOfDay(*sub.DailyWindowStart)
+		resetsAt := windowStart.Add(24 * time.Hour)
 		progress.Daily = &UsageWindowProgress{
 			LimitUSD:        limit,
 			UsedUSD:         sub.DailyUsageUSD,
 			RemainingUSD:    limit - sub.DailyUsageUSD,
 			Percentage:      (sub.DailyUsageUSD / limit) * 100,
-			WindowStart:     *sub.DailyWindowStart,
+			WindowStart:     windowStart,
 			ResetsAt:        resetsAt,
 			ResetsInSeconds: int64(time.Until(resetsAt).Seconds()),
 		}

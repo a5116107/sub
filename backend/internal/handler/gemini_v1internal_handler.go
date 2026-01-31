@@ -91,9 +91,17 @@ func (h *GatewayHandler) GeminiV1Internal(c *gin.Context) {
 	// For Gemini native/CodeAssist API, do not send Claude-style ping frames.
 	geminiConcurrency := NewConcurrencyHelper(h.concurrencyHelper.concurrencyService, SSEPingFormatNone, 0)
 
+	// Concurrency is tracked per (user_id, group_id). Group is required for v1internal.
+	groupID := int64(0)
+	if apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	} else if apiKey.Group != nil {
+		groupID = apiKey.Group.ID
+	}
+
 	// 0) wait queue check
 	maxWait := service.CalculateMaxWait(authSubject.Concurrency)
-	canWait, err := geminiConcurrency.IncrementWaitCount(c.Request.Context(), authSubject.UserID, maxWait)
+	canWait, err := geminiConcurrency.IncrementWaitCount(c.Request.Context(), authSubject.UserID, groupID, maxWait)
 	waitCounted := false
 	if err != nil {
 		log.Printf("Increment wait count failed: %v", err)
@@ -106,19 +114,19 @@ func (h *GatewayHandler) GeminiV1Internal(c *gin.Context) {
 	}
 	defer func() {
 		if waitCounted {
-			geminiConcurrency.DecrementWaitCount(c.Request.Context(), authSubject.UserID)
+			geminiConcurrency.DecrementWaitCount(c.Request.Context(), authSubject.UserID, groupID)
 		}
 	}()
 
 	// 1) user concurrency slot
 	streamStarted := false
-	userReleaseFunc, err := geminiConcurrency.AcquireUserSlotWithWait(c, authSubject.UserID, authSubject.Concurrency, stream, &streamStarted)
+	userReleaseFunc, err := geminiConcurrency.AcquireUserSlotWithWait(c, authSubject.UserID, groupID, authSubject.Concurrency, stream, &streamStarted)
 	if err != nil {
 		googleError(c, http.StatusTooManyRequests, err.Error())
 		return
 	}
 	if waitCounted {
-		geminiConcurrency.DecrementWaitCount(c.Request.Context(), authSubject.UserID)
+		geminiConcurrency.DecrementWaitCount(c.Request.Context(), authSubject.UserID, groupID)
 		waitCounted = false
 	}
 	userReleaseFunc = wrapReleaseOnDone(c.Request.Context(), userReleaseFunc)

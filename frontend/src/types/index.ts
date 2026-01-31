@@ -275,6 +275,8 @@ export interface Group {
   daily_limit_usd: number | null
   weekly_limit_usd: number | null
   monthly_limit_usd: number | null
+  // Subscription package user concurrency (0 = no override)
+  user_concurrency: number
   // 图片生成计费配置（仅 antigravity 平台使用）
   image_price_1k: number | null
   image_price_2k: number | null
@@ -304,6 +306,12 @@ export interface ApiKey {
   status: 'active' | 'inactive'
   ip_whitelist: string[]
   ip_blacklist: string[]
+  allow_balance: boolean
+  allow_subscription: boolean
+  subscription_strict: boolean
+  expires_at?: string | null
+  quota_limit_usd?: number | null
+  quota_used_usd: number
   created_at: string
   updated_at: string
   group?: Group
@@ -311,10 +319,15 @@ export interface ApiKey {
 
 export interface CreateApiKeyRequest {
   name: string
-  group_id?: number | null
+  group_id: number
   custom_key?: string // Optional custom API Key
   ip_whitelist?: string[]
   ip_blacklist?: string[]
+  allow_balance?: boolean
+  allow_subscription?: boolean
+  subscription_strict?: boolean
+  expires_at?: string | null
+  quota_limit_usd?: number | null
 }
 
 export interface UpdateApiKeyRequest {
@@ -323,6 +336,13 @@ export interface UpdateApiKeyRequest {
   status?: 'active' | 'inactive'
   ip_whitelist?: string[]
   ip_blacklist?: string[]
+  allow_balance?: boolean
+  allow_subscription?: boolean
+  subscription_strict?: boolean
+  expires_at?: string | null
+  clear_expires_at?: boolean
+  quota_limit_usd?: number | null
+  clear_quota_limit_usd?: boolean
 }
 
 export interface CreateGroupRequest {
@@ -335,6 +355,7 @@ export interface CreateGroupRequest {
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
+  user_concurrency?: number
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
@@ -353,6 +374,7 @@ export interface UpdateGroupRequest {
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
+  user_concurrency?: number
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null

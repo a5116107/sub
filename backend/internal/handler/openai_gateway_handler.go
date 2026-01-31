@@ -225,9 +225,17 @@ func (h *OpenAIGatewayHandler) forwardWithFailover(
 	// Track if we've started streaming (for error handling)
 	streamStarted := false
 
+	// Concurrency is tracked per (user_id, group_id). Group may be nil.
+	groupID := int64(0)
+	if apiKey != nil && apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	} else if apiKey != nil && apiKey.Group != nil {
+		groupID = apiKey.Group.ID
+	}
+
 	// 0. Check if wait queue is full
 	maxWait := service.CalculateMaxWait(subject.Concurrency)
-	canWait, err := h.concurrencyHelper.IncrementWaitCount(c.Request.Context(), subject.UserID, maxWait)
+	canWait, err := h.concurrencyHelper.IncrementWaitCount(c.Request.Context(), subject.UserID, groupID, maxWait)
 	waitCounted := false
 	if err != nil {
 		log.Printf("Increment wait count failed: %v", err)
@@ -241,12 +249,12 @@ func (h *OpenAIGatewayHandler) forwardWithFailover(
 	}
 	defer func() {
 		if waitCounted {
-			h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID)
+			h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID, groupID)
 		}
 	}()
 
 	// 1. First acquire user concurrency slot
-	userReleaseFunc, err := h.concurrencyHelper.AcquireUserSlotWithWait(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted)
+	userReleaseFunc, err := h.concurrencyHelper.AcquireUserSlotWithWait(c, subject.UserID, groupID, subject.Concurrency, reqStream, &streamStarted)
 	if err != nil {
 		log.Printf("User concurrency acquire failed: %v", err)
 		h.handleConcurrencyError(c, err, "user", streamStarted)
@@ -254,7 +262,7 @@ func (h *OpenAIGatewayHandler) forwardWithFailover(
 	}
 	// User slot acquired: no longer waiting.
 	if waitCounted {
-		h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID)
+		h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID, groupID)
 		waitCounted = false
 	}
 	// 确保请求取消时也会释放槽位，避免长连接被动中断造成泄漏

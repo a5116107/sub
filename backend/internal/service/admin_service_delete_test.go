@@ -320,6 +320,10 @@ func (s *redeemRepoStub) ListByUser(ctx context.Context, userID int64, limit int
 	panic("unexpected ListByUser call")
 }
 
+func (s *redeemRepoStub) GetStats(ctx context.Context) (*RedeemCodeStats, error) {
+	panic("unexpected GetStats call")
+}
+
 type subscriptionInvalidateCall struct {
 	userID  int64
 	groupID int64
@@ -359,6 +363,14 @@ func (s *billingCacheStub) SetSubscriptionCache(ctx context.Context, userID, gro
 
 func (s *billingCacheStub) UpdateSubscriptionUsage(ctx context.Context, userID, groupID int64, cost float64) error {
 	panic("unexpected UpdateSubscriptionUsage call")
+}
+
+func (s *billingCacheStub) ReserveSubscriptionUsage(ctx context.Context, userID, groupID int64, reserveUSD float64, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64) (int, error) {
+	panic("unexpected ReserveSubscriptionUsage call")
+}
+
+func (s *billingCacheStub) FinalizeSubscriptionUsage(ctx context.Context, userID, groupID int64, reservedUSD, actualUSD float64) error {
+	panic("unexpected FinalizeSubscriptionUsage call")
 }
 
 func (s *billingCacheStub) InvalidateSubscriptionCache(ctx context.Context, userID, groupID int64) error {

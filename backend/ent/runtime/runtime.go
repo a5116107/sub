@@ -91,6 +91,22 @@ func init() {
 	apikey.DefaultStatus = apikeyDescStatus.Default.(string)
 	// apikey.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	apikey.StatusValidator = apikeyDescStatus.Validators[0].(func(string) error)
+	// apikeyDescAllowBalance is the schema descriptor for allow_balance field.
+	apikeyDescAllowBalance := apikeyFields[7].Descriptor()
+	// apikey.DefaultAllowBalance holds the default value on creation for the allow_balance field.
+	apikey.DefaultAllowBalance = apikeyDescAllowBalance.Default.(bool)
+	// apikeyDescAllowSubscription is the schema descriptor for allow_subscription field.
+	apikeyDescAllowSubscription := apikeyFields[8].Descriptor()
+	// apikey.DefaultAllowSubscription holds the default value on creation for the allow_subscription field.
+	apikey.DefaultAllowSubscription = apikeyDescAllowSubscription.Default.(bool)
+	// apikeyDescSubscriptionStrict is the schema descriptor for subscription_strict field.
+	apikeyDescSubscriptionStrict := apikeyFields[9].Descriptor()
+	// apikey.DefaultSubscriptionStrict holds the default value on creation for the subscription_strict field.
+	apikey.DefaultSubscriptionStrict = apikeyDescSubscriptionStrict.Default.(bool)
+	// apikeyDescQuotaUsedUsd is the schema descriptor for quota_used_usd field.
+	apikeyDescQuotaUsedUsd := apikeyFields[12].Descriptor()
+	// apikey.DefaultQuotaUsedUsd holds the default value on creation for the quota_used_usd field.
+	apikey.DefaultQuotaUsedUsd = apikeyDescQuotaUsedUsd.Default.(float64)
 	accountMixin := schema.Account{}.Mixin()
 	accountMixinHooks1 := accountMixin[1].Hooks()
 	account.Hooks[0] = accountMixinHooks1[0]
@@ -279,12 +295,16 @@ func init() {
 	groupDescDefaultValidityDays := groupFields[10].Descriptor()
 	// group.DefaultDefaultValidityDays holds the default value on creation for the default_validity_days field.
 	group.DefaultDefaultValidityDays = groupDescDefaultValidityDays.Default.(int)
+	// groupDescUserConcurrency is the schema descriptor for user_concurrency field.
+	groupDescUserConcurrency := groupFields[11].Descriptor()
+	// group.DefaultUserConcurrency holds the default value on creation for the user_concurrency field.
+	group.DefaultUserConcurrency = groupDescUserConcurrency.Default.(int)
 	// groupDescClaudeCodeOnly is the schema descriptor for claude_code_only field.
-	groupDescClaudeCodeOnly := groupFields[14].Descriptor()
+	groupDescClaudeCodeOnly := groupFields[15].Descriptor()
 	// group.DefaultClaudeCodeOnly holds the default value on creation for the claude_code_only field.
 	group.DefaultClaudeCodeOnly = groupDescClaudeCodeOnly.Default.(bool)
 	// groupDescModelRoutingEnabled is the schema descriptor for model_routing_enabled field.
-	groupDescModelRoutingEnabled := groupFields[17].Descriptor()
+	groupDescModelRoutingEnabled := groupFields[18].Descriptor()
 	// group.DefaultModelRoutingEnabled holds the default value on creation for the model_routing_enabled field.
 	group.DefaultModelRoutingEnabled = groupDescModelRoutingEnabled.Default.(bool)
 	paymentorderMixin := schema.PaymentOrder{}.Mixin()

@@ -3767,6 +3767,9 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 							} else {
 								appliedThisCall = true
 								appliedAmountUSD = subscriptionCostUSD
+								if err := tx.APIKey.UpdateOneID(apiKey.ID).AddQuotaUsedUsd(appliedAmountUSD).Exec(txCtx); err != nil {
+									log.Printf("Increment api key quota used failed: %v", err)
+								}
 							}
 						} else {
 							if err := s.userRepo.DeductBalance(txCtx, user.ID, cost.ActualCost); err != nil {
@@ -3776,6 +3779,9 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 							} else {
 								appliedThisCall = true
 								appliedAmountUSD = cost.ActualCost
+								if err := tx.APIKey.UpdateOneID(apiKey.ID).AddQuotaUsedUsd(appliedAmountUSD).Exec(txCtx); err != nil {
+									log.Printf("Increment api key quota used failed: %v", err)
+								}
 							}
 						}
 					}

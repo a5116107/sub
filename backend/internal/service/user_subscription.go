@@ -1,6 +1,10 @@
 package service
 
-import "time"
+import (
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+)
 
 type UserSubscription struct {
 	ID      int64
@@ -54,7 +58,11 @@ func (s *UserSubscription) NeedsDailyReset() bool {
 	if s.DailyWindowStart == nil {
 		return false
 	}
-	return time.Since(*s.DailyWindowStart) >= 24*time.Hour
+	// Daily usage resets at 00:00 in the server timezone (default Asia/Shanghai),
+	// not as a rolling 24-hour window.
+	nowDay := timezone.StartOfDay(time.Now())
+	windowDay := timezone.StartOfDay(*s.DailyWindowStart)
+	return windowDay.Before(nowDay)
 }
 
 func (s *UserSubscription) NeedsWeeklyReset() bool {
@@ -75,7 +83,9 @@ func (s *UserSubscription) DailyResetTime() *time.Time {
 	if s.DailyWindowStart == nil {
 		return nil
 	}
-	t := s.DailyWindowStart.Add(24 * time.Hour)
+	// Next reset is at the next 00:00 boundary in the server timezone.
+	start := timezone.StartOfDay(*s.DailyWindowStart)
+	t := start.Add(24 * time.Hour)
 	return &t
 }
 

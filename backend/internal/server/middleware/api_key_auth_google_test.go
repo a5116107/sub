@@ -634,9 +634,10 @@ func TestApiKeyAuthWithSubscriptionGoogle_InsufficientBalance(t *testing.T) {
 	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
 		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
 			return &service.APIKey{
-				ID:     1,
-				Key:    key,
-				Status: service.StatusActive,
+				ID:           1,
+				Key:          key,
+				Status:       service.StatusActive,
+				AllowBalance: true,
 				User: &service.User{
 					ID:      123,
 					Status:  service.StatusActive,

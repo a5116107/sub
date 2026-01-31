@@ -1,5 +1,7 @@
 package service
 
+import "time"
+
 // APIKeyAuthSnapshot API Key 认证缓存快照（仅包含认证所需字段）
 type APIKeyAuthSnapshot struct {
 	APIKeyID    int64                    `json:"api_key_id"`
@@ -8,6 +10,12 @@ type APIKeyAuthSnapshot struct {
 	Status      string                   `json:"status"`
 	IPWhitelist []string                 `json:"ip_whitelist,omitempty"`
 	IPBlacklist []string                 `json:"ip_blacklist,omitempty"`
+	AllowBalance      bool       `json:"allow_balance"`
+	AllowSubscription bool       `json:"allow_subscription"`
+	SubscriptionStrict bool      `json:"subscription_strict"`
+	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	QuotaLimitUSD     *float64   `json:"quota_limit_usd,omitempty"`
+	QuotaUsedUSD      float64    `json:"quota_used_usd"`
 	User        APIKeyAuthUserSnapshot   `json:"user"`
 	Group       *APIKeyAuthGroupSnapshot `json:"group,omitempty"`
 }
@@ -28,11 +36,13 @@ type APIKeyAuthGroupSnapshot struct {
 	Name             string   `json:"name"`
 	Platform         string   `json:"platform"`
 	Status           string   `json:"status"`
+	IsExclusive      bool     `json:"is_exclusive"`
 	SubscriptionType string   `json:"subscription_type"`
 	RateMultiplier   float64  `json:"rate_multiplier"`
 	DailyLimitUSD    *float64 `json:"daily_limit_usd,omitempty"`
 	WeeklyLimitUSD   *float64 `json:"weekly_limit_usd,omitempty"`
 	MonthlyLimitUSD  *float64 `json:"monthly_limit_usd,omitempty"`
+	UserConcurrency  int      `json:"user_concurrency"`
 	ImagePrice1K     *float64 `json:"image_price_1k,omitempty"`
 	ImagePrice2K     *float64 `json:"image_price_2k,omitempty"`
 	ImagePrice4K     *float64 `json:"image_price_4k,omitempty"`

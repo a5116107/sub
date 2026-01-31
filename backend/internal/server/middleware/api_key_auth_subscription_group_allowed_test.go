@@ -38,6 +38,7 @@ func TestAPIKeyAuth_SubscriptionGroup_IgnoresAllowedGroupsWhenSubscriptionActive
 		Platform:         service.PlatformAnthropic,
 		Hydrated:         true,
 		SubscriptionType: service.SubscriptionTypeSubscription,
+		UserConcurrency:  10,
 		IsExclusive:      true,
 	}
 	user := &service.User{
@@ -49,12 +50,14 @@ func TestAPIKeyAuth_SubscriptionGroup_IgnoresAllowedGroupsWhenSubscriptionActive
 		AllowedGroups: []int64{999}, // does not include group.ID
 	}
 	apiKey := &service.APIKey{
-		ID:     100,
-		UserID: user.ID,
-		Key:    "test-key",
-		Status: service.StatusActive,
-		User:   user,
-		Group:  group,
+		ID:                100,
+		UserID:            user.ID,
+		Key:               "test-key",
+		Status:            service.StatusActive,
+		AllowBalance:      true,
+		AllowSubscription: true,
+		User:              user,
+		Group:             group,
 	}
 	apiKey.GroupID = &group.ID
 
@@ -94,7 +97,10 @@ func TestAPIKeyAuth_SubscriptionGroup_IgnoresAllowedGroupsWhenSubscriptionActive
 	cfg := &config.Config{RunMode: "prod"}
 	router := gin.New()
 	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg)))
-	router.GET("/t", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	router.GET("/t", func(c *gin.Context) {
+		subject, _ := GetAuthSubjectFromContext(c)
+		c.JSON(http.StatusOK, gin.H{"ok": true, "concurrency": subject.Concurrency})
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/t", nil)
 	req.Header.Set("x-api-key", apiKey.Key)
@@ -102,6 +108,10 @@ func TestAPIKeyAuth_SubscriptionGroup_IgnoresAllowedGroupsWhenSubscriptionActive
 	router.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+	require.Equal(t, float64(10), payload["concurrency"])
 }
 
 func TestAPIKeyAuthGoogle_SubscriptionGroup_IgnoresAllowedGroupsWhenSubscriptionActive(t *testing.T) {
@@ -115,6 +125,7 @@ func TestAPIKeyAuthGoogle_SubscriptionGroup_IgnoresAllowedGroupsWhenSubscription
 		Platform:         service.PlatformAnthropic,
 		Hydrated:         true,
 		SubscriptionType: service.SubscriptionTypeSubscription,
+		UserConcurrency:  10,
 		IsExclusive:      true,
 	}
 	user := &service.User{
@@ -126,12 +137,14 @@ func TestAPIKeyAuthGoogle_SubscriptionGroup_IgnoresAllowedGroupsWhenSubscription
 		AllowedGroups: []int64{999}, // does not include group.ID
 	}
 	apiKey := &service.APIKey{
-		ID:     100,
-		UserID: user.ID,
-		Key:    "test-key",
-		Status: service.StatusActive,
-		User:   user,
-		Group:  group,
+		ID:                100,
+		UserID:            user.ID,
+		Key:               "test-key",
+		Status:            service.StatusActive,
+		AllowBalance:      true,
+		AllowSubscription: true,
+		User:              user,
+		Group:             group,
 	}
 	apiKey.GroupID = &group.ID
 
@@ -171,7 +184,10 @@ func TestAPIKeyAuthGoogle_SubscriptionGroup_IgnoresAllowedGroupsWhenSubscription
 	cfg := &config.Config{RunMode: "prod"}
 	router := gin.New()
 	router.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
-	router.GET("/t", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	router.GET("/t", func(c *gin.Context) {
+		subject, _ := GetAuthSubjectFromContext(c)
+		c.JSON(http.StatusOK, gin.H{"ok": true, "concurrency": subject.Concurrency})
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/t", nil)
 	req.Header.Set("x-api-key", apiKey.Key)
@@ -182,4 +198,29 @@ func TestAPIKeyAuthGoogle_SubscriptionGroup_IgnoresAllowedGroupsWhenSubscription
 
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+	require.Equal(t, float64(10), payload["concurrency"])
+}
+
+func TestComputeSubjectConcurrency_SubscriptionGroup_FallsBackToUserWhenZero(t *testing.T) {
+	t.Parallel()
+
+	group := &service.Group{
+		ID:               1,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+		UserConcurrency:  0,
+	}
+	require.Equal(t, 5, computeSubjectConcurrency(5, group))
+	require.Equal(t, 1, computeSubjectConcurrency(0, group))  // clamp
+	require.Equal(t, 1, computeSubjectConcurrency(-3, group)) // clamp
+}
+
+func TestComputeSubjectConcurrency_StandardGroup_OverridesWhenConfigured(t *testing.T) {
+	t.Parallel()
+
+	group := &service.Group{
+		ID:               1,
+		SubscriptionType: service.SubscriptionTypeStandard,
+		UserConcurrency:  7,
+	}
+	require.Equal(t, 7, computeSubjectConcurrency(3, group))
 }
