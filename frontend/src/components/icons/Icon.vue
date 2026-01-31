@@ -13,8 +13,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+export type IconName = keyof typeof icons
+
 const props = withDefaults(defineProps<{
-  name: keyof typeof icons
+  name: IconName
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   strokeWidth?: number
 }>(), {

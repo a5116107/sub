@@ -7,11 +7,12 @@
       :disabled="disabled"
       :aria-expanded="isOpen"
       :aria-haspopup="true"
-      aria-label="Select option"
+      :aria-label="ariaLabel || placeholderText"
       :class="[
         'select-trigger',
         isOpen && 'select-trigger-open',
         error && 'select-trigger-error',
+        success && !error && 'select-trigger-success',
         disabled && 'select-trigger-disabled'
       ]"
       @keydown.down.prevent="onTriggerKeyDown"
@@ -122,11 +123,13 @@ interface Props {
   placeholder?: string
   disabled?: boolean
   error?: boolean
+  success?: boolean
   searchable?: boolean
   searchPlaceholder?: string
   emptyText?: string
   valueKey?: string
   labelKey?: string
+  ariaLabel?: string
 }
 
 interface Emits {
@@ -137,6 +140,7 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   disabled: false,
   error: false,
+  success: false,
   searchable: false,
   valueKey: 'value',
   labelKey: 'label'
@@ -417,6 +421,10 @@ onUnmounted(() => {
 
 .select-trigger-error {
   @apply border-red-500 focus:border-red-500 focus:ring-red-500/30;
+}
+
+.select-trigger-success {
+  @apply border-emerald-500 focus:border-emerald-500 focus:ring-emerald-500/30;
 }
 
 .select-trigger-disabled {

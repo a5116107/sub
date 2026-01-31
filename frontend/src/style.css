@@ -489,8 +489,37 @@
   }
 
   .table tbody tr {
-    @apply transition-colors duration-150;
-    @apply hover:bg-gray-50 dark:hover:bg-dark-800/30;
+    @apply transition-all duration-200 ease-out;
+    @apply hover:bg-gray-50/80 dark:hover:bg-dark-800/40;
+    @apply relative;
+  }
+
+  /* Enhanced row hover with subtle left border indicator */
+  .table tbody tr:hover td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(to bottom, rgba(var(--neo-cyan) / 0.8), rgba(var(--neo-cyan) / 0.4));
+    border-radius: 0 2px 2px 0;
+  }
+
+  /* Selected row state */
+  .table tbody tr.selected {
+    @apply bg-primary-50/50 dark:bg-primary-900/10;
+  }
+
+  .table tbody tr.selected td:first-child::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(to bottom, rgba(var(--neo-cyan) / 1), rgba(var(--neo-cyan) / 0.6));
+    border-radius: 0 2px 2px 0;
   }
 
   /* ============ 徽章样式 ============ */
@@ -562,6 +591,7 @@
     @apply rounded-2xl shadow-2xl;
     @apply border border-gray-200 dark:border-dark-700;
     @apply flex flex-col;
+    @apply transform transition-all duration-300 ease-out;
   }
 
   .modal-header {
@@ -757,6 +787,20 @@
     box-shadow:
       0 0 0 6px rgba(var(--neo-cyan) / 0.14),
       0 0 18px rgba(var(--neo-cyan) / 0.35);
+    animation: activeIndicatorPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes activeIndicatorPulse {
+    0%, 100% {
+      box-shadow:
+        0 0 0 6px rgba(var(--neo-cyan) / 0.14),
+        0 0 18px rgba(var(--neo-cyan) / 0.35);
+    }
+    50% {
+      box-shadow:
+        0 0 0 8px rgba(var(--neo-cyan) / 0.1),
+        0 0 24px rgba(var(--neo-cyan) / 0.5);
+    }
   }
 
   .sidebar-section {
@@ -793,12 +837,31 @@
     @apply text-gray-300 dark:text-dark-600;
   }
 
+  .empty-state-icon-wrapper {
+    @apply relative mb-6;
+  }
+
+  .empty-state-icon-wrapper::before {
+    content: '';
+    @apply absolute inset-0;
+    @apply rounded-full;
+    @apply bg-gradient-to-br from-primary-100/50 to-transparent;
+    @apply dark:from-primary-900/20;
+    @apply transform scale-150;
+    @apply blur-xl;
+  }
+
   .empty-state-title {
-    @apply mb-1 text-lg font-medium text-gray-900 dark:text-white;
+    @apply mb-2 text-lg font-semibold text-gray-900 dark:text-white;
   }
 
   .empty-state-description {
     @apply max-w-sm text-sm text-gray-500 dark:text-dark-400;
+    @apply leading-relaxed;
+  }
+
+  .empty-state-action {
+    @apply mt-6;
   }
 
   /* ============ 加载状态 ============ */
@@ -807,8 +870,52 @@
     @apply animate-spin;
   }
 
+  .spinner-sm {
+    @apply h-4 w-4 border-2;
+  }
+
+  .spinner-lg {
+    @apply h-6 w-6 border-[3px];
+  }
+
   .skeleton {
     @apply animate-pulse rounded bg-gray-200 dark:bg-dark-700;
+  }
+
+  /* Shimmer effect skeleton */
+  .skeleton-shimmer {
+    @apply relative overflow-hidden rounded;
+    @apply bg-gray-200 dark:bg-dark-700;
+  }
+
+  .skeleton-shimmer::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.4),
+      transparent
+    );
+    animation: shimmer 1.5s infinite;
+  }
+
+  .dark .skeleton-shimmer::after {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+  }
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
   }
 
   /* ============ 分隔线 ============ */

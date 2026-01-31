@@ -13,12 +13,24 @@
         <div ref="dialogRef" :class="['modal-content', widthClasses]" @click.stop>
           <!-- Header -->
           <div class="modal-header">
-            <h3 :id="dialogId" class="modal-title">
-              {{ title }}
-            </h3>
+            <div class="flex items-center gap-3">
+              <!-- Header Icon -->
+              <div
+                v-if="headerIcon"
+                :class="[
+                  'flex h-10 w-10 items-center justify-center rounded-xl',
+                  headerIconBgClass
+                ]"
+              >
+                <Icon :name="headerIcon" size="md" :class="headerIconClass" />
+              </div>
+              <h3 :id="dialogId" class="modal-title">
+                {{ title }}
+              </h3>
+            </div>
             <button
               @click="emit('close')"
-              class="-mr-2 rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-dark-500 dark:hover:bg-dark-700 dark:hover:text-dark-300"
+              class="-mr-2 rounded-xl p-2 text-gray-400 transition-all duration-200 hover:bg-gray-100 hover:text-gray-600 hover:rotate-90 dark:text-dark-500 dark:hover:bg-dark-700 dark:hover:text-dark-300"
               aria-label="Close modal"
             >
               <Icon name="x" size="md" />
@@ -43,6 +55,7 @@
 <script setup lang="ts">
 import { computed, watch, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import Icon from '@/components/icons/Icon.vue'
+import type { IconName } from '@/components/icons/Icon.vue'
 
 // 生成唯一ID以避免多个对话框时ID冲突
 let dialogIdCounter = 0
@@ -60,6 +73,8 @@ interface Props {
   width?: DialogWidth
   closeOnEscape?: boolean
   closeOnClickOutside?: boolean
+  headerIcon?: IconName
+  headerIconVariant?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
 }
 
 interface Emits {
@@ -69,10 +84,33 @@ interface Emits {
 const props = withDefaults(defineProps<Props>(), {
   width: 'normal',
   closeOnEscape: true,
-  closeOnClickOutside: false
+  closeOnClickOutside: false,
+  headerIconVariant: 'primary'
 })
 
 const emit = defineEmits<Emits>()
+
+const headerIconBgClass = computed(() => {
+  const classes: Record<string, string> = {
+    primary: 'bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400',
+    success: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
+    warning: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
+    danger: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+    info: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+  }
+  return classes[props.headerIconVariant]
+})
+
+const headerIconClass = computed(() => {
+  const classes: Record<string, string> = {
+    primary: 'text-primary-600 dark:text-primary-400',
+    success: 'text-emerald-600 dark:text-emerald-400',
+    warning: 'text-amber-600 dark:text-amber-400',
+    danger: 'text-red-600 dark:text-red-400',
+    info: 'text-blue-600 dark:text-blue-400'
+  }
+  return classes[props.headerIconVariant]
+})
 
 const widthClasses = computed(() => {
   // Width guidance: narrow=confirm/short prompts, normal=standard forms,
