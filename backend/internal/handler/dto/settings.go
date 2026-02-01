@@ -66,28 +66,29 @@ type SystemSettings struct {
 }
 
 type PublicSettings struct {
-	RegistrationEnabled         bool   `json:"registration_enabled"`
-	EmailVerifyEnabled          bool   `json:"email_verify_enabled"`
-	PromoCodeEnabled            bool   `json:"promo_code_enabled"`
-	PasswordResetEnabled        bool   `json:"password_reset_enabled"`
-	TotpEnabled                 bool   `json:"totp_enabled"` // TOTP 双因素认证
-	TurnstileEnabled            bool   `json:"turnstile_enabled"`
-	TurnstileSiteKey            string `json:"turnstile_site_key"`
-	SiteName                    string `json:"site_name"`
-	SiteLogo                    string `json:"site_logo"`
-	SiteSubtitle                string `json:"site_subtitle"`
-	APIBaseURL                  string `json:"api_base_url"`
-	ContactInfo                 string `json:"contact_info"`
-	DocURL                      string `json:"doc_url"`
-	HomeContent                 string `json:"home_content"`
-	LandingPricingEnabled       bool   `json:"landing_pricing_enabled"`
-	LandingPricingConfig        string `json:"landing_pricing_config"`
-	SubscriptionsEnabled        bool   `json:"subscriptions_enabled"`
-	HideCcsImportButton         bool   `json:"hide_ccs_import_button"`
-	PurchaseSubscriptionEnabled bool   `json:"purchase_subscription_enabled"`
-	PurchaseSubscriptionURL     string `json:"purchase_subscription_url"`
-	LinuxDoOAuthEnabled         bool   `json:"linuxdo_oauth_enabled"`
-	Version                     string `json:"version"`
+	RegistrationEnabled         bool    `json:"registration_enabled"`
+	EmailVerifyEnabled          bool    `json:"email_verify_enabled"`
+	PromoCodeEnabled            bool    `json:"promo_code_enabled"`
+	PasswordResetEnabled        bool    `json:"password_reset_enabled"`
+	TotpEnabled                 bool    `json:"totp_enabled"` // TOTP 双因素认证
+	TurnstileEnabled            bool    `json:"turnstile_enabled"`
+	TurnstileSiteKey            string  `json:"turnstile_site_key"`
+	SiteName                    string  `json:"site_name"`
+	SiteLogo                    string  `json:"site_logo"`
+	SiteSubtitle                string  `json:"site_subtitle"`
+	APIBaseURL                  string  `json:"api_base_url"`
+	ContactInfo                 string  `json:"contact_info"`
+	DocURL                      string  `json:"doc_url"`
+	HomeContent                 string  `json:"home_content"`
+	LandingPricingEnabled       bool    `json:"landing_pricing_enabled"`
+	LandingPricingConfig        string  `json:"landing_pricing_config"`
+	LandingPricingGroups        []Group `json:"landing_pricing_groups"`
+	SubscriptionsEnabled        bool    `json:"subscriptions_enabled"`
+	HideCcsImportButton         bool    `json:"hide_ccs_import_button"`
+	PurchaseSubscriptionEnabled bool    `json:"purchase_subscription_enabled"`
+	PurchaseSubscriptionURL     string  `json:"purchase_subscription_url"`
+	LinuxDoOAuthEnabled         bool    `json:"linuxdo_oauth_enabled"`
+	Version                     string  `json:"version"`
 }
 
 // StreamTimeoutSettings 流超时处理配置 DTO

@@ -20,6 +20,7 @@ import qwenAPI from './qwen'
 import antigravityAPI from './antigravity'
 import userAttributesAPI from './userAttributes'
 import opsAPI from './ops'
+import docsAPI from './docs'
 
 /**
  * Unified admin API object for convenient access
@@ -33,6 +34,7 @@ export const adminAPI = {
   redeem: redeemAPI,
   promo: promoAPI,
   settings: settingsAPI,
+  docs: docsAPI,
   system: systemAPI,
   subscriptions: subscriptionsAPI,
   usage: usageAPI,
@@ -53,6 +55,7 @@ export {
   redeemAPI,
   promoAPI,
   settingsAPI,
+  docsAPI,
   systemAPI,
   subscriptionsAPI,
   usageAPI,

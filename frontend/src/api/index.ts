@@ -21,5 +21,8 @@ export { paymentsAPI } from './payments'
 // Admin APIs
 export { adminAPI } from './admin'
 
+// Public Docs
+export { default as docsAPI, type DocsPage } from './docs'
+
 // Default export
 export { default } from './client'

@@ -50,6 +50,13 @@ func RegisterAuthRoutes(
 		settings.GET("/public", h.Setting.GetPublicSettings)
 	}
 
+	// 公开文档（无需认证）
+	docs := v1.Group("/docs")
+	{
+		docs.GET("/pages", h.Setting.ListDocsPages)
+		docs.GET("/:key", h.Setting.GetDocsPage)
+	}
+
 	// 需要认证的当前用户信息
 	authenticated := v1.Group("")
 	authenticated.Use(gin.HandlerFunc(jwtAuth))

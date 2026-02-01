@@ -517,6 +517,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyPromoCodeEnabled:            "true", // 默认启用优惠码功能
 		SettingKeySiteName:                    "Sub2API",
 		SettingKeySiteLogo:                    "",
+		SettingKeyDocURL:                      "/docs",
 		SettingKeyReferralInviterBonus:        "0",
 		SettingKeyReferralInviteeBonus:        "0",
 		SettingKeyReferralCommissionRate:      "0",

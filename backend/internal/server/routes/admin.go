@@ -53,6 +53,9 @@ func RegisterAdminRoutes(
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
+		// 文档管理
+		registerDocsRoutes(admin, h)
+
 		// 运维监控（Ops）
 		registerOpsRoutes(admin, h)
 
@@ -161,6 +164,19 @@ func registerDashboardRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		dashboard.POST("/users-usage", h.Admin.Dashboard.GetBatchUsersUsage)
 		dashboard.POST("/api-keys-usage", h.Admin.Dashboard.GetBatchAPIKeysUsage)
 		dashboard.POST("/aggregation/backfill", h.Admin.Dashboard.BackfillAggregation)
+	}
+}
+
+func registerDocsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	docs := admin.Group("/docs")
+	{
+		docs.GET("/pages", h.Admin.Setting.ListDocsPages)
+		docs.POST("/pages", h.Admin.Setting.CreateDocsPage)
+		docs.PUT("/pages/:key", h.Admin.Setting.UpdateDocsPageMeta)
+		docs.DELETE("/pages/:key", h.Admin.Setting.DeleteDocsPage)
+
+		docs.GET("/:key", h.Admin.Setting.GetDocsPage)
+		docs.PUT("/:key", h.Admin.Setting.UpdateDocsPage)
 	}
 }
 

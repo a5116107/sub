@@ -81,7 +81,7 @@ func TestSettingHandler_AdminAPIKeyManagement_RequiresJWT(t *testing.T) {
 
 	repo := &settingRepoStub{}
 	settingService := service.NewSettingService(repo, nil)
-	h := NewSettingHandler(settingService, nil, nil, nil)
+	h := NewSettingHandler(settingService, nil, nil, nil, nil)
 
 	t.Run("GetAdminAPIKey forbidden for admin_api_key auth", func(t *testing.T) {
 		w := httptest.NewRecorder()

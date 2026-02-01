@@ -230,12 +230,7 @@
                 </div>
               </div>
 
-              <ul class="mt-4 space-y-2 text-sm text-gray-700 dark:text-dark-200">
-                <li v-for="(f, idx) in plan.features" :key="idx" class="flex items-start gap-2">
-                  <Icon name="check" size="sm" class="mt-0.5 text-primary-500" :stroke-width="2" />
-                  <span>{{ f }}</span>
-                </li>
-              </ul>
+              <PricingPlanPerks class="mt-4" :plan="plan" :groups="pricingGroups" :period="pricingPeriod" />
             </div>
           </button>
         </div>
@@ -286,6 +281,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import PricingPlanPerks from '@/components/pricing/PricingPlanPerks.vue'
 import { useAppStore } from '@/stores/app'
 import { paymentsAPI, type PaymentProviderInfo } from '@/api/payments'
 import {
@@ -302,6 +298,7 @@ const appStore = useAppStore()
 
 const contactInfo = computed(() => appStore.cachedPublicSettings?.contact_info || appStore.contactInfo || '')
 const landingPricingEnabled = computed(() => appStore.cachedPublicSettings?.landing_pricing_enabled ?? true)
+const purchaseSubscriptionEnabled = computed(() => appStore.cachedPublicSettings?.purchase_subscription_enabled ?? false)
 
 const providers = ref<PaymentProviderInfo[]>([])
 const providersLoading = ref(false)
@@ -359,6 +356,8 @@ const pricingParseResult = computed(() =>
 )
 const pricing = computed(() => pricingParseResult.value.config)
 
+const pricingGroups = computed(() => appStore.cachedPublicSettings?.landing_pricing_groups || [])
+
 type DisplayPeriod = PricingPeriod
 
 const pricingTab = ref<PricingTab>('subscription')
@@ -394,7 +393,7 @@ const visibleSubscriptionPlans = computed(() => {
 
 function periodLabel(key: DisplayPeriod): string {
   const found = pricing.value.subscription.periods.find((p) => p.key === key)
-  return found?.label || (key === 'week' ? '周付' : key === 'custom' ? '自定义' : '月付')
+  return found?.label || key
 }
 
 function normalizeTab(raw: any): PricingTab {
@@ -514,6 +513,17 @@ function handleNextStep() {
     appStore.showError(t('purchase.pleaseSelectPlan'))
     return
   }
+
+  if (purchaseSubscriptionEnabled.value) {
+    const nextQuery: Record<string, any> = { tab: pricingTab.value }
+    if (pricingTab.value === 'subscription') {
+      nextQuery.plan = selectedPlanId.value
+      nextQuery.period = pricingPeriod.value
+    }
+    router.push({ path: '/purchase-subscription', query: nextQuery })
+    return
+  }
+
   if (!contactInfo.value) {
     appStore.showInfo(t('purchase.noContactInfo'))
     return

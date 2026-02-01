@@ -84,6 +84,7 @@ export interface PublicSettings {
   home_content: string
   landing_pricing_enabled: boolean
   landing_pricing_config: string
+  landing_pricing_groups: Group[]
   subscriptions_enabled: boolean
   hide_ccs_import_button: boolean
   purchase_subscription_enabled: boolean

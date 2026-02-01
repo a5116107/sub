@@ -181,6 +181,7 @@ type SecurityConfig struct {
 	ResponseHeaders ResponseHeaderConfig `mapstructure:"response_headers"`
 	CSP             CSPConfig            `mapstructure:"csp"`
 	ProxyProbe      ProxyProbeConfig     `mapstructure:"proxy_probe"`
+	Indexing        IndexingConfig       `mapstructure:"indexing"`
 }
 
 type URLAllowlistConfig struct {
@@ -206,6 +207,14 @@ type CSPConfig struct {
 
 type ProxyProbeConfig struct {
 	InsecureSkipVerify bool `mapstructure:"insecure_skip_verify"` // 已禁用：禁止跳过 TLS 证书验证
+}
+
+type IndexingConfig struct {
+	// Mode controls whether the site is allowed to be indexed by search engines.
+	// Supported values:
+	// - "private" (recommended default): noindex by default; robots disallow all.
+	// - "public": allow indexing for public pages; login/admin/user pages remain noindex.
+	Mode string `mapstructure:"mode"`
 }
 
 type BillingConfig struct {
@@ -889,6 +898,7 @@ func setDefaults() {
 	viper.SetDefault("security.csp.enabled", true)
 	viper.SetDefault("security.csp.policy", DefaultCSPPolicy)
 	viper.SetDefault("security.proxy_probe.insecure_skip_verify", false)
+	viper.SetDefault("security.indexing.mode", "private")
 
 	// Billing
 	viper.SetDefault("billing.circuit_breaker.enabled", true)
@@ -1126,6 +1136,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Security.CSP.Enabled && strings.TrimSpace(c.Security.CSP.Policy) == "" {
 		return fmt.Errorf("security.csp.policy is required when CSP is enabled")
+	}
+	mode := strings.ToLower(strings.TrimSpace(c.Security.Indexing.Mode))
+	switch mode {
+	case "", "private", "public":
+	default:
+		return fmt.Errorf("security.indexing.mode must be one of: private/public")
 	}
 	if strings.TrimSpace(c.Server.FrontendBaseURL) != "" {
 		if err := ValidateAbsoluteHTTPURL(c.Server.FrontendBaseURL); err != nil {

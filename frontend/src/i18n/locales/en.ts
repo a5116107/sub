@@ -18,7 +18,14 @@ export default {
     pricing: {
       goToPurchase: 'Go to purchase',
       nav: 'Pricing',
-      customHint: 'Custom billing is available for enterprise plans (contact sales).'
+      customHint: 'Custom billing is available for enterprise plans (contact sales).',
+      groupFields: {
+        daily: 'Daily limit (USD)',
+        weekly: 'Weekly limit (USD)',
+        monthly: 'Monthly limit (USD)',
+        concurrency: 'Concurrency',
+        rate: 'Rate multiplier'
+      }
     },
     tags: {
       subscriptionToApi: 'Subscription to API',
@@ -227,6 +234,18 @@ export default {
     buySubscription: 'Purchase Subscription',
     purchase: 'Purchase',
     docs: 'Docs'
+  },
+
+  // Documentation
+  docs: {
+    loadFailed: 'Failed to load docs. Please try again.',
+    nav: {
+      title: 'Documentation',
+      overview: 'Overview',
+      quickstart: 'Quickstart',
+      compatibility: 'Compatibility',
+      faq: 'FAQ'
+    }
   },
 
   // Auth
@@ -835,6 +854,53 @@ export default {
         failed: 'Failed to trigger backfill'
       },
       failedToLoad: 'Failed to load dashboard statistics'
+    },
+
+    // Docs
+    docs: {
+      title: 'Docs',
+      subtitle: 'Manage in-site docs/articles served under /docs',
+      viewPublic: 'View Public Docs',
+      pages: 'Pages',
+      createPage: 'Create Page',
+      slug: 'Slug',
+      slugPlaceholder: 'e.g. security / pricing / terms',
+      slugRequired: 'Slug is required',
+      titleZh: 'Title (ZH)',
+      titleEn: 'Title (EN)',
+      group: 'Group',
+      groupPlaceholder: 'e.g. Docs / Blog / Security',
+      order: 'Order',
+      format: 'Format',
+      formats: {
+        markdown: 'Markdown',
+        html: 'HTML',
+        text: 'Plain text'
+      },
+      public: 'Public',
+      private: 'Private',
+      ungrouped: 'Ungrouped',
+      selectHint: 'Select a page from the left panel first',
+      meta: 'Metadata',
+      openPage: 'Open Page',
+      content: 'Content',
+      page: 'Page',
+      lang: 'Language',
+      status: 'Status',
+      unsaved: 'Unsaved changes',
+      saved: 'Saved',
+      updatedAt: 'Updated',
+      editor: 'Content Editor',
+      placeholder: 'Write Markdown here...',
+      htmlPlaceholder: 'Write HTML here...',
+      textPlaceholder: 'Write plain text here...',
+      htmlSanitizedHint: 'Note: HTML is sanitized on the frontend before rendering (scripts will be removed).',
+      deleteConfirm: 'Delete this page? This will remove both zh/en content and cannot be undone.',
+      loadFailed: 'Failed to load docs page',
+      saveFailed: 'Failed to save docs page',
+      savedToast: 'Docs saved',
+      createdToast: 'Page created',
+      deletedToast: 'Page deleted'
     },
 
     // Users
@@ -2990,7 +3056,8 @@ export default {
     // Settings
     settings: {
       title: 'System Settings',
-      description: 'Manage registration, email verification, default values, and SMTP settings',
+      description: 'Manage system security, site, pricing, and email settings',
+      jumpToSection: 'Jump to section',
       registration: {
         title: 'Registration Settings',
         description: 'Control user registration and verification',
@@ -3058,7 +3125,12 @@ export default {
       },
       site: {
         title: 'Site Settings',
-        description: 'Customize site branding',
+        description: 'Branding, links, home content, and pricing',
+        tabs: {
+          general: 'General',
+          home: 'Home',
+          subscriptions: 'Subscriptions & Pricing'
+        },
         siteName: 'Site Name',
         siteNamePlaceholder: 'Sub2API',
         siteNameHint: 'Displayed in emails and page titles',
@@ -3091,9 +3163,98 @@ export default {
         homeContentHint: 'Customize the home page content. Supports Markdown/HTML. If you enter a URL (starting with http:// or https://), it will be used as an iframe src to embed an external page. When set, the default status information will no longer be displayed.',
         homeContentIframeWarning: '⚠️ iframe mode note: Some websites have X-Frame-Options or CSP security policies that prevent embedding in iframes. If the page appears blank or shows an error, please verify the target website allows embedding, or consider using HTML mode to build your own content.',
         landingPricingConfig: 'Landing / Pricing Config (JSON)',
-        landingPricingConfigPlaceholder: 'Enter JSON config (plans, prices, copywriting, etc.)',
-        landingPricingConfigHint: 'Used by the home pricing section and /purchase page. Supports weekly/monthly/custom and pay-as-you-go info.',
+        landingPricingConfigPlaceholder:
+          'Enter JSON config (plans, prices, copywriting, etc.; optional: group_id, group_fields, validity_days, meta.widgets)',
+        landingPricingConfigHint:
+          'Used by the home pricing section and /purchase page. Supports weekly/monthly/custom and pay-as-you-go info. Optional: set plan.group_id to bind a backend subscription group (subscription_type=subscription), use group_fields to select which group fields to display, use validity_days to define validity (days) per period, and use meta.widgets to render typed fields.',
         landingPricingConfigInvalid: 'Invalid pricing config',
+        landingPricingEditor: {
+          ui: 'Visual',
+          defaultTab: 'Default Tab',
+          tab: {
+            subscription: 'Subscription',
+            payg: 'Pay-as-you-go'
+          },
+          currency: 'Currency',
+          subscriptionTitle: 'Subscription Title',
+          subscriptionSubtitle: 'Subscription Subtitle',
+          defaultPeriod: 'Default Period',
+          period: {
+            week: 'Weekly',
+            month: 'Monthly',
+            custom: 'Custom'
+          },
+          periodOptions: 'Period Options',
+          periodLabelPlaceholder: 'Display label (e.g. Weekly / Monthly / Custom)',
+          plans: 'Plans',
+          add: 'Add',
+          addPlan: 'Add plan',
+          noPlans: 'No plans yet. Click "Add plan" to create one.',
+          unnamedPlan: 'Untitled plan',
+          planId: 'Plan ID',
+          planBadge: 'Badge (optional)',
+          planDescription: 'Description (optional)',
+          planHighlighted: 'Highlighted',
+          planHighlightedHint: 'UI-only: used to show a recommended style on /home and /purchase.',
+          widgets: 'Widgets (typed, optional)',
+          noWidgets: 'No widgets yet. Add widgets to display structured fields on plan cards.',
+          widgetType: {
+            text: 'Text',
+            kv: 'Key/Value',
+            groupField: 'Backend group field',
+            list: 'List',
+            tags: 'Tags',
+            divider: 'Divider',
+            metric: 'Metric'
+          },
+          widgetTone: {
+            primary: 'Primary',
+            gray: 'Gray',
+            gold: 'Gold'
+          },
+          widgetWhen: 'Show on periods (optional)',
+          widgetWhenAll: 'All periods',
+          widgetField: {
+            text: 'Text',
+            label: 'Label',
+            value: 'Value',
+            groupFieldKey: 'Field',
+            groupFieldLabel: 'Label override (optional)',
+            listTitle: 'List title (optional)',
+            listItems: 'Items',
+            tagsTone: 'Tone',
+            tags: 'Tags',
+            dividerLabel: 'Divider label (optional)',
+            metricLabel: 'Label',
+            metricValue: 'Value',
+            metricHint: 'Hint (optional)'
+          },
+          widgetGroupFieldRequiresGroup: 'This widget type requires binding a backend group first.',
+          planGroup: 'Bind backend group (optional)',
+          planGroupNone: 'None',
+          planGroupHint:
+            'Recommended: bind an active group with subscription_type=subscription to keep plans in sync with backend quotas.',
+          validityDays: 'Validity (days, optional)',
+          validityDaysHint: 'Used by backend assignment/extend flows. Leave empty to use backend defaults.',
+          groupFields: 'Group fields to display (optional)',
+          priceWeek: 'Weekly price (CNY)',
+          priceMonth: 'Monthly price (CNY)',
+          priceCustom: 'Custom price label',
+          features: 'Features (free text list)',
+          payg: 'Pay-as-you-go',
+          paygTitle: 'Title',
+          paygSubtitle: 'Subtitle (optional)',
+          paygCtaLabel: 'CTA label (optional)',
+          paygNote: 'Note (optional)',
+          note: 'Global note (optional)'
+        },
+        landingPricingGroupFields: {
+          daily: 'Daily limit (USD)',
+          weekly: 'Weekly limit (USD)',
+          monthly: 'Monthly limit (USD)',
+          concurrency: 'User concurrency',
+          rate: 'Rate multiplier'
+        },
         hideCcsImportButton: 'Hide CCS Import Button',
         hideCcsImportButtonHint: 'When enabled, the "Import to CCS" button will be hidden on the API Keys page'
       },

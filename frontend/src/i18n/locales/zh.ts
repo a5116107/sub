@@ -18,7 +18,14 @@ export default {
     pricing: {
       goToPurchase: '前往购买',
       nav: '价格',
-      customHint: '自定义周期以套餐说明为准（如“联系销售”）。'
+      customHint: '自定义周期以套餐说明为准（如“联系销售”）。',
+      groupFields: {
+        daily: '每日额度（USD）',
+        weekly: '每周额度（USD）',
+        monthly: '每月额度（USD）',
+        concurrency: '并发',
+        rate: '速率倍率'
+      }
     },
     tags: {
       subscriptionToApi: '订阅转 API',
@@ -256,6 +263,18 @@ export default {
     buySubscription: '购买订阅',
     purchase: '购买/充值',
     docs: '文档'
+  },
+
+  // Documentation
+  docs: {
+    loadFailed: '加载文档失败，请重试。',
+    nav: {
+      title: '文档',
+      overview: '概览',
+      quickstart: '快速开始',
+      compatibility: '兼容性',
+      faq: 'FAQ'
+    }
   },
 
   // Auth
@@ -846,6 +865,53 @@ export default {
       systemSettings: '系统设置',
       configureSystem: '配置系统设置',
       failedToLoad: '加载仪表盘数据失败'
+    },
+
+    // Docs
+    docs: {
+      title: '文档',
+      subtitle: '管理站内文档/文章（/docs）',
+      viewPublic: '查看前台文档',
+      pages: '页面列表',
+      createPage: '新增页面',
+      slug: 'Slug',
+      slugPlaceholder: '例如：security / pricing / terms',
+      slugRequired: '请填写 slug',
+      titleZh: '标题（中文）',
+      titleEn: '标题（英文）',
+      group: '分组',
+      groupPlaceholder: '例如：Docs / Blog / Security',
+      order: '排序',
+      format: '格式',
+      formats: {
+        markdown: 'Markdown',
+        html: 'HTML',
+        text: '纯文本'
+      },
+      public: '公开',
+      private: '私有',
+      ungrouped: '未分组',
+      selectHint: '请先在左侧选择一个页面',
+      meta: '页面信息',
+      openPage: '打开页面',
+      content: '内容',
+      page: '页面',
+      lang: '语言',
+      status: '状态',
+      unsaved: '有未保存修改',
+      saved: '已保存',
+      updatedAt: '更新时间',
+      editor: '内容编辑器',
+      placeholder: '在这里编写 Markdown...',
+      htmlPlaceholder: '在这里编写 HTML...',
+      textPlaceholder: '在这里编写纯文本...',
+      htmlSanitizedHint: '提示：HTML 会在前端渲染前进行安全清理（script 等会被移除）。',
+      deleteConfirm: '确定要删除该页面吗？此操作会同时删除中英文内容，且不可恢复。',
+      loadFailed: '加载文档失败',
+      saveFailed: '保存文档失败',
+      savedToast: '文档已保存',
+      createdToast: '页面已创建',
+      deletedToast: '页面已删除'
     },
 
     // Users Management
@@ -3140,7 +3206,8 @@ export default {
     // Settings
     settings: {
       title: '系统设置',
-      description: '管理注册、邮箱验证、默认值和 SMTP 设置',
+      description: '管理系统安全、站点、定价与邮件等设置',
+      jumpToSection: '跳转到分区',
       registration: {
         title: '注册设置',
         description: '控制用户注册和验证',
@@ -3207,7 +3274,12 @@ export default {
       },
       site: {
         title: '站点设置',
-        description: '自定义站点品牌',
+        description: '配置品牌、链接、首页内容与定价',
+        tabs: {
+          general: '基础',
+          home: '首页',
+          subscriptions: '订阅与定价'
+        },
         siteName: '站点名称',
         siteNameHint: '显示在邮件和页面标题中',
         siteNamePlaceholder: 'Sub2API',
@@ -3239,9 +3311,97 @@ export default {
         homeContentHint: '自定义首页内容，支持 Markdown/HTML。如果输入的是链接（以 http:// 或 https:// 开头），则会使用该链接作为 iframe 的 src 属性，这允许你设置任意网页作为首页。设置后首页的状态信息将不再显示。',
         homeContentIframeWarning: '⚠️ iframe 模式提示：部分网站设置了 X-Frame-Options 或 CSP 安全策略，禁止被嵌入到 iframe 中。如果页面显示空白或报错，请确认目标网站允许被嵌入，或考虑使用 HTML 模式自行构建页面内容。',
         landingPricingConfig: 'Landing / Pricing 配置（JSON）',
-        landingPricingConfigPlaceholder: '请输入 JSON 配置（例如 plans、价格、描述文案等）',
-        landingPricingConfigHint: '用于首页价格模块与 /purchase 页面展示。支持周付/月付/自定义、按量计费信息等。',
+        landingPricingConfigPlaceholder:
+          '请输入 JSON 配置（例如 plans、价格、文案等；可选：group_id、group_fields、validity_days、meta.widgets）',
+        landingPricingConfigHint:
+          '用于首页价格模块与 /purchase 页面展示。支持周付/月付/自定义、按量计费信息等。可选：使用 plan.group_id 绑定后台订阅分组（subscription_type=subscription），用 group_fields 选择要展示的分组字段，用 validity_days 定义各周期的有效期（天），并用 meta.widgets 渲染带类型的字段。',
         landingPricingConfigInvalid: '定价配置无效',
+        landingPricingEditor: {
+          ui: '可视化',
+          defaultTab: '默认页签',
+          tab: {
+            subscription: '订阅套餐',
+            payg: '按量计费'
+          },
+          currency: '币种',
+          subscriptionTitle: '订阅标题',
+          subscriptionSubtitle: '订阅副标题',
+          defaultPeriod: '默认周期',
+          period: {
+            week: '周付',
+            month: '月付',
+            custom: '自定义'
+          },
+          periodOptions: '周期选项',
+          periodLabelPlaceholder: '展示文案（如：周付 / 月付 / 自定义）',
+          plans: '套餐列表',
+          add: '新增',
+          addPlan: '新增套餐',
+          noPlans: '暂无套餐，点击“新增套餐”创建。',
+          unnamedPlan: '未命名套餐',
+          planId: '套餐 ID',
+          planBadge: '角标（可选）',
+          planDescription: '描述（可选）',
+          planHighlighted: '高亮推荐',
+          planHighlightedHint: '仅用于前端展示：在 /home 与 /purchase 上显示推荐样式。',
+          widgets: '组件（带类型，可选）',
+          noWidgets: '暂无组件，可添加组件用于展示结构化字段。',
+          widgetType: {
+            text: '文本',
+            kv: '键值对',
+            groupField: '后台分组字段',
+            list: '列表',
+            tags: '标签组',
+            divider: '分隔线',
+            metric: '指标'
+          },
+          widgetTone: {
+            primary: '主色',
+            gray: '灰色',
+            gold: '金色'
+          },
+          widgetWhen: '显示周期（可选）',
+          widgetWhenAll: '全部周期',
+          widgetField: {
+            text: '文本',
+            label: '标签',
+            value: '值',
+            groupFieldKey: '字段',
+            groupFieldLabel: '标签覆盖（可选）',
+            listTitle: '列表标题（可选）',
+            listItems: '条目',
+            tagsTone: '样式',
+            tags: '标签',
+            dividerLabel: '分隔线文案（可选）',
+            metricLabel: '标签',
+            metricValue: '值',
+            metricHint: '说明（可选）'
+          },
+          widgetGroupFieldRequiresGroup: '此组件类型需要先绑定后台分组。',
+          planGroup: '绑定后台分组（可选）',
+          planGroupNone: '不绑定',
+          planGroupHint: '建议绑定一个 subscription_type=subscription 且启用中的分组，以保持与后台配额一致。',
+          validityDays: '有效期（天，可选）',
+          validityDaysHint: '用于后台订阅开通/续期逻辑；留空则使用后台默认。',
+          groupFields: '展示分组字段（可选）',
+          priceWeek: '周付价格（CNY）',
+          priceMonth: '月付价格（CNY）',
+          priceCustom: '自定义价格文案',
+          features: '权益说明（自由组合）',
+          payg: '按量计费',
+          paygTitle: '标题',
+          paygSubtitle: '副标题（可选）',
+          paygCtaLabel: '按钮文案（可选）',
+          paygNote: '备注（可选）',
+          note: '全局备注（可选）'
+        },
+        landingPricingGroupFields: {
+          daily: '每日额度（USD）',
+          weekly: '每周额度（USD）',
+          monthly: '每月额度（USD）',
+          concurrency: '并发（用户）',
+          rate: '速率倍率'
+        },
         hideCcsImportButton: '隐藏 CCS 导入按钮',
         hideCcsImportButtonHint: '启用后将在 API Keys 页面隐藏"导入 CCS"按钮'
       },

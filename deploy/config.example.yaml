@@ -97,13 +97,21 @@ security:
     enabled: true
     # Default CSP policy (override if you host assets on other domains)
     # 默认 CSP 策略（如果静态资源托管在其他域名，请自行覆盖）
-    # Note: __CSP_NONCE__ will be replaced with 'nonce-xxx' at request time for inline script security
-    # 注意：__CSP_NONCE__ 会在请求时被替换为 'nonce-xxx'，用于内联脚本安全
-    policy: "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-  proxy_probe:
-    # Allow skipping TLS verification for proxy probe (debug only)
-    # 允许代理探测时跳过 TLS 证书验证（仅用于调试）
-    insecure_skip_verify: false
+      # Note: __CSP_NONCE__ will be replaced with 'nonce-xxx' at request time for inline script security
+      # 注意：__CSP_NONCE__ 会在请求时被替换为 'nonce-xxx'，用于内联脚本安全
+      policy: "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    indexing:
+      # Search engine indexing mode:
+      # - private (recommended default): noindex by default; robots disallow all.
+      # - public: allow indexing for public pages; login/admin/user pages remain noindex.
+      # 搜索引擎索引模式：
+      # - private（推荐默认）：默认 noindex；robots 全部禁止抓取。
+      # - public：允许公开页面被收录；登录/管理/用户页保持 noindex。
+      mode: "private"
+    proxy_probe:
+      # Allow skipping TLS verification for proxy probe (debug only)
+      # 允许代理探测时跳过 TLS 证书验证（仅用于调试）
+      insecure_skip_verify: false
 
 # =============================================================================
 # Gateway Configuration

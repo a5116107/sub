@@ -172,6 +172,23 @@ const (
 
 	// SettingKeyStreamTimeoutSettings stores JSON config for stream timeout handling.
 	SettingKeyStreamTimeoutSettings = "stream_timeout_settings"
+
+	// =========================
+	// Docs Pages (Markdown)
+	// =========================
+
+	// Docs index (JSON, versioned). Stores page metadata (slug/title/order/format/public/etc).
+	SettingKeyDocsIndexV1 = "docs_index_v1"
+
+	// Public docs pages are stored as Markdown strings.
+	SettingKeyDocsOverviewZh       = "docs_overview_zh"
+	SettingKeyDocsOverviewEn       = "docs_overview_en"
+	SettingKeyDocsQuickstartZh     = "docs_quickstart_zh"
+	SettingKeyDocsQuickstartEn     = "docs_quickstart_en"
+	SettingKeyDocsCompatibilityZh  = "docs_compatibility_zh"
+	SettingKeyDocsCompatibilityEn  = "docs_compatibility_en"
+	SettingKeyDocsFAQZh            = "docs_faq_zh"
+	SettingKeyDocsFAQEn            = "docs_faq_en"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).

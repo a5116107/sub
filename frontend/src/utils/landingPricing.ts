@@ -1,6 +1,62 @@
 export type PricingTab = 'subscription' | 'payg'
 export type PricingPeriod = 'week' | 'month' | 'custom'
 
+export type PricingGroupFieldKey =
+  | 'daily_limit_usd'
+  | 'weekly_limit_usd'
+  | 'monthly_limit_usd'
+  | 'user_concurrency'
+  | 'rate_multiplier'
+
+export type PricingPlanWidgetType = 'text' | 'kv' | 'group_field' | 'list' | 'tags' | 'divider' | 'metric'
+
+export type PricingPlanWidgetTone = 'primary' | 'gray' | 'gold'
+
+export type PricingWidgetWhen = Readonly<{
+  periods?: ReadonlyArray<PricingPeriod>
+}>
+
+export type LandingPricingWidget =
+  Readonly<{
+    when?: PricingWidgetWhen
+  }> &
+    (
+      | {
+          type: 'text'
+          text: string
+        }
+      | {
+          type: 'kv'
+          label: string
+          value: string
+        }
+      | {
+          type: 'group_field'
+          key: PricingGroupFieldKey
+          label?: string
+        }
+      | {
+          type: 'list'
+          title?: string
+          items: ReadonlyArray<string>
+        }
+      | {
+          type: 'tags'
+          tags: ReadonlyArray<string>
+          tone?: PricingPlanWidgetTone
+        }
+      | {
+          type: 'divider'
+          label?: string
+        }
+      | {
+          type: 'metric'
+          label: string
+          value: string
+          hint?: string
+        }
+    )
+
 export type LandingPricingPeriodOption = Readonly<{
   key: PricingPeriod
   label: string
@@ -12,6 +68,23 @@ export type LandingPricingPlan = Readonly<{
   badge?: string
   description?: string
   highlighted?: boolean
+  // Optional backend binding: link the display plan to a subscription Group.
+  // When set, admins should ensure the referenced group is `subscription_type=subscription`.
+  group_id?: number
+  // Optional: show selected backend group fields in the plan card.
+  // Requires `group_id` to be set.
+  group_fields?: ReadonlyArray<PricingGroupFieldKey>
+  // Optional validity days per period (used by backend subscription assignment flows).
+  validity_days?: Readonly<{
+    week?: number
+    month?: number
+    custom?: number
+  }>
+  // Optional: typed widgets to display on the plan card (free组合).
+  // Designed to cover both arbitrary marketing copy and structured fields.
+  meta?: Readonly<{
+    widgets?: ReadonlyArray<LandingPricingWidget>
+  }>
   price: Readonly<{
     week?: number
     month?: number
@@ -130,6 +203,25 @@ const isPricingTab = (v: any): v is PricingTab => v === 'subscription' || v === 
 
 const isPricingPeriod = (v: any): v is PricingPeriod => v === 'week' || v === 'month' || v === 'custom'
 
+const isPricingGroupFieldKey = (v: any): v is PricingGroupFieldKey =>
+  v === 'daily_limit_usd' ||
+  v === 'weekly_limit_usd' ||
+  v === 'monthly_limit_usd' ||
+  v === 'user_concurrency' ||
+  v === 'rate_multiplier'
+
+const isPricingPlanWidgetType = (v: any): v is PricingPlanWidgetType =>
+  v === 'text' ||
+  v === 'kv' ||
+  v === 'group_field' ||
+  v === 'list' ||
+  v === 'tags' ||
+  v === 'divider' ||
+  v === 'metric'
+
+const isPricingPlanWidgetTone = (v: any): v is PricingPlanWidgetTone =>
+  v === 'primary' || v === 'gray' || v === 'gold'
+
 export function parseLandingPricingConfig(raw: string | null | undefined): ParsedResult {
   if (!raw || typeof raw !== 'string' || raw.trim() === '') {
     return { config: DEFAULT_LANDING_PRICING_CONFIG_V1 }
@@ -169,6 +261,128 @@ export function parseLandingPricingConfig(raw: string | null | undefined): Parse
     }
     if (!Array.isArray(parsed.payg.features)) {
       return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'payg.features must be an array' }
+    }
+
+    // Optional backend binding validation (non-breaking)
+    for (const plan of parsed.subscription.plans as any[]) {
+      if (!isRecord(plan)) continue
+
+      if ('group_id' in plan && plan.group_id != null) {
+        if (typeof plan.group_id !== 'number' || !Number.isInteger(plan.group_id) || plan.group_id <= 0) {
+          return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid plan.group_id' }
+        }
+      }
+
+      if ('group_fields' in plan && plan.group_fields != null) {
+        if (!Array.isArray(plan.group_fields) || plan.group_fields.some((k: any) => !isPricingGroupFieldKey(k))) {
+          return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid plan.group_fields' }
+        }
+        if (!('group_id' in plan) || plan.group_id == null) {
+          return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'plan.group_fields requires plan.group_id' }
+        }
+      }
+
+      if ('validity_days' in plan && plan.validity_days != null) {
+        if (!isRecord(plan.validity_days)) {
+          return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid plan.validity_days' }
+        }
+        for (const [k, v] of Object.entries(plan.validity_days)) {
+          if (!isPricingPeriod(k)) {
+            return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid plan.validity_days key' }
+          }
+          if (typeof v !== 'number' || !Number.isInteger(v) || v <= 0) {
+            return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid plan.validity_days value' }
+          }
+        }
+      }
+
+      if ('meta' in plan && plan.meta != null) {
+        if (!isRecord(plan.meta)) {
+          return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid plan.meta' }
+        }
+        const meta = plan.meta as any
+        if ('widgets' in meta && meta.widgets != null) {
+          if (!Array.isArray(meta.widgets)) {
+            return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid plan.meta.widgets' }
+          }
+          for (const w of meta.widgets as any[]) {
+            if (!isRecord(w) || !isPricingPlanWidgetType(w.type)) {
+              return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid plan.meta.widgets item' }
+            }
+
+            if ('when' in w && w.when != null) {
+              if (!isRecord(w.when)) {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.when' }
+              }
+              if ('periods' in w.when && w.when.periods != null) {
+                if (
+                  !Array.isArray(w.when.periods) ||
+                  w.when.periods.length === 0 ||
+                  w.when.periods.some((p: any) => !isPricingPeriod(p))
+                ) {
+                  return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.when.periods' }
+                }
+              }
+            }
+
+            if (w.type === 'text') {
+              if (typeof w.text !== 'string' || w.text.trim() === '') {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.text' }
+              }
+            } else if (w.type === 'kv') {
+              if (
+                typeof w.label !== 'string' ||
+                w.label.trim() === '' ||
+                typeof w.value !== 'string' ||
+                w.value.trim() === ''
+              ) {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.kv' }
+              }
+            } else if (w.type === 'group_field') {
+              if (!('group_id' in plan) || plan.group_id == null) {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'widget.group_field requires plan.group_id' }
+              }
+              if (!isPricingGroupFieldKey(w.key)) {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.group_field.key' }
+              }
+              if ('label' in w && w.label != null && typeof w.label !== 'string') {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.group_field.label' }
+              }
+            } else if (w.type === 'list') {
+              if (!Array.isArray(w.items) || w.items.length === 0 || w.items.some((x: any) => typeof x !== 'string')) {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.list.items' }
+              }
+              if (w.items.some((x: any) => typeof x === 'string' && x.trim() === '')) {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.list.items' }
+              }
+              if ('title' in w && w.title != null && typeof w.title !== 'string') {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.list.title' }
+              }
+            } else if (w.type === 'tags') {
+              if (!Array.isArray(w.tags) || w.tags.length === 0 || w.tags.some((x: any) => typeof x !== 'string')) {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.tags' }
+              }
+              if (w.tags.some((x: any) => typeof x === 'string' && x.trim() === '')) {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.tags' }
+              }
+              if ('tone' in w && w.tone != null && !isPricingPlanWidgetTone(w.tone)) {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.tags.tone' }
+              }
+            } else if (w.type === 'divider') {
+              if ('label' in w && w.label != null && typeof w.label !== 'string') {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.divider.label' }
+              }
+            } else if (w.type === 'metric') {
+              if (typeof w.label !== 'string' || w.label.trim() === '' || typeof w.value !== 'string' || w.value.trim() === '') {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.metric' }
+              }
+              if ('hint' in w && w.hint != null && typeof w.hint !== 'string') {
+                return { config: DEFAULT_LANDING_PRICING_CONFIG_V1, error: 'Invalid widget.metric.hint' }
+              }
+            }
+          }
+        }
+      }
     }
 
     return { config: parsed as LandingPricingConfigV1 }

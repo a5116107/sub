@@ -35,6 +35,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/docs',
+    redirect: '/docs/overview'
+  },
+  {
+    path: '/docs/:slug',
+    name: 'Docs',
+    component: () => import('@/views/docs/DocsView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Docs'
+    }
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/auth/LoginView.vue'),
@@ -188,6 +201,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/purchase-subscription',
+    name: 'PurchaseSubscription',
+    component: () => import('@/views/user/PurchaseSubscriptionView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Purchase Subscription',
+      titleKey: 'purchaseSubscription.title',
+      descriptionKey: 'purchaseSubscription.description'
+    }
+  },
+  {
     path: '/billing',
     name: 'Billing',
     component: () => import('@/views/user/BillingView.vue'),
@@ -323,6 +348,18 @@ const routes: RouteRecordRaw[] = [
       title: 'System Settings',
       titleKey: 'admin.settings.title',
       descriptionKey: 'admin.settings.description'
+    }
+  },
+  {
+    path: '/admin/docs',
+    name: 'AdminDocs',
+    component: () => import('@/views/admin/DocsEditorView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Docs',
+      titleKey: 'admin.docs.title',
+      descriptionKey: 'admin.docs.subtitle'
     }
   },
   {

@@ -1,121 +1,115 @@
 <template>
   <AppLayout>
-    <div class="purchase-page-layout">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-            {{ t('purchaseSubscription.title') }}
-          </h2>
-          <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-            {{ t('purchaseSubscription.description') }}
-          </p>
-        </div>
+    <div class="space-y-6">
+      <div class="page-header">
+        <h1 class="page-title">{{ t('purchaseSubscription.title') }}</h1>
+        <p class="page-description">{{ t('purchaseSubscription.description') }}</p>
+      </div>
 
-        <div class="flex items-center gap-2">
-          <a
-            v-if="isValidUrl"
-            :href="purchaseUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="btn btn-secondary btn-sm"
-          >
-            <Icon name="externalLink" size="sm" class="mr-1.5" :stroke-width="2" />
-            {{ t('purchaseSubscription.openInNewTab') }}
-          </a>
+      <div
+        v-if="!purchaseSubscriptionEnabled"
+        class="card p-6"
+      >
+        <div class="text-sm font-medium text-gray-900 dark:text-white">
+          {{ t('purchaseSubscription.notEnabledTitle') }}
+        </div>
+        <div class="mt-1 text-sm text-gray-600 dark:text-dark-400">
+          {{ t('purchaseSubscription.notEnabledDesc') }}
         </div>
       </div>
 
-      <div class="card flex-1 min-h-0 overflow-hidden">
-        <div v-if="loading" class="flex h-full items-center justify-center py-12">
-          <div
-            class="h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"
-          ></div>
+      <div
+        v-else-if="!purchaseSubscriptionUrl"
+        class="card p-6"
+      >
+        <div class="text-sm font-medium text-gray-900 dark:text-white">
+          {{ t('purchaseSubscription.notConfiguredTitle') }}
         </div>
+        <div class="mt-1 text-sm text-gray-600 dark:text-dark-400">
+          {{ t('purchaseSubscription.notConfiguredDesc') }}
+        </div>
+      </div>
 
-        <div
-          v-else-if="!purchaseEnabled"
-          class="flex h-full items-center justify-center p-10 text-center"
-        >
-          <div class="max-w-md">
-            <div
-              class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
-            >
-              <Icon name="creditCard" size="lg" class="text-gray-400" />
+      <div v-else class="card overflow-hidden">
+        <div class="flex flex-col gap-3 border-b border-gray-100 p-4 dark:border-dark-700 md:flex-row md:items-center md:justify-between">
+          <div class="min-w-0">
+            <div class="text-xs font-medium text-gray-500 dark:text-dark-400">
+              URL
             </div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('purchaseSubscription.notEnabledTitle') }}
-            </h3>
-            <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-              {{ t('purchaseSubscription.notEnabledDesc') }}
-            </p>
+            <div class="mt-1 truncate font-mono text-sm text-gray-900 dark:text-dark-100">
+              {{ iframeSrc }}
+            </div>
+          </div>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button type="button" class="btn btn-secondary btn-sm" @click="openInNewTab">
+              <Icon name="externalLink" size="sm" class="mr-1.5" :stroke-width="2" />
+              {{ t('purchaseSubscription.openInNewTab') }}
+            </button>
           </div>
         </div>
 
-        <div
-          v-else-if="!isValidUrl"
-          class="flex h-full items-center justify-center p-10 text-center"
-        >
-          <div class="max-w-md">
-            <div
-              class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
-            >
-              <Icon name="link" size="lg" class="text-gray-400" />
-            </div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('purchaseSubscription.notConfiguredTitle') }}
-            </h3>
-            <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-              {{ t('purchaseSubscription.notConfiguredDesc') }}
-            </p>
-          </div>
+        <div class="bg-white dark:bg-dark-950">
+          <iframe
+            :src="iframeSrc"
+            class="h-[75vh] w-full border-0"
+            referrerpolicy="no-referrer"
+            allowfullscreen
+          ></iframe>
         </div>
-
-        <iframe v-else :src="purchaseUrl" class="h-full w-full border-0" allowfullscreen></iframe>
       </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useAppStore } from '@/stores'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { useAppStore } from '@/stores/app'
 
 const { t } = useI18n()
+const route = useRoute()
 const appStore = useAppStore()
 
-const loading = ref(false)
+const purchaseSubscriptionEnabled = computed(() => appStore.cachedPublicSettings?.purchase_subscription_enabled ?? false)
+const purchaseSubscriptionUrl = computed(() => (appStore.cachedPublicSettings?.purchase_subscription_url || '').trim())
 
-const purchaseEnabled = computed(() => {
-  return appStore.cachedPublicSettings?.purchase_subscription_enabled ?? false
-})
-
-const purchaseUrl = computed(() => {
-  return (appStore.cachedPublicSettings?.purchase_subscription_url || '').trim()
-})
-
-const isValidUrl = computed(() => {
-  const url = purchaseUrl.value
-  return url.startsWith('http://') || url.startsWith('https://')
-})
-
-onMounted(async () => {
-  if (appStore.publicSettingsLoaded) return
-  loading.value = true
+function buildUrlWithParams(raw: string, params: Record<string, string>): string {
+  if (!raw) return ''
+  const hasParams = Object.keys(params).length > 0
+  if (!hasParams) return raw
   try {
-    await appStore.fetchPublicSettings()
-  } finally {
-    loading.value = false
+    const u = new URL(raw, window.location.origin)
+    for (const [k, v] of Object.entries(params)) {
+      if (!v) continue
+      u.searchParams.set(k, v)
+    }
+    return u.toString()
+  } catch {
+    const sp = new URLSearchParams(params)
+    const suffix = sp.toString()
+    if (!suffix) return raw
+    const join = raw.includes('?') ? '&' : '?'
+    return `${raw}${join}${suffix}`
   }
-})
-</script>
-
-<style scoped>
-.purchase-page-layout {
-  @apply flex flex-col gap-6;
-  height: calc(100vh - 64px - 4rem); /* 减去 header + lg:p-8 的上下padding */
 }
-</style>
 
+const iframeSrc = computed(() => {
+  const raw = purchaseSubscriptionUrl.value
+  if (!raw) return ''
+
+  const params: Record<string, string> = {}
+  if (typeof route.query.tab === 'string' && route.query.tab) params.tab = route.query.tab
+  if (typeof route.query.plan === 'string' && route.query.plan) params.plan = route.query.plan
+  if (typeof route.query.period === 'string' && route.query.period) params.period = route.query.period
+
+  return buildUrlWithParams(raw, params)
+})
+
+function openInNewTab() {
+  if (!iframeSrc.value) return
+  window.open(iframeSrc.value, '_blank', 'noopener,noreferrer')
+}
+</script>

@@ -168,6 +168,9 @@ const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => appStore.siteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
 const subscriptionsEnabled = computed(() => appStore.cachedPublicSettings?.subscriptions_enabled ?? true)
+const purchaseSubscriptionEnabled = computed(
+  () => appStore.cachedPublicSettings?.purchase_subscription_enabled ?? false
+)
 
 // SVG Icon Components
 const DashboardIcon = {
@@ -225,6 +228,21 @@ const GiftIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z'
+        })
+      ]
+    )
+}
+
+const BookIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M12 6.042A8.967 8.967 0 006 3.75c-1.353 0-2.66.286-3.875.8A1.5 1.5 0 001.5 5.93v12.14a1.5 1.5 0 002.1 1.37c1.087-.46 2.268-.69 3.4-.69A8.967 8.967 0 0112 21.25m0-15.208A8.967 8.967 0 0118 3.75c1.353 0 2.66.286 3.875.8A1.5 1.5 0 0122.5 5.93v12.14a1.5 1.5 0 01-2.1 1.37 8.987 8.987 0 00-3.4-.69 8.967 8.967 0 00-5 1.5m0-15.208v15.208'
         })
       ]
     )
@@ -419,10 +437,14 @@ const ChevronDoubleRightIcon = {
 const userNavItems = computed(() => {
   const items = [
     { path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
+    { path: '/docs/overview', label: t('nav.docs'), icon: BookIcon },
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     ...(subscriptionsEnabled.value
       ? [{ path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true }]
+      : []),
+    ...(purchaseSubscriptionEnabled.value
+      ? [{ path: '/purchase-subscription', label: t('nav.buySubscription'), icon: CreditCardIcon, hideInSimpleMode: true }]
       : []),
     { path: '/purchase', label: t('nav.purchase'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
@@ -435,9 +457,13 @@ const userNavItems = computed(() => {
 const personalNavItems = computed(() => {
   const items = [
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
+    { path: '/docs/overview', label: t('nav.docs'), icon: BookIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     ...(subscriptionsEnabled.value
       ? [{ path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true }]
+      : []),
+    ...(purchaseSubscriptionEnabled.value
+      ? [{ path: '/purchase-subscription', label: t('nav.buySubscription'), icon: CreditCardIcon, hideInSimpleMode: true }]
       : []),
     { path: '/purchase', label: t('nav.purchase'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/redeem', label: t('nav.redeem'), icon: GiftIcon, hideInSimpleMode: true },
@@ -469,10 +495,12 @@ const adminNavItems = computed(() => {
   if (authStore.isSimpleMode) {
     const filtered = baseItems.filter(item => !item.hideInSimpleMode)
     filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon })
+    filtered.push({ path: '/admin/docs', label: t('nav.docs'), icon: BookIcon })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
     return filtered
   }
 
+  baseItems.push({ path: '/admin/docs', label: t('nav.docs'), icon: BookIcon })
   baseItems.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
   return baseItems
 })

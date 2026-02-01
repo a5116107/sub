@@ -32,6 +32,7 @@ func SetupRouter(
 	r.Use(middleware2.Logger())
 	r.Use(middleware2.CORS(cfg.CORS))
 	r.Use(middleware2.SecurityHeaders(cfg.Security.CSP))
+	r.Use(middleware2.Indexing(cfg, settingService))
 
 	// Serve embedded frontend with settings injection if available
 	if web.HasEmbeddedFrontend() {

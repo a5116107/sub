@@ -28,6 +28,9 @@ RUN pnpm install --frozen-lockfile
 
 # Copy frontend source and build
 COPY frontend/ ./
+# Vite outputs to ../backend/internal/web/dist (see frontend/vite.config.ts).
+# Create that path inside the builder image so the build succeeds.
+RUN mkdir -p /app/backend/internal/web/dist
 RUN pnpm run build
 
 # -----------------------------------------------------------------------------

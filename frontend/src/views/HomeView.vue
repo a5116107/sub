@@ -74,14 +74,39 @@
           >
             {{ t('home.pricing.nav') }}
           </a>
+
+          <router-link
+            v-if="docUrl && docUrlIsInternal"
+            :to="docUrl"
+            class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100/70 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-900/50 dark:hover:text-white"
+          >
+            {{ t('home.docs') }}
+          </router-link>
+          <a
+            v-else-if="docUrl"
+            :href="docUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100/70 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-900/50 dark:hover:text-white"
+          >
+            {{ t('home.docs') }}
+          </a>
         </div>
 
         <!-- Actions -->
         <div class="flex items-center gap-2">
           <LocaleSwitcher />
 
+          <router-link
+            v-if="docUrl && docUrlIsInternal"
+            :to="docUrl"
+            class="btn btn-ghost btn-icon"
+            :title="t('home.viewDocs')"
+          >
+            <Icon name="book" size="md" />
+          </router-link>
           <a
-            v-if="docUrl"
+            v-else-if="docUrl"
             :href="docUrl"
             target="_blank"
             rel="noopener noreferrer"
@@ -520,12 +545,7 @@
                 </p>
               </div>
 
-              <ul class="mb-6 space-y-2 text-sm text-gray-700 dark:text-dark-200">
-                <li v-for="(f, idx) in plan.features" :key="idx" class="flex items-start gap-2">
-                  <Icon name="check" size="sm" class="mt-0.5 text-primary-500" :stroke-width="2" />
-                  <span>{{ f }}</span>
-                </li>
-              </ul>
+              <PricingPlanPerks :plan="plan" :groups="pricingGroups" :period="pricingPeriod" class="mb-6" />
 
               <router-link
                 :to="planCtaTo(plan.id, pricingPeriod)"
@@ -613,9 +633,15 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import PricingPlanPerks from '@/components/pricing/PricingPlanPerks.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useClipboard } from '@/composables/useClipboard'
-import { formatCny, parseLandingPricingConfig, type PricingTab, type PricingPeriod } from '@/utils/landingPricing'
+import {
+  formatCny,
+  parseLandingPricingConfig,
+  type PricingTab,
+  type PricingPeriod
+} from '@/utils/landingPricing'
 
 const { t } = useI18n()
 
@@ -627,12 +653,14 @@ const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appS
 const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform')
 const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
+const docUrlIsInternal = computed(() => docUrl.value.startsWith('/'))
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 const landingPricingEnabled = computed(() => appStore.cachedPublicSettings?.landing_pricing_enabled ?? true)
 const pricingParseResult = computed(() =>
   parseLandingPricingConfig(appStore.cachedPublicSettings?.landing_pricing_config || '')
 )
 const pricing = computed(() => pricingParseResult.value.config)
+const pricingGroups = computed(() => appStore.cachedPublicSettings?.landing_pricing_groups || [])
 
 // Check if homeContent is a URL (for iframe display)
 const isHomeContentUrl = computed(() => {
@@ -720,7 +748,7 @@ const pricingConfigSubtitle = computed(() =>
 
 function periodLabel(key: DisplayPeriod): string {
   const found = pricing.value.subscription.periods.find((p) => p.key === key)
-  return found?.label || (key === 'week' ? '周付' : key === 'custom' ? '自定义' : '月付')
+  return found?.label || key
 }
 
 function purchaseQueryString(params: Record<string, string>): string {

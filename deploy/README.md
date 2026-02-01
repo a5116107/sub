@@ -35,11 +35,11 @@ cd sub2api/deploy
 cp .env.example .env
 nano .env  # Set POSTGRES_PASSWORD (required)
 
-# Start all services
-docker-compose up -d
+# Build (frontend + backend) and start all services
+docker compose -f docker-compose.yml up -d --build
 
 # View logs (check for auto-generated admin password)
-docker-compose logs -f sub2api
+docker compose -f docker-compose.yml logs -f sub2api
 
 # Access Web UI
 # http://localhost:8080
@@ -85,7 +85,7 @@ When using Docker Compose with `AUTO_SETUP=true`:
 
 3. If `ADMIN_PASSWORD` is not set, check logs for the generated password:
    ```bash
-   docker-compose logs sub2api | grep "admin password"
+   docker compose -f docker-compose.yml logs sub2api
    ```
 
 ### Database Migration Notes (PostgreSQL)
@@ -116,23 +116,40 @@ SELECT
 
 ```bash
 # Start services
-docker-compose up -d
+docker compose -f docker-compose.yml up -d
+
+# Rebuild (frontend + backend) and restart services
+docker compose -f docker-compose.yml up -d --build
 
 # Stop services
-docker-compose down
+docker compose -f docker-compose.yml down
 
 # View logs
-docker-compose logs -f sub2api
+docker compose -f docker-compose.yml logs -f sub2api
 
 # Restart Sub2API only
-docker-compose restart sub2api
-
-# Update to latest version
-docker-compose pull
-docker-compose up -d
+docker compose -f docker-compose.yml restart sub2api
 
 # Remove all data (caution!)
-docker-compose down -v
+docker compose -f docker-compose.yml down -v
+```
+
+### Restore Database (Optional)
+
+If you have a PostgreSQL dump (`pg_dump -Fc`) from a dev environment and want to import it into the Docker Compose PostgreSQL:
+
+```bash
+# 1) Stop Sub2API (avoid writes while restoring)
+docker compose -f docker-compose.yml stop sub2api
+
+# 2) Copy dump into postgres container (example path)
+docker cp ../.dev/db-backups/sub2api_dev.dump sub2api-postgres:/tmp/sub2api.dump
+
+# 3) Restore (⚠️ overwrites current DB contents)
+docker exec -it sub2api-postgres sh -lc 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --no-privileges /tmp/sub2api.dump'
+
+# 4) Start Sub2API
+docker compose -f docker-compose.yml start sub2api
 ```
 
 ### Environment Variables

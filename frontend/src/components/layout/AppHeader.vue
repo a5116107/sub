@@ -30,8 +30,16 @@
       <!-- Right: Docs + Language + Subscriptions + Balance + User Dropdown -->
       <div class="flex items-center gap-3">
         <!-- Docs Link -->
+        <router-link
+          v-if="docUrl && docUrlIsInternal"
+          :to="docUrl"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+        >
+          <Icon name="book" size="sm" />
+          <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
+        </router-link>
         <a
-          v-if="docUrl"
+          v-else-if="docUrl"
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
@@ -230,6 +238,7 @@ const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => appStore.docUrl)
+const docUrlIsInternal = computed(() => docUrl.value.startsWith('/'))
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
