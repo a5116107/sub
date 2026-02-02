@@ -13,7 +13,9 @@ This directory contains files for deploying Sub2API on Linux servers.
 
 | File | Description |
 |------|-------------|
-| `docker-compose.yml` | Docker Compose configuration |
+| `docker-compose.yml` | Docker Compose configuration (named volumes) |
+| `docker-compose.local.yml` | Docker Compose configuration (local directories, easy migration) |
+| `docker-deploy.sh` | **One-click Docker deployment script (recommended)** |
 | `.env.example` | Docker environment variables template |
 | `DOCKER.md` | Docker Hub documentation |
 | `install.sh` | One-click binary installation script |
@@ -24,7 +26,45 @@ This directory contains files for deploying Sub2API on Linux servers.
 
 ## Docker Deployment (Recommended)
 
-### Quick Start
+### Method 1: One-Click Deployment (Recommended)
+
+Use the automated preparation script for the easiest setup:
+
+```bash
+# Download and run the preparation script
+curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/docker-deploy.sh | bash
+
+# Or download first, then run
+curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/docker-deploy.sh -o docker-deploy.sh
+chmod +x docker-deploy.sh
+./docker-deploy.sh
+```
+
+**What the script does:**
+- Downloads `docker-compose.local.yml` and `.env.example`
+- Automatically generates secure secrets (JWT_SECRET, TOTP_ENCRYPTION_KEY, POSTGRES_PASSWORD)
+- Creates `.env` file with generated secrets
+- Creates necessary data directories (data/, postgres_data/, redis_data/)
+- **Displays generated credentials** (POSTGRES_PASSWORD, JWT_SECRET, etc.)
+
+**After running the script:**
+```bash
+# Start services
+docker-compose -f docker-compose.local.yml up -d
+
+# View logs
+docker-compose -f docker-compose.local.yml logs -f sub2api
+
+# If admin password was auto-generated, find it in logs:
+docker-compose -f docker-compose.local.yml logs sub2api | grep "admin password"
+
+# Access Web UI
+# http://localhost:8080
+```
+
+### Method 2: Manual Deployment
+
+If you prefer manual control:
 
 ```bash
 # Clone repository
@@ -33,42 +73,35 @@ cd sub2api/deploy
 
 # Configure environment
 cp .env.example .env
-nano .env  # Set POSTGRES_PASSWORD (required)
+nano .env  # Set POSTGRES_PASSWORD and other required variables
 
-# Build (frontend + backend) and start all services
-docker compose -f docker-compose.yml up -d --build
+# Generate secure secrets (recommended)
+JWT_SECRET=$(openssl rand -hex 32)
+TOTP_ENCRYPTION_KEY=$(openssl rand -hex 32)
+echo "JWT_SECRET=${JWT_SECRET}" >> .env
+echo "TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}" >> .env
+
+# Create data directories
+mkdir -p data postgres_data redis_data
+
+# Start all services using local directory version
+docker-compose -f docker-compose.local.yml up -d
 
 # View logs (check for auto-generated admin password)
-docker compose -f docker-compose.yml logs -f sub2api
+docker-compose -f docker-compose.local.yml logs -f sub2api
 
 # Access Web UI
 # http://localhost:8080
 ```
 
----
+### Deployment Version Comparison
 
-## Docker Development (Frontend + Backend)
+| Version | Data Storage | Migration | Best For |
+|---------|-------------|-----------|----------|
+| **docker-compose.local.yml** | Local directories (./data, ./postgres_data, ./redis_data) | ✅ Easy (tar entire directory) | Production, need frequent backups/migration |
+| **docker-compose.yml** | Named volumes (/var/lib/docker/volumes/) | ⚠️ Requires docker commands | Simple setup, don't need migration |
 
-Run frontend (Vite) and backend (Go) as separate containers for local development.
-
-```bash
-cd deploy
-cp .env.example .env
-# Edit .env (set POSTGRES_PASSWORD at least)
-
-docker compose -f docker-compose.dev.yml up -d --build
-docker compose -f docker-compose.dev.yml ps
-docker compose -f docker-compose.dev.yml logs -f
-```
-
-Access:
-- Frontend: `http://localhost:${FRONTEND_PORT:-3000}`
-- Backend: `http://localhost:${SERVER_PORT:-8080}`
-
-Stop:
-```bash
-docker compose -f docker-compose.dev.yml down
-```
+**Recommendation:** Use `docker-compose.local.yml` (deployed by `docker-deploy.sh`) for easier data management and migration.
 
 ### How Auto-Setup Works
 
@@ -85,7 +118,7 @@ When using Docker Compose with `AUTO_SETUP=true`:
 
 3. If `ADMIN_PASSWORD` is not set, check logs for the generated password:
    ```bash
-   docker compose -f docker-compose.yml logs sub2api
+   docker-compose logs sub2api | grep "admin password"
    ```
 
 ### Database Migration Notes (PostgreSQL)
@@ -114,42 +147,51 @@ SELECT
 
 ### Commands
 
+For **local directory version** (docker-compose.local.yml):
+
 ```bash
 # Start services
-docker compose -f docker-compose.yml up -d
-
-# Rebuild (frontend + backend) and restart services
-docker compose -f docker-compose.yml up -d --build
+docker-compose -f docker-compose.local.yml up -d
 
 # Stop services
-docker compose -f docker-compose.yml down
+docker-compose -f docker-compose.local.yml down
 
 # View logs
-docker compose -f docker-compose.yml logs -f sub2api
+docker-compose -f docker-compose.local.yml logs -f sub2api
 
 # Restart Sub2API only
-docker compose -f docker-compose.yml restart sub2api
+docker-compose -f docker-compose.local.yml restart sub2api
+
+# Update to latest version
+docker-compose -f docker-compose.local.yml pull
+docker-compose -f docker-compose.local.yml up -d
 
 # Remove all data (caution!)
-docker compose -f docker-compose.yml down -v
+docker-compose -f docker-compose.local.yml down
+rm -rf data/ postgres_data/ redis_data/
 ```
 
-### Restore Database (Optional)
-
-If you have a PostgreSQL dump (`pg_dump -Fc`) from a dev environment and want to import it into the Docker Compose PostgreSQL:
+For **named volumes version** (docker-compose.yml):
 
 ```bash
-# 1) Stop Sub2API (avoid writes while restoring)
-docker compose -f docker-compose.yml stop sub2api
+# Start services
+docker-compose up -d
 
-# 2) Copy dump into postgres container (example path)
-docker cp ../.dev/db-backups/sub2api_dev.dump sub2api-postgres:/tmp/sub2api.dump
+# Stop services
+docker-compose down
 
-# 3) Restore (⚠️ overwrites current DB contents)
-docker exec -it sub2api-postgres sh -lc 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --no-privileges /tmp/sub2api.dump'
+# View logs
+docker-compose logs -f sub2api
 
-# 4) Start Sub2API
-docker compose -f docker-compose.yml start sub2api
+# Restart Sub2API only
+docker-compose restart sub2api
+
+# Update to latest version
+docker-compose pull
+docker-compose up -d
+
+# Remove all data (caution!)
+docker-compose down -v
 ```
 
 ### Environment Variables
@@ -157,10 +199,11 @@ docker compose -f docker-compose.yml start sub2api
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `POSTGRES_PASSWORD` | **Yes** | - | PostgreSQL password |
+| `JWT_SECRET` | **Recommended** | *(auto-generated)* | JWT secret (fixed for persistent sessions) |
+| `TOTP_ENCRYPTION_KEY` | **Recommended** | *(auto-generated)* | TOTP encryption key (fixed for persistent 2FA) |
 | `SERVER_PORT` | No | `8080` | Server port |
 | `ADMIN_EMAIL` | No | `admin@sub2api.local` | Admin email |
 | `ADMIN_PASSWORD` | No | *(auto-generated)* | Admin password |
-| `JWT_SECRET` | No | *(auto-generated)* | JWT secret |
 | `TZ` | No | `Asia/Shanghai` | Timezone |
 | `GEMINI_OAUTH_CLIENT_ID` | No | *(builtin)* | Google OAuth client ID (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |
 | `GEMINI_OAUTH_CLIENT_SECRET` | No | *(builtin)* | Google OAuth client secret (Gemini OAuth). Leave empty to use the built-in Gemini CLI client. |
@@ -168,6 +211,30 @@ docker compose -f docker-compose.yml start sub2api
 | `GEMINI_QUOTA_POLICY` | No | *(empty)* | JSON overrides for Gemini local quota simulation (Code Assist only). |
 
 See `.env.example` for all available options.
+
+> **Note:** The `docker-deploy.sh` script automatically generates `JWT_SECRET`, `TOTP_ENCRYPTION_KEY`, and `POSTGRES_PASSWORD` for you.
+
+### Easy Migration (Local Directory Version)
+
+When using `docker-compose.local.yml`, all data is stored in local directories, making migration simple:
+
+```bash
+# On source server: Stop services and create archive
+cd /path/to/deployment
+docker-compose -f docker-compose.local.yml down
+cd ..
+tar czf sub2api-complete.tar.gz deployment/
+
+# Transfer to new server
+scp sub2api-complete.tar.gz user@new-server:/path/to/destination/
+
+# On new server: Extract and start
+tar xzf sub2api-complete.tar.gz
+cd deployment/
+docker-compose -f docker-compose.local.yml up -d
+```
+
+Your entire deployment (configuration + data) is migrated!
 
 ---
 
@@ -400,6 +467,30 @@ The main config file is at `/etc/sub2api/config.yaml` (created by Setup Wizard).
 ## Troubleshooting
 
 ### Docker
+
+For **local directory version**:
+
+```bash
+# Check container status
+docker-compose -f docker-compose.local.yml ps
+
+# View detailed logs
+docker-compose -f docker-compose.local.yml logs --tail=100 sub2api
+
+# Check database connection
+docker-compose -f docker-compose.local.yml exec postgres pg_isready
+
+# Check Redis connection
+docker-compose -f docker-compose.local.yml exec redis redis-cli ping
+
+# Restart all services
+docker-compose -f docker-compose.local.yml restart
+
+# Check data directories
+ls -la data/ postgres_data/ redis_data/
+```
+
+For **named volumes version**:
 
 ```bash
 # Check container status

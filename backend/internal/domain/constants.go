@@ -29,6 +29,13 @@ const (
 	PlatformAntigravity = "antigravity"
 )
 
+// Account type constants.
+const (
+	AccountTypeOAuth      = "oauth"       // OAuth 类型账号（full scope: profile + inference）
+	AccountTypeSetupToken = "setup-token" // Setup Token 类型账号（inference only scope）
+	AccountTypeAPIKey     = "apikey"      // API Key 类型账号
+)
+
 // Redeem type constants.
 const (
 	RedeemTypeBalance      = "balance"
@@ -42,10 +49,17 @@ const (
 	PromoCodeStatusDisabled = "disabled"
 )
 
+// Admin adjustment type constants.
+const (
+	AdjustmentTypeAdminBalance     = "admin_balance"     // 管理员调整余额
+	AdjustmentTypeAdminConcurrency = "admin_concurrency" // 管理员调整并发数
+	AdjustmentTypePaymentBalance   = "payment_balance"   // 支付充值（第三方回调入账）
+)
+
 // Group subscription type constants.
 const (
-	SubscriptionTypeStandard     = "standard"
-	SubscriptionTypeSubscription = "subscription"
+	SubscriptionTypeStandard     = "standard"     // 标准计费模式（按余额扣费）
+	SubscriptionTypeSubscription = "subscription" // 订阅模式（按限额控制）
 )
 
 // Subscription status constants.
@@ -54,3 +68,4 @@ const (
 	SubscriptionStatusExpired   = "expired"
 	SubscriptionStatusSuspended = "suspended"
 )
+
