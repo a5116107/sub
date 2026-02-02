@@ -375,6 +375,11 @@ type GatewayConfig struct {
 	// 是否允许对部分 400 错误触发 failover（默认关闭以避免改变语义）
 	FailoverOn400 bool `mapstructure:"failover_on_400"`
 
+	// FixOrphanedToolResults removes invalid tool_result blocks that reference non-existent tool_use ids
+	// before forwarding requests to Claude Messages API. This prevents 400 errors caused by corrupted
+	// tool histories (e.g. orphaned tool_result blocks).
+	FixOrphanedToolResults bool `mapstructure:"fix_orphaned_tool_results"`
+
 	// 账户切换最大次数（遇到上游错误时切换到其他账户的次数上限）
 	MaxAccountSwitches int `mapstructure:"max_account_switches"`
 	// Gemini 账户切换最大次数（Gemini 平台单独配置，因 API 限制更严格）
@@ -1071,6 +1076,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.inject_beta_for_apikey", false)
 	viper.SetDefault("gateway.cache_control_limit_removal_strategy", "messages_tail_then_head")
 	viper.SetDefault("gateway.failover_on_400", false)
+	viper.SetDefault("gateway.fix_orphaned_tool_results", true)
 	viper.SetDefault("gateway.max_account_switches", 10)
 	viper.SetDefault("gateway.max_account_switches_gemini", 3)
 	viper.SetDefault("gateway.antigravity_fallback_cooldown_minutes", 1)

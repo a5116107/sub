@@ -2448,6 +2448,78 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			if readErr == nil {
 				_ = resp.Body.Close()
 
+				// Detect orphaned tool_result errors (400) and retry once with cleaned tool blocks.
+				// This is conservative: only triggers when upstream indicates missing tool_use ids.
+				if s.cfg == nil || s.cfg.Gateway.FixOrphanedToolResults {
+					if isOrphanErr, _ := detectOrphanedToolResultError(respBody); isOrphanErr {
+						cleanedBody := FilterOrphanedToolResults(body)
+						if !bytes.Equal(cleanedBody, body) {
+							appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+								Platform:           account.Platform,
+								AccountID:          account.ID,
+								AccountName:        account.Name,
+								UpstreamStatusCode: resp.StatusCode,
+								UpstreamRequestID:  resp.Header.Get("x-request-id"),
+								Kind:               "orphan_tool_result_error",
+								Message:            extractUpstreamErrorMessage(respBody),
+								Detail: func() string {
+									if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+										return truncateString(string(respBody), s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes)
+									}
+									return ""
+								}(),
+							})
+
+							// Avoid extra requests when retry budget is exhausted.
+							if time.Since(retryStart) >= maxRetryElapsed {
+								resp.Body = io.NopCloser(bytes.NewReader(respBody))
+								break
+							}
+
+							log.Printf("Account %d: detected orphaned tool_result error, retrying with cleaned tool_result blocks", account.ID)
+							retryReq, buildErr := s.buildUpstreamRequest(ctx, c, account, cleanedBody, token, tokenType, reqModel)
+							if buildErr == nil {
+								retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
+								if retryErr == nil {
+									if retryResp.StatusCode < 400 {
+										resp = retryResp
+										break
+									}
+
+									retryRespBody, retryReadErr := io.ReadAll(io.LimitReader(retryResp.Body, 2<<20))
+									_ = retryResp.Body.Close()
+									if retryReadErr == nil {
+										// Continue 400 handling (e.g. signature retry) using the retry response context.
+										resp = &http.Response{
+											StatusCode: retryResp.StatusCode,
+											Header:     retryResp.Header.Clone(),
+											Body:       io.NopCloser(bytes.NewReader(retryRespBody)),
+										}
+										respBody = retryRespBody
+									} else {
+										log.Printf("Account %d: orphan tool_result retry read failed: %v", account.ID, retryReadErr)
+									}
+								} else {
+									if retryResp != nil && retryResp.Body != nil {
+										_ = retryResp.Body.Close()
+									}
+									appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+										Platform:           account.Platform,
+										AccountID:          account.ID,
+										AccountName:        account.Name,
+										UpstreamStatusCode: 0,
+										Kind:               "orphan_tool_result_retry_request_error",
+										Message:            sanitizeUpstreamErrorMessage(retryErr.Error()),
+									})
+									log.Printf("Account %d: orphan tool_result retry failed: %v", account.ID, retryErr)
+								}
+							} else {
+								log.Printf("Account %d: orphan tool_result retry build request failed: %v", account.ID, buildErr)
+							}
+						}
+					}
+				}
+
 				if s.isThinkingBlockSignatureError(respBody) {
 					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 						Platform:           account.Platform,
@@ -2818,6 +2890,11 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		}
 	}
 
+	// Proactive cleanup: remove orphaned tool_result blocks before forwarding.
+	if s.cfg == nil || s.cfg.Gateway.FixOrphanedToolResults {
+		body = FilterOrphanedToolResults(body)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -2981,6 +3058,51 @@ func (s *GatewayService) isThinkingBlockSignatureError(respBody []byte) bool {
 	}
 
 	return false
+}
+
+var orphanedToolUseIDPattern = regexp.MustCompile(`\\b(?:toolu_[A-Za-z0-9_]+|call_function_[A-Za-z0-9_]+)\\b`)
+
+func detectOrphanedToolResultError(respBody []byte) (bool, []string) {
+	msg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+	if msg == "" {
+		return false, nil
+	}
+	lower := strings.ToLower(msg)
+
+	// Must mention tool blocks.
+	if !strings.Contains(lower, "tool_result") {
+		return false, nil
+	}
+	if !strings.Contains(lower, "tool_use") && !strings.Contains(lower, "tool_use_id") {
+		return false, nil
+	}
+
+	// Must indicate the referenced tool_use is missing.
+	missingRef := strings.Contains(lower, "non-existent") ||
+		strings.Contains(lower, "nonexistent") ||
+		strings.Contains(lower, "does not exist") ||
+		strings.Contains(lower, "not found") ||
+		strings.Contains(lower, "unexpected `tool_use_id`")
+	if !missingRef {
+		return false, nil
+	}
+
+	rawIDs := orphanedToolUseIDPattern.FindAllString(msg, -1)
+	if len(rawIDs) == 0 {
+		return true, nil
+	}
+
+	// Dedupe while preserving order.
+	seen := make(map[string]struct{}, len(rawIDs))
+	ids := make([]string, 0, len(rawIDs))
+	for _, id := range rawIDs {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return true, ids
 }
 
 func (s *GatewayService) shouldFailoverOn400(respBody []byte) bool {
@@ -3914,21 +4036,47 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		return err
 	}
 
-	// 检测 thinking block 签名错误（400）并重试一次（过滤 thinking blocks）
-	if resp.StatusCode == 400 && s.isThinkingBlockSignatureError(respBody) {
-		log.Printf("Account %d: detected thinking block signature error on count_tokens, retrying with filtered thinking blocks", account.ID)
+	// 400: 尝试修复工具历史（orphaned tool_result）以及 thinking signature 问题，各自最多重试一次。
+	if resp.StatusCode == 400 {
+		// 1) Orphaned tool_result: retry once with cleaned tool blocks.
+		if s.cfg == nil || s.cfg.Gateway.FixOrphanedToolResults {
+			if isOrphanErr, _ := detectOrphanedToolResultError(respBody); isOrphanErr {
+				cleanedBody := FilterOrphanedToolResults(body)
+				if !bytes.Equal(cleanedBody, body) {
+					log.Printf("Account %d: detected orphaned tool_result error on count_tokens, retrying with cleaned tool_result blocks", account.ID)
+					retryReq, buildErr := s.buildCountTokensRequest(ctx, c, account, cleanedBody, token, tokenType, reqModel)
+					if buildErr == nil {
+						retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
+						if retryErr == nil {
+							resp = retryResp
+							respBody, err = io.ReadAll(resp.Body)
+							_ = resp.Body.Close()
+							if err != nil {
+								s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to read response")
+								return err
+							}
+						}
+					}
+				}
+			}
+		}
 
-		filteredBody := FilterThinkingBlocksForRetry(body)
-		retryReq, buildErr := s.buildCountTokensRequest(ctx, c, account, filteredBody, token, tokenType, reqModel)
-		if buildErr == nil {
-			retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
-			if retryErr == nil {
-				resp = retryResp
-				respBody, err = io.ReadAll(resp.Body)
-				_ = resp.Body.Close()
-				if err != nil {
-					s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to read response")
-					return err
+		// 2) Thinking signature error: retry once with thinking blocks filtered.
+		if resp.StatusCode == 400 && s.isThinkingBlockSignatureError(respBody) {
+			log.Printf("Account %d: detected thinking block signature error on count_tokens, retrying with filtered thinking blocks", account.ID)
+
+			filteredBody := FilterThinkingBlocksForRetry(body)
+			retryReq, buildErr := s.buildCountTokensRequest(ctx, c, account, filteredBody, token, tokenType, reqModel)
+			if buildErr == nil {
+				retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
+				if retryErr == nil {
+					resp = retryResp
+					respBody, err = io.ReadAll(resp.Body)
+					_ = resp.Body.Close()
+					if err != nil {
+						s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to read response")
+						return err
+					}
 				}
 			}
 		}
@@ -4016,6 +4164,11 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 				}
 			}
 		}
+	}
+
+	// Proactive cleanup: remove orphaned tool_result blocks before forwarding.
+	if s.cfg == nil || s.cfg.Gateway.FixOrphanedToolResults {
+		body = FilterOrphanedToolResults(body)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
