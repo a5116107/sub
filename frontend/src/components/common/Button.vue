@@ -86,7 +86,7 @@ import { computed, ref } from 'vue'
 import Icon from '@/components/icons/Icon.vue'
 import type { IconName } from '@/components/icons/Icon.vue'
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'premium'
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'premium' | 'outline'
 type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 type IconPosition = 'left' | 'right'
 
@@ -179,6 +179,7 @@ const variantClasses = computed(() => {
       'border border-gray-200 dark:border-dark-600',
       'shadow-sm hover:bg-gray-50 dark:hover:bg-dark-700',
       'hover:border-gray-300 dark:hover:border-dark-500',
+      'hover:-translate-y-0.5 hover:shadow-md',
       'focus:ring-gray-500/30'
     ].join(' '),
 
@@ -186,6 +187,7 @@ const variantClasses = computed(() => {
       'bg-transparent',
       'text-gray-600 dark:text-gray-300',
       'hover:bg-gray-100 dark:hover:bg-dark-800',
+      'hover:-translate-y-0.5',
       'focus:ring-gray-500/30'
     ].join(' '),
 
@@ -217,6 +219,15 @@ const variantClasses = computed(() => {
       'text-white shadow-lg shadow-gold-500/25',
       'hover:from-gold-600 hover:to-gold-700 hover:shadow-xl hover:shadow-gold-500/30',
       'focus:ring-gold-500/50'
+    ].join(' '),
+
+    outline: [
+      'bg-transparent',
+      'text-primary-600 dark:text-primary-400',
+      'border-2 border-primary-500',
+      'hover:bg-primary-50 dark:hover:bg-primary-900/20',
+      'hover:-translate-y-0.5 hover:shadow-md hover:shadow-primary-500/20',
+      'focus:ring-primary-500/50'
     ].join(' ')
   }
   return variants[props.variant]
@@ -230,7 +241,8 @@ const loadingIconColor = computed(() => {
     danger: 'text-white',
     success: 'text-white',
     warning: 'text-white',
-    premium: 'text-white'
+    premium: 'text-white',
+    outline: 'text-primary-600 dark:text-primary-400'
   }
   return colors[props.variant]
 })

@@ -152,7 +152,7 @@
           v-else
           v-for="(row, index) in sortedData"
           :key="resolveRowKey(row, index)"
-          class="hover:bg-gray-50/60 dark:hover:bg-dark-900/45"
+          class="hover:bg-gray-100/90 dark:hover:bg-dark-800/60 transition-colors duration-150"
         >
           <td
             v-for="(column, colIndex) in columns"

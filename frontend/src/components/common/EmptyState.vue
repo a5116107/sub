@@ -1,9 +1,17 @@
 <template>
-  <div class="empty-state">
-    <!-- Icon with gradient background -->
+  <div class="empty-state-enhanced">
+    <!-- Background decorations -->
+    <div class="empty-state-bg">
+      <div class="empty-state-orb empty-state-orb-1"></div>
+      <div class="empty-state-orb empty-state-orb-2"></div>
+    </div>
+
+    <!-- Icon with ring decoration and gradient background -->
     <div class="empty-state-icon-wrapper">
+      <!-- Ring decoration -->
+      <div class="empty-state-ring"></div>
       <div
-        class="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-gray-100 to-gray-50 dark:from-dark-800 dark:to-dark-900 shadow-inner"
+        class="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-gray-100 to-gray-50 dark:from-dark-800 dark:to-dark-900 shadow-inner ring-1 ring-gray-200/50 dark:ring-dark-700/50"
       >
         <slot name="icon">
           <component v-if="icon" :is="icon" class="h-10 w-10 text-gray-400 dark:text-dark-500" aria-hidden="true" />

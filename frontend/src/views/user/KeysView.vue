@@ -2,24 +2,42 @@
   <AppLayout>
     <TablePageLayout>
       <template #actions>
-        <div class="flex justify-end gap-3">
-        <button
-          @click="loadApiKeys"
-          :disabled="loading"
-          class="btn btn-secondary"
-          :title="t('common.refresh')"
-        >
-          <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-        </button>
-        <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
-          <Icon name="plus" size="md" class="mr-2" />
-          {{ t('keys.createKey') }}
-        </button>
-      </div>
+        <div class="flex items-center justify-end gap-3">
+          <!-- View Toggle -->
+          <div class="tabs p-0.5">
+            <button
+              @click="viewMode = 'table'"
+              :class="['tab px-3 py-1.5', viewMode === 'table' ? 'tab-active' : '']"
+              :title="t('keys.tableView')"
+            >
+              <Icon name="menu" size="sm" />
+            </button>
+            <button
+              @click="viewMode = 'card'"
+              :class="['tab px-3 py-1.5', viewMode === 'card' ? 'tab-active' : '']"
+              :title="t('keys.cardView')"
+            >
+              <Icon name="grid" size="sm" />
+            </button>
+          </div>
+          <button
+            @click="loadApiKeys"
+            :disabled="loading"
+            class="btn btn-secondary"
+            :title="t('common.refresh')"
+          >
+            <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+          </button>
+          <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
+            <Icon name="plus" size="md" class="mr-2" />
+            {{ t('keys.createKey') }}
+          </button>
+        </div>
       </template>
 
       <template #table>
-        <DataTable :columns="columns" :data="apiKeys" :loading="loading">
+        <!-- Table View -->
+        <DataTable v-if="viewMode === 'table'" :columns="columns" :data="apiKeys" :loading="loading">
           <template #cell-key="{ value, row }">
             <div class="flex items-center gap-2">
               <code class="code text-xs">
@@ -182,6 +200,32 @@
             />
           </template>
         </DataTable>
+
+        <!-- Card View -->
+        <div v-else-if="viewMode === 'card'" class="space-y-4">
+          <div v-if="loading" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <SkeletonCard v-for="i in 6" :key="i" />
+          </div>
+          <div v-else-if="apiKeys.length === 0">
+            <EmptyState
+              :title="t('keys.noKeysYet')"
+              :description="t('keys.createFirstKey')"
+              :action-text="t('keys.createKey')"
+              @action="showCreateModal = true"
+            />
+          </div>
+          <div v-else class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <ApiKeyCard
+              v-for="key in apiKeys"
+              :key="key.id"
+              :api-key="key"
+              :usage-stats="usageStats[key.id]"
+              @use="openUseKeyModal"
+              @edit="editKey"
+              @delete="confirmDelete"
+            />
+          </div>
+        </div>
       </template>
 
       <template #pagination>
@@ -618,8 +662,10 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import Select from '@/components/common/Select.vue'
 	import Icon from '@/components/icons/Icon.vue'
 	import UseKeyModal from '@/components/keys/UseKeyModal.vue'
+import ApiKeyCard from '@/components/keys/ApiKeyCard.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
 	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
+import SkeletonCard from '@/components/common/SkeletonCard.vue'
 	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform } from '@/types'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
@@ -653,6 +699,7 @@ const groups = ref<Group[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const usageStats = ref<Record<string, BatchApiKeyUsageStats>>({})
+const viewMode = ref<'table' | 'card'>('table')
 
 const pagination = ref({
   page: 1,
