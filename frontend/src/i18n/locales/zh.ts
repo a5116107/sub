@@ -3581,6 +3581,13 @@ export default {
         saved: '流超时设置保存成功',
         saveFailed: '保存流超时设置失败'
       },
+      gateway: {
+        title: '网关设置',
+        description: 'LLM 网关兼容性与自动修复',
+        fixOrphanedToolResults: '自动清理孤儿 tool_result',
+        fixOrphanedToolResultsHint:
+          '当消息历史包含引用不存在 tool_use 的 tool_result 时自动移除，避免 Claude 400；如发现兼容性问题可关闭兜底'
+      },
       saveSettings: '保存设置',
       saving: '保存中...',
       settingsSaved: '设置保存成功',

@@ -532,6 +532,7 @@ func TestAPIContracts(t *testing.T) {
 					service.SettingKeyLandingPricingEnabled: "true",
 					service.SettingKeyLandingPricingConfig:  "{}",
 					service.SettingKeySubscriptionsEnabled:  "true",
+					service.SettingKeyGatewayFixOrphanedToolResults: "true",
 				})
 			},
 			method:     http.MethodGet,
@@ -580,6 +581,7 @@ func TestAPIContracts(t *testing.T) {
 					"fallback_model_openai": "gpt-4o",
 					"enable_identity_patch": true,
 					"identity_patch_prompt": "",
+					"gateway_fix_orphaned_tool_results": true,
 					"home_content": "",
 					"hide_ccs_import_button": false,
 					"purchase_subscription_enabled": false,

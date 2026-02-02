@@ -349,6 +349,37 @@
         </div>
           </section>
 
+          <!-- Gateway Settings -->
+          <section
+            :id="SECTION_IDS.gateway"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.gateway)"
+          >
+            <div class="card">
+              <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.settings.gateway.title') }}
+                </h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.gateway.description') }}
+                </p>
+              </div>
+              <div class="space-y-5 p-6">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <label class="font-medium text-gray-900 dark:text-white">{{
+                      t('admin.settings.gateway.fixOrphanedToolResults')
+                    }}</label>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.gateway.fixOrphanedToolResultsHint') }}
+                    </p>
+                  </div>
+                  <Toggle v-model="form.gateway_fix_orphaned_tool_results" />
+                </div>
+              </div>
+            </div>
+          </section>
+
           <!-- Registration Settings -->
           <section
             :id="SECTION_IDS.registration"
@@ -1903,6 +1934,7 @@ const { copyToClipboard } = useClipboard()
 const SECTION_IDS = {
   adminApiKey: 'admin-api-key',
   streamTimeout: 'stream-timeout',
+  gateway: 'gateway',
   registration: 'registration',
   referral: 'referral',
   turnstile: 'turnstile',
@@ -2246,6 +2278,8 @@ const form = reactive<SettingsForm>({
   // Identity patch (Claude -> Gemini)
   enable_identity_patch: true,
   identity_patch_prompt: '',
+  // Gateway runtime toggles
+  gateway_fix_orphaned_tool_results: true,
   // Ops monitoring (vNext)
   ops_monitoring_enabled: true,
   ops_realtime_monitoring_enabled: true,
@@ -2259,6 +2293,7 @@ const navItems = computed(() => {
   const items: Array<{ id: SectionId; label: string }> = [
     { id: SECTION_IDS.adminApiKey, label: t('admin.settings.adminApiKey.title') },
     { id: SECTION_IDS.streamTimeout, label: t('admin.settings.streamTimeout.title') },
+    { id: SECTION_IDS.gateway, label: t('admin.settings.gateway.title') },
     { id: SECTION_IDS.registration, label: t('admin.settings.registration.title') },
     { id: SECTION_IDS.referral, label: t('admin.settings.referral.title') },
     { id: SECTION_IDS.turnstile, label: t('admin.settings.turnstile.title') },
@@ -2418,7 +2453,8 @@ function buildUpdateSettingsPayload(): UpdateSettingsRequest {
     fallback_model_gemini: form.fallback_model_gemini,
     fallback_model_antigravity: form.fallback_model_antigravity,
     enable_identity_patch: form.enable_identity_patch,
-    identity_patch_prompt: form.identity_patch_prompt
+    identity_patch_prompt: form.identity_patch_prompt,
+    gateway_fix_orphaned_tool_results: form.gateway_fix_orphaned_tool_results
   }
 }
 

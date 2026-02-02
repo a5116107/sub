@@ -347,6 +347,9 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyEnableIdentityPatch] = strconv.FormatBool(settings.EnableIdentityPatch)
 	updates[SettingKeyIdentityPatchPrompt] = settings.IdentityPatchPrompt
 
+	// Gateway runtime toggles
+	updates[SettingKeyGatewayFixOrphanedToolResults] = strconv.FormatBool(settings.GatewayFixOrphanedToolResults)
+
 	// Ops monitoring (vNext)
 	updates[SettingKeyOpsMonitoringEnabled] = strconv.FormatBool(settings.OpsMonitoringEnabled)
 	updates[SettingKeyOpsRealtimeMonitoringEnabled] = strconv.FormatBool(settings.OpsRealtimeMonitoringEnabled)
@@ -537,6 +540,9 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyEnableIdentityPatch: "true",
 		SettingKeyIdentityPatchPrompt: "",
 
+		// Gateway runtime toggles
+		SettingKeyGatewayFixOrphanedToolResults: strconv.FormatBool(s.cfg.Gateway.FixOrphanedToolResults),
+
 		// Ops monitoring defaults (vNext)
 		SettingKeyOpsMonitoringEnabled:         "true",
 		SettingKeyOpsRealtimeMonitoringEnabled: "true",
@@ -679,6 +685,15 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 	result.IdentityPatchPrompt = settings[SettingKeyIdentityPatchPrompt]
 
+	// Gateway runtime toggles (default: enabled / fail-open)
+	if v, ok := settings[SettingKeyGatewayFixOrphanedToolResults]; ok && strings.TrimSpace(v) != "" {
+		result.GatewayFixOrphanedToolResults = v == "true"
+	} else if s.cfg != nil {
+		result.GatewayFixOrphanedToolResults = s.cfg.Gateway.FixOrphanedToolResults
+	} else {
+		result.GatewayFixOrphanedToolResults = true
+	}
+
 	// Ops monitoring settings (default: enabled, fail-open)
 	result.OpsMonitoringEnabled = !isFalseSettingValue(settings[SettingKeyOpsMonitoringEnabled])
 	result.OpsRealtimeMonitoringEnabled = !isFalseSettingValue(settings[SettingKeyOpsRealtimeMonitoringEnabled])
@@ -739,6 +754,22 @@ func (s *SettingService) IsIdentityPatchEnabled(ctx context.Context) bool {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyEnableIdentityPatch)
 	if err != nil {
 		// 默认开启，保持兼容
+		return true
+	}
+	return value == "true"
+}
+
+// IsGatewayFixOrphanedToolResultsEnabled controls whether the gateway should proactively remove orphaned tool_result
+// blocks (tool_result.tool_use_id references a missing tool_use.id) before forwarding.
+//
+// Default: enabled (fail-open).
+func (s *SettingService) IsGatewayFixOrphanedToolResultsEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyGatewayFixOrphanedToolResults)
+	if err != nil {
+		// Fallback to config (if present) and fail-open.
+		if s != nil && s.cfg != nil {
+			return s.cfg.Gateway.FixOrphanedToolResults
+		}
 		return true
 	}
 	return value == "true"

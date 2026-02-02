@@ -60,3 +60,22 @@ func TestSettingService_IsLandingPricingEnabled_FalseWhenDisabled(t *testing.T) 
 	}}, &config.Config{})
 	require.False(t, svc.IsLandingPricingEnabled(context.Background()))
 }
+
+func TestSettingService_IsGatewayFixOrphanedToolResultsEnabled_DefaultTrueWhenMissing(t *testing.T) {
+	cfg := &config.Config{Gateway: config.GatewayConfig{FixOrphanedToolResults: true}}
+	svc := NewSettingService(&settingRepoFeatureStub{values: map[string]string{}}, cfg)
+	require.True(t, svc.IsGatewayFixOrphanedToolResultsEnabled(context.Background()))
+}
+
+func TestSettingService_IsGatewayFixOrphanedToolResultsEnabled_FalseWhenDisabled(t *testing.T) {
+	svc := NewSettingService(&settingRepoFeatureStub{values: map[string]string{
+		SettingKeyGatewayFixOrphanedToolResults: "false",
+	}}, &config.Config{})
+	require.False(t, svc.IsGatewayFixOrphanedToolResultsEnabled(context.Background()))
+}
+
+func TestSettingService_IsGatewayFixOrphanedToolResultsEnabled_FallsBackToConfig(t *testing.T) {
+	cfg := &config.Config{Gateway: config.GatewayConfig{FixOrphanedToolResults: false}}
+	svc := NewSettingService(&settingRepoFeatureStub{values: map[string]string{}}, cfg)
+	require.False(t, svc.IsGatewayFixOrphanedToolResultsEnabled(context.Background()))
+}

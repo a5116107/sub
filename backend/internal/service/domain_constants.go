@@ -143,6 +143,9 @@ const (
 	SettingKeyEnableIdentityPatch = "enable_identity_patch"
 	SettingKeyIdentityPatchPrompt = "identity_patch_prompt"
 
+	// Gateway runtime toggles
+	SettingKeyGatewayFixOrphanedToolResults = "gateway_fix_orphaned_tool_results"
+
 	// =========================
 	// Ops Monitoring (vNext)
 	// =========================

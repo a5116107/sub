@@ -62,6 +62,23 @@ func (s *GatewayService) cacheControlLimitRemovalStrategy() string {
 	return "messages_tail_then_head"
 }
 
+func (s *GatewayService) fixOrphanedToolResultsEnabled(ctx context.Context) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// Prefer the admin (DB-backed) toggle when available.
+	if s != nil && s.rateLimitService != nil && s.rateLimitService.settingService != nil {
+		return s.rateLimitService.settingService.IsGatewayFixOrphanedToolResultsEnabled(ctx)
+	}
+
+	// Fallback to config and fail-open.
+	if s == nil || s.cfg == nil {
+		return true
+	}
+	return s.cfg.Gateway.FixOrphanedToolResults
+}
+
 func (s *GatewayService) claudeCodeCompatMode() string {
 	if s == nil || s.cfg == nil {
 		return "auto"
@@ -2450,7 +2467,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 				// Detect orphaned tool_result errors (400) and retry once with cleaned tool blocks.
 				// This is conservative: only triggers when upstream indicates missing tool_use ids.
-				if s.cfg == nil || s.cfg.Gateway.FixOrphanedToolResults {
+				if s.fixOrphanedToolResultsEnabled(ctx) {
 					if isOrphanErr, _ := detectOrphanedToolResultError(respBody); isOrphanErr {
 						cleanedBody := FilterOrphanedToolResults(body)
 						if !bytes.Equal(cleanedBody, body) {
@@ -2891,7 +2908,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	}
 
 	// Proactive cleanup: remove orphaned tool_result blocks before forwarding.
-	if s.cfg == nil || s.cfg.Gateway.FixOrphanedToolResults {
+	if s.fixOrphanedToolResultsEnabled(ctx) {
 		body = FilterOrphanedToolResults(body)
 	}
 
@@ -4039,7 +4056,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 	// 400: 尝试修复工具历史（orphaned tool_result）以及 thinking signature 问题，各自最多重试一次。
 	if resp.StatusCode == 400 {
 		// 1) Orphaned tool_result: retry once with cleaned tool blocks.
-		if s.cfg == nil || s.cfg.Gateway.FixOrphanedToolResults {
+		if s.fixOrphanedToolResultsEnabled(ctx) {
 			if isOrphanErr, _ := detectOrphanedToolResultError(respBody); isOrphanErr {
 				cleanedBody := FilterOrphanedToolResults(body)
 				if !bytes.Equal(cleanedBody, body) {
@@ -4167,7 +4184,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 
 	// Proactive cleanup: remove orphaned tool_result blocks before forwarding.
-	if s.cfg == nil || s.cfg.Gateway.FixOrphanedToolResults {
+	if s.fixOrphanedToolResultsEnabled(ctx) {
 		body = FilterOrphanedToolResults(body)
 	}
 

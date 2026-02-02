@@ -67,6 +67,9 @@ export interface SystemSettings {
   enable_identity_patch: boolean
   identity_patch_prompt: string
 
+  // Gateway runtime toggles
+  gateway_fix_orphaned_tool_results: boolean
+
   // Ops Monitoring (vNext)
   ops_monitoring_enabled: boolean
   ops_realtime_monitoring_enabled: boolean
@@ -119,6 +122,7 @@ export interface UpdateSettingsRequest {
   fallback_model_antigravity?: string
   enable_identity_patch?: boolean
   identity_patch_prompt?: string
+  gateway_fix_orphaned_tool_results?: boolean
   ops_monitoring_enabled?: boolean
   ops_realtime_monitoring_enabled?: boolean
   ops_query_mode_default?: 'auto' | 'raw' | 'preagg' | string

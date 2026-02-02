@@ -3435,6 +3435,13 @@ export default {
         saved: 'Stream timeout settings saved',
         saveFailed: 'Failed to save stream timeout settings'
       },
+      gateway: {
+        title: 'Gateway Settings',
+        description: 'LLM gateway compatibility and auto-fix',
+        fixOrphanedToolResults: 'Auto-remove orphan tool_result',
+        fixOrphanedToolResultsHint:
+          'Automatically removes tool_result blocks whose tool_use_id references a missing tool_use, avoiding Claude 400. Disable as a fallback if it causes compatibility issues.'
+      },
       saveSettings: 'Save Settings',
       saving: 'Saving...',
       settingsSaved: 'Settings saved successfully',
