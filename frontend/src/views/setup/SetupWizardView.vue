@@ -492,12 +492,12 @@
 </template>
 
 <script setup lang="ts">
- import { ref, reactive, computed, watch } from 'vue'
- import { useI18n } from 'vue-i18n'
- import { testDatabase, testRedis, install, setSetupToken, type InstallRequest } from '@/api/setup'
- import Select from '@/components/common/Select.vue'
- import Toggle from '@/components/common/Toggle.vue'
- import Icon from '@/components/icons/Icon.vue'
+import { ref, reactive, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { testDatabase, testRedis, install, setSetupToken, type InstallRequest } from '@/api/setup'
+import Select from '@/components/common/Select.vue'
+import Toggle from '@/components/common/Toggle.vue'
+import Icon from '@/components/icons/Icon.vue'
 
  const { t } = useI18n()
 
