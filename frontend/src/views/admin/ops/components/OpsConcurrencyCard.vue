@@ -399,6 +399,7 @@ watch(
               {{ t('admin.ops.concurrency.rateLimited', { count: row.rate_limited_accounts }) }}
             </span>
 
+            <!-- Scope 限流 (仅 Antigravity) -->
             <template v-if="row.scope_rate_limit_count && Object.keys(row.scope_rate_limit_count).length > 0">
               <span
                 v-for="(count, scope) in row.scope_rate_limit_count"
