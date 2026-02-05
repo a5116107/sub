@@ -98,6 +98,8 @@ func TestAccountExportDataIncludesLinkedProxyAndSecrets(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.Equal(t, 0, resp.Code)
 	require.NotEmpty(t, resp.Data.ExportedAt)
+	require.Empty(t, resp.Data.Type)
+	require.Equal(t, 0, resp.Data.Version)
 	require.Len(t, resp.Data.Proxies, 1)
 	require.Equal(t, "pass", resp.Data.Proxies[0].Password)
 	require.Len(t, resp.Data.Accounts, 1)
