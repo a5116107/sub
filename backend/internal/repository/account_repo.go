@@ -1123,6 +1123,7 @@ func (r *accountRepository) UpdateExtra(ctx context.Context, id int64, updates m
 		"UPDATE accounts SET extra = COALESCE(extra, '{}'::jsonb) || $1::jsonb, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL",
 		string(payload), id,
 	)
+
 	if err != nil {
 		return err
 	}
