@@ -950,7 +950,6 @@ func (s *GeminiOAuthService) fetchProjectID(ctx context.Context, accessToken, pr
 		registeredTierID := strings.TrimSpace(loadResp.GetTier())
 		if registeredTierID != "" {
 			log.Printf("[GeminiOAuth] User has tier (%s) but no cloudaicompanionProject, trying Cloud Resource Manager...", registeredTierID)
-
 			fallback, fbErr := fetchProjectIDFromResourceManager(ctx, accessToken, proxyURL)
 			if fbErr == nil && strings.TrimSpace(fallback) != "" {
 				log.Printf("[GeminiOAuth] Found project from Cloud Resource Manager: %s", fallback)
@@ -964,7 +963,6 @@ func (s *GeminiOAuthService) fetchProjectID(ctx context.Context, accessToken, pr
 			)
 		}
 	}
-
 	log.Printf("[GeminiOAuth] No currentTier/paidTier found, proceeding with onboardUser (tierID: %s)", tierID)
 
 	req := &geminicli.OnboardUserRequest{
