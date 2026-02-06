@@ -133,6 +133,9 @@ func runMainServer() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 	if cfg.RunMode == config.RunModeSimple {
+		if strings.ToLower(strings.TrimSpace(cfg.Server.Mode)) == "release" {
+			log.Fatalf("Refusing to start in SIMPLE mode with server.mode=release: billing and quota checks would be DISABLED")
+		}
 		log.Println("⚠️  WARNING: Running in SIMPLE mode - billing and quota checks are DISABLED")
 	}
 

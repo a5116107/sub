@@ -52,6 +52,7 @@ func defaultDocsIndex() *docsIndexV1 {
 		Pages: []DocsPageMeta{
 			{Key: "overview", TitleZh: "概览", TitleEn: "Overview", Group: "Docs", Order: 10, Format: docsFormatMarkdown, Public: true},
 			{Key: "quickstart", TitleZh: "快速开始", TitleEn: "Quickstart", Group: "Docs", Order: 20, Format: docsFormatMarkdown, Public: true},
+			{Key: "providers", TitleZh: "按渠道调用", TitleEn: "Providers", Group: "Docs", Order: 25, Format: docsFormatMarkdown, Public: true},
 			{Key: "compatibility", TitleZh: "兼容性", TitleEn: "Compatibility", Group: "Docs", Order: 30, Format: docsFormatMarkdown, Public: true},
 			{Key: "faq", TitleZh: "FAQ", TitleEn: "FAQ", Group: "Docs", Order: 40, Format: docsFormatMarkdown, Public: true},
 		},
@@ -497,6 +498,9 @@ func (s *SettingService) UpdateDocsPage(ctx context.Context, docKey, lang, markd
 }
 
 func defaultDocsMarkdown(docKey, lang string) string {
+	if markdown, ok := loadEmbeddedDocsMarkdown(docKey, lang); ok {
+		return markdown
+	}
 	// Keep defaults intentionally generic (no upstream secrets / internal linkages).
 	switch docKey {
 	case "overview":
@@ -526,4 +530,3 @@ func defaultDocsMarkdown(docKey, lang string) string {
 		return "# Docs\n\n(No content)\n"
 	}
 }
-

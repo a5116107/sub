@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -137,7 +138,7 @@ func (s *AntigravityOAuthService) ExchangeCode(ctx context.Context, input *Antig
 	// 获取用户信息
 	userInfo, err := client.GetUserInfo(ctx, tokenResp.AccessToken)
 	if err != nil {
-		fmt.Printf("[AntigravityOAuth] 警告: 获取用户信息失败: %v\n", err)
+		log.Printf("[AntigravityOAuth] WARN: failed to fetch user info: %v", err)
 	} else {
 		result.Email = userInfo.Email
 	}
@@ -145,7 +146,7 @@ func (s *AntigravityOAuthService) ExchangeCode(ctx context.Context, input *Antig
 	// 获取 project_id（部分账户类型可能没有），失败时重试
 	projectID, loadErr := s.loadProjectIDWithRetry(ctx, tokenResp.AccessToken, proxyURL, 3)
 	if loadErr != nil {
-		fmt.Printf("[AntigravityOAuth] 警告: 获取 project_id 失败（重试后）: %v\n", loadErr)
+		log.Printf("[AntigravityOAuth] WARN: failed to fetch project_id (after retries): %v", loadErr)
 		result.ProjectIDMissing = true
 	} else {
 		result.ProjectID = projectID
@@ -172,7 +173,7 @@ func (s *AntigravityOAuthService) RefreshToken(ctx context.Context, refreshToken
 		if err == nil {
 			now := time.Now()
 			expiresAt := now.Unix() + tokenResp.ExpiresIn - 300
-			fmt.Printf("[AntigravityOAuth] Token refreshed: expires_in=%d, expires_at=%d (%s)\n",
+			log.Printf("[AntigravityOAuth] INFO: token refreshed: expires_in=%d, expires_at=%d (%s)",
 				tokenResp.ExpiresIn, expiresAt, time.Unix(expiresAt, 0).Format("2006-01-02 15:04:05"))
 			return &AntigravityTokenInfo{
 				AccessToken:  tokenResp.AccessToken,

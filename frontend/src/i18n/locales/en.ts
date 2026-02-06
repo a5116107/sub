@@ -226,6 +226,7 @@ export default {
     ops: 'Ops',
     promoCodes: 'Promo Codes',
     settings: 'Settings',
+    modelPricing: 'Model Pricing',
     myAccount: 'My Account',
     lightMode: 'Light Mode',
     darkMode: 'Dark Mode',
@@ -3125,6 +3126,37 @@ export default {
         downloadChart: 'Download',
         downloadChartHint: 'Download chart as image'
       }
+    },
+
+    // Model Pricing
+    modelPricing: {
+      title: 'Model Pricing',
+      description: 'Manage billing model token pricing (model_pricing.json)',
+      status: 'Status',
+      modelCount: 'Model count',
+      lastUpdated: 'Last updated',
+      localHash: 'Local hash',
+      override: 'Local override',
+      overrideHint: 'When enabled, remote auto-sync is disabled to avoid overwriting your uploaded pricing file.',
+      download: 'Download current pricing file',
+      import: 'Upload & import',
+      importHint: 'Upload LiteLLM pricing JSON (model -> pricing object). It takes effect immediately after import.',
+      syncRemote: 'Sync from remote',
+      syncHint: 'Download pricing from configured remote_url (overwrites local file).',
+      refreshFailed: 'Failed to refresh',
+      importFailed: 'Import failed',
+      syncFailed: 'Sync failed',
+      downloadFailed: 'Download failed',
+      editor: 'Online editor',
+      editorHint: 'Edit model_pricing.json in the UI. Changes take effect immediately after save.',
+      editorPlaceholder: 'Click “Load current” to fetch model_pricing.json (or paste JSON here).',
+      loadCurrent: 'Load current',
+      formatJson: 'Format JSON',
+      invalidJson: 'Invalid JSON',
+      loadFailed: 'Load failed',
+      saveFailed: 'Save failed',
+      unsavedChanges: 'Unsaved changes',
+      savedHint: 'In sync with server'
     },
 
     // Settings

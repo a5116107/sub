@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -187,9 +186,14 @@ func shouldFallbackToNextURL(err error, statusCode int) bool {
 
 // ExchangeCode 用 authorization code 交换 token
 func (c *Client) ExchangeCode(ctx context.Context, code, codeVerifier string) (*TokenResponse, error) {
+	secret, err := oauthClientSecret()
+	if err != nil {
+		return nil, err
+	}
+
 	params := url.Values{}
-	params.Set("client_id", ClientID)
-	params.Set("client_secret", ClientSecret)
+	params.Set("client_id", oauthClientID())
+	params.Set("client_secret", secret)
 	params.Set("code", code)
 	params.Set("redirect_uri", RedirectURI)
 	params.Set("grant_type", "authorization_code")
@@ -207,7 +211,7 @@ func (c *Client) ExchangeCode(ctx context.Context, code, codeVerifier string) (*
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readAllWithLimit(resp.Body, maxGoogleOAuthBodyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
@@ -226,9 +230,14 @@ func (c *Client) ExchangeCode(ctx context.Context, code, codeVerifier string) (*
 
 // RefreshToken 刷新 access_token
 func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (*TokenResponse, error) {
+	secret, err := oauthClientSecret()
+	if err != nil {
+		return nil, err
+	}
+
 	params := url.Values{}
-	params.Set("client_id", ClientID)
-	params.Set("client_secret", ClientSecret)
+	params.Set("client_id", oauthClientID())
+	params.Set("client_secret", secret)
 	params.Set("refresh_token", refreshToken)
 	params.Set("grant_type", "refresh_token")
 
@@ -244,7 +253,7 @@ func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (*TokenR
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readAllWithLimit(resp.Body, maxGoogleOAuthBodyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
@@ -275,7 +284,7 @@ func (c *Client) GetUserInfo(ctx context.Context, accessToken string) (*UserInfo
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	bodyBytes, err := readAllWithLimit(resp.Body, maxGoogleOAuthBodyBytes)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
@@ -328,7 +337,7 @@ func (c *Client) LoadCodeAssist(ctx context.Context, accessToken string) (*LoadC
 			return nil, nil, lastErr
 		}
 
-		respBodyBytes, err := io.ReadAll(resp.Body)
+		respBodyBytes, err := readAllWithLimit(resp.Body, maxAntigravityInternalBytes)
 		_ = resp.Body.Close() // 立即关闭，避免循环内 defer 导致的资源泄漏
 		if err != nil {
 			return nil, nil, fmt.Errorf("读取响应失败: %w", err)
@@ -416,7 +425,7 @@ func (c *Client) FetchAvailableModels(ctx context.Context, accessToken, projectI
 			return nil, nil, lastErr
 		}
 
-		respBodyBytes, err := io.ReadAll(resp.Body)
+		respBodyBytes, err := readAllWithLimit(resp.Body, maxAntigravityInternalBytes)
 		_ = resp.Body.Close() // 立即关闭，避免循环内 defer 导致的资源泄漏
 		if err != nil {
 			return nil, nil, fmt.Errorf("读取响应失败: %w", err)

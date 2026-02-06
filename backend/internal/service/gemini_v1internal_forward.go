@@ -292,7 +292,7 @@ func (s *GeminiMessagesCompatService) ForwardV1Internal(ctx context.Context, c *
 			}
 		}
 	} else {
-		respBody, err := io.ReadAll(resp.Body)
+		respBody, err := readAllWithLimit(resp.Body, maxUpstreamNonStreamingBodyBytes)
 		if err != nil {
 			return nil, s.writeGoogleError(c, http.StatusBadGateway, "Failed to read response")
 		}

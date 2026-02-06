@@ -22,6 +22,7 @@ import systemAPI from './system'
 import usageAPI from './usage'
 import userAttributesAPI from './userAttributes'
 import usersAPI from './users'
+import modelPricingAPI from './modelPricing'
 
 /**
  * Unified admin API object for convenient access
@@ -37,6 +38,7 @@ export const adminAPI = {
 	announcements: announcementsAPI,
 	settings: settingsAPI,
 	docs: docsAPI,
+	modelPricing: modelPricingAPI,
 	system: systemAPI,
 	subscriptions: subscriptionsAPI,
 	usage: usageAPI,
@@ -59,6 +61,7 @@ export {
 	announcementsAPI,
 	settingsAPI,
 	docsAPI,
+	modelPricingAPI,
 	systemAPI,
 	subscriptionsAPI,
 	usageAPI,
@@ -71,4 +74,3 @@ export {
 }
 
 export default adminAPI
-

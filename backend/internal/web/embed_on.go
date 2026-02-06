@@ -25,6 +25,9 @@ const (
 //go:embed all:dist
 var frontendFS embed.FS
 
+//go:embed all:dist-v2
+var frontendV2FS embed.FS
+
 // PublicSettingsProvider is an interface to fetch public settings
 type PublicSettingsProvider interface {
 	GetPublicSettingsForInjection(ctx context.Context) (any, error)
@@ -256,4 +259,72 @@ func serveIndexHTML(c *gin.Context, fsys fs.FS) {
 func HasEmbeddedFrontend() bool {
 	_, err := frontendFS.ReadFile("dist/index.html")
 	return err == nil
+}
+
+// HasV2Frontend checks if the v2 frontend (web-app) is embedded
+func HasV2Frontend() bool {
+	_, err := frontendV2FS.ReadFile("dist-v2/index.html")
+	return err == nil
+}
+
+// NewV2FrontendServer creates a new frontend server for the v2 (web-app) frontend
+func NewV2FrontendServer(settingsProvider PublicSettingsProvider) (*FrontendServer, error) {
+	distFS, err := fs.Sub(frontendV2FS, "dist-v2")
+	if err != nil {
+		return nil, err
+	}
+
+	// Read base HTML once
+	file, err := distFS.Open("index.html")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+
+	baseHTML, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	cache := NewHTMLCache()
+	cache.SetBaseHTML(baseHTML)
+
+	return &FrontendServer{
+		distFS:     distFS,
+		fileServer: http.FileServer(http.FS(distFS)),
+		baseHTML:   baseHTML,
+		cache:      cache,
+		settings:   settingsProvider,
+	}, nil
+}
+
+// V2Middleware returns the Gin middleware handler for v2 frontend at /v2/ path
+func (s *FrontendServer) V2Middleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		path := c.Request.URL.Path
+
+		// Only handle /v2/ paths
+		if !strings.HasPrefix(path, "/v2/") && path != "/v2" {
+			c.Next()
+			return
+		}
+
+		// Remove /v2/ prefix for file lookup
+		cleanPath := strings.TrimPrefix(path, "/v2")
+		if cleanPath == "" || cleanPath == "/" {
+			cleanPath = "index.html"
+		} else {
+			cleanPath = strings.TrimPrefix(cleanPath, "/")
+		}
+
+		// For index.html or SPA routes, serve with injected settings
+		if cleanPath == "index.html" || !s.fileExists(cleanPath) {
+			s.serveIndexHTML(c)
+			return
+		}
+
+		// Serve static files normally
+		s.fileServer.ServeHTTP(c.Writer, c.Request)
+		c.Abort()
+	}
 }

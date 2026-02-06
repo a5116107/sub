@@ -18,6 +18,8 @@ type githubReleaseClient struct {
 	downloadHTTPClient *http.Client
 }
 
+const maxGitHubChecksumBytes int64 = 256 << 10 // 256 KiB
+
 // NewGitHubReleaseClient 创建 GitHub Release 客户端
 // proxyURL 为空时直连 GitHub，支持 http/https/socks5/socks5h 协议
 func NewGitHubReleaseClient(proxyURL string) service.GitHubReleaseClient {
@@ -137,5 +139,5 @@ func (c *githubReleaseClient) FetchChecksumFile(ctx context.Context, url string)
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	return readAllWithLimit(resp.Body, maxGitHubChecksumBytes)
 }

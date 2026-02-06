@@ -1,0 +1,1 @@
+import{b as s}from"./api-CFwCk11n.js";import{p as t}from"./index-CJPp5tUZ.js";const r={forgotPassword:o=>t("/auth/forgot-password",o),resetPassword:o=>t("/auth/reset-password",o)};function e(){return s({mutationFn:r.forgotPassword})}function n(){return s({mutationFn:r.resetPassword})}export{n as a,e as u};

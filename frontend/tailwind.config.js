@@ -78,6 +78,12 @@ export default {
         ],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
       },
+      // Unified spacing tokens
+      spacing: {
+        'card': '20px',
+        'section': '24px',
+        'page': '32px'
+      },
       boxShadow: {
         glass: '0 8px 32px rgba(0, 0, 0, 0.08)',
         'glass-sm': '0 4px 16px rgba(0, 0, 0, 0.06)',
@@ -85,7 +91,8 @@ export default {
         'glow-lg': '0 0 40px rgba(34, 211, 238, 0.35)',
         card: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06)',
         'card-hover': '0 10px 40px rgba(0, 0, 0, 0.08)',
-        'inner-glow': 'inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+        'inner-glow': 'inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+        'float': '0 20px 40px rgba(0, 0, 0, 0.15)'
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
@@ -109,7 +116,14 @@ export default {
         'bounce-subtle': 'bounceSubtle 0.3s ease-out',
         'spin-slow': 'spin 3s linear infinite',
         'float': 'float 6s ease-in-out infinite',
-        'pulse-ring': 'pulseRing 2s ease-in-out infinite'
+        'pulse-ring': 'pulseRing 2s ease-in-out infinite',
+        // New micro-interaction animations
+        'btn-press': 'btnPress 0.15s ease-out',
+        'btn-success': 'btnSuccess 0.4s ease-out',
+        'list-item-in': 'listItemIn 0.3s ease-out',
+        'list-item-out': 'listItemOut 0.2s ease-in',
+        'page-enter': 'pageEnter 0.35s ease-out',
+        'shake': 'shake 0.4s ease-out'
       },
       keyframes: {
         fadeIn: {
@@ -156,6 +170,36 @@ export default {
           '0%': { transform: 'scale(1)', opacity: '0.5' },
           '50%': { transform: 'scale(1.05)', opacity: '0.8' },
           '100%': { transform: 'scale(1)', opacity: '0.5' }
+        },
+        // New micro-interaction keyframes
+        btnPress: {
+          '0%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(0.97)' },
+          '100%': { transform: 'scale(1)' }
+        },
+        btnSuccess: {
+          '0%': { transform: 'scale(1)' },
+          '30%': { transform: 'scale(1.05)' },
+          '100%': { transform: 'scale(1)' }
+        },
+        listItemIn: {
+          '0%': { opacity: '0', transform: 'translateX(-10px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' }
+        },
+        listItemOut: {
+          '0%': { opacity: '1', transform: 'translateX(0)' },
+          '100%': { opacity: '0', transform: 'translateX(10px)' }
+        },
+        pageEnter: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' }
+        },
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '20%': { transform: 'translateX(-4px)' },
+          '40%': { transform: 'translateX(4px)' },
+          '60%': { transform: 'translateX(-4px)' },
+          '80%': { transform: 'translateX(4px)' }
         }
       },
       backdropBlur: {
@@ -166,7 +210,14 @@ export default {
         14: '0.14',
         16: '0.16'
       },
+      // Unified border-radius tokens
       borderRadius: {
+        'sm': '8px',
+        'md': '12px',
+        'lg': '16px',
+        'xl': '24px',
+        '2xl': '32px',
+        '3xl': '40px',
         '4xl': '2rem'
       },
       zIndex: {
@@ -175,6 +226,18 @@ export default {
         modal: '200',
         toast: '300',
         tooltip: '400'
+      },
+      // Transition timing functions
+      transitionTimingFunction: {
+        'out-expo': 'cubic-bezier(0.19, 1, 0.22, 1)',
+        'in-expo': 'cubic-bezier(0.95, 0.05, 0.795, 0.035)',
+        'out-back': 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+      },
+      // Transition durations
+      transitionDuration: {
+        'fast': '150ms',
+        'normal': '250ms',
+        'slow': '350ms'
       }
     }
   },

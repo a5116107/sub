@@ -86,7 +86,7 @@ onMounted(async () => {
 
 <template>
   <NavigationProgress />
-  <RouterView v-slot="{ Component }">
+  <RouterView v-slot="{ Component, route }">
     <Transition
       name="page"
       mode="out-in"
@@ -97,7 +97,9 @@ onMounted(async () => {
       leave-from-class="opacity-100 translate-y-0"
       leave-to-class="opacity-0 -translate-y-2"
     >
-      <component :is="Component" />
+      <div :key="route.fullPath">
+        <component :is="Component" />
+      </div>
     </Transition>
   </RouterView>
   <Toast />

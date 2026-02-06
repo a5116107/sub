@@ -2,16 +2,19 @@ package service
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGeminiOAuthService_GenerateAuthURL_RedirectURIStrategy(t *testing.T) {
-	t.Parallel()
+	t.Setenv(geminicli.GeminiCLIBuiltinOAuthClientSecretEnvVar, "test-builtin-secret")
 
 	type testCase struct {
 		name          string
@@ -127,4 +130,27 @@ func TestGeminiOAuthService_GenerateAuthURL_RedirectURIStrategy(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFetchProjectIDFromResourceManager_TooLarge(t *testing.T) {
+	// Not parallel: overrides package-level URL.
+	prev := googleResourceManagerProjectsURL
+	prevAllow := googleResourceManagerAllowPrivateHosts
+	t.Cleanup(func() {
+		googleResourceManagerProjectsURL = prev
+		googleResourceManagerAllowPrivateHosts = prevAllow
+	})
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(make([]byte, (2<<20)+1))
+	}))
+	defer srv.Close()
+
+	googleResourceManagerProjectsURL = srv.URL
+	googleResourceManagerAllowPrivateHosts = true
+
+	_, err := fetchProjectIDFromResourceManager(context.Background(), "at", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "too large")
 }

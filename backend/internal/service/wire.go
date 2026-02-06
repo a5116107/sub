@@ -81,6 +81,20 @@ func ProvideBillingReconcileService(
 	return svc
 }
 
+// ProvideBillingSpoolService creates and starts BillingSpoolService when enabled.
+func ProvideBillingSpoolService(
+	entClient *dbent.Client,
+	usageLogRepo UsageLogRepository,
+	userRepo UserRepository,
+	userSubRepo UserSubscriptionRepository,
+	billingCacheService *BillingCacheService,
+	cfg *config.Config,
+) *BillingSpoolService {
+	svc := NewBillingSpoolService(entClient, usageLogRepo, userRepo, userSubRepo, billingCacheService, cfg)
+	svc.Start()
+	return svc
+}
+
 // ProvideAccountExpiryService creates and starts AccountExpiryService.
 func ProvideAccountExpiryService(accountRepo AccountRepository) *AccountExpiryService {
 	svc := NewAccountExpiryService(accountRepo, time.Minute)
@@ -243,6 +257,7 @@ var ProviderSet = wire.NewSet(
 	ProvidePricingService,
 	NewBillingService,
 	NewBillingCacheService,
+	ProvideBillingSpoolService,
 	ProvideBillingReconcileService,
 	NewAnnouncementService,
 	NewAdminService,

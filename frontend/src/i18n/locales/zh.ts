@@ -255,6 +255,7 @@ export default {
     ops: '运维监控',
     promoCodes: '优惠码',
     settings: '系统设置',
+    modelPricing: '模型定价',
     myAccount: '我的账户',
     lightMode: '浅色模式',
     darkMode: '深色模式',
@@ -3275,6 +3276,37 @@ export default {
         downloadChart: '下载',
         downloadChartHint: '下载图表图片'
       }
+    },
+
+    // Model Pricing
+    modelPricing: {
+      title: '模型定价',
+      description: '管理计费使用的按模型 Token 单价（model_pricing.json）',
+      status: '状态',
+      modelCount: '模型数量',
+      lastUpdated: '最近更新',
+      localHash: '本地哈希',
+      override: '本地覆盖',
+      overrideHint: '开启后将停止从远程自动同步，避免覆盖你上传的定价文件。',
+      download: '下载当前定价文件',
+      import: '上传导入',
+      importHint: '支持上传 LiteLLM 定价 JSON（model -> pricing object）。导入后立即生效。',
+      syncRemote: '从远程同步',
+      syncHint: '从配置的 remote_url 下载最新定价（会覆盖本地）。',
+      refreshFailed: '刷新失败',
+      importFailed: '导入失败',
+      syncFailed: '同步失败',
+      downloadFailed: '下载失败',
+      editor: '在线编辑',
+      editorHint: '直接在页面内编辑 model_pricing.json，保存后立即生效。',
+      editorPlaceholder: '点击“加载当前配置”读取当前 model_pricing.json（或直接粘贴 JSON）。',
+      loadCurrent: '加载当前配置',
+      formatJson: '格式化 JSON',
+      invalidJson: 'JSON 格式不正确',
+      loadFailed: '加载失败',
+      saveFailed: '保存失败',
+      unsavedChanges: '有未保存的修改',
+      savedHint: '已与服务器同步'
     },
 
     // Settings

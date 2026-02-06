@@ -76,9 +76,11 @@ func (s *AccountTestService) validateUpstreamBaseURL(raw string) (string, error)
 		return urlvalidator.ValidateURLFormat(raw, s.cfg.Security.URLAllowlist.AllowInsecureHTTP)
 	}
 	normalized, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
-		AllowedHosts:     s.cfg.Security.URLAllowlist.UpstreamHosts,
+		AllowedHosts:     chooseAllowlist(s.cfg.Security.URLAllowlist.OpenAIHosts, s.cfg.Security.URLAllowlist.UpstreamHosts),
 		RequireAllowlist: true,
 		AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
+		AllowPorts:       []int{443},
+		RequireNoPath:    true,
 	})
 	if err != nil {
 		return "", err

@@ -24,6 +24,8 @@ type BillingCache interface {
 	UpdateSubscriptionUsage(ctx context.Context, userID, groupID int64, cost float64) error
 	ReserveSubscriptionUsage(ctx context.Context, userID, groupID int64, reserveUSD float64, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64) (int, error)
 	FinalizeSubscriptionUsage(ctx context.Context, userID, groupID int64, reservedUSD, actualUSD float64) error
+	ReserveSubscriptionUsageByKey(ctx context.Context, userID, groupID int64, key string, reserveUSD float64, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64) (int, error)
+	FinalizeSubscriptionUsageByKey(ctx context.Context, userID, groupID int64, key string, reservedUSD, actualUSD float64) error
 	InvalidateSubscriptionCache(ctx context.Context, userID, groupID int64) error
 }
 
@@ -187,7 +189,8 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	// 2. Missing pricing policy
 	policy := strings.ToLower(strings.TrimSpace(s.cfg.Pricing.MissingPolicy))
 	if policy == "" {
-		policy = "fallback_any"
+		// Safer default: only Claude-family models fall back; unknown non-Claude models must error.
+		policy = "fallback_claude_only"
 	}
 	switch policy {
 	case "fallback_any":

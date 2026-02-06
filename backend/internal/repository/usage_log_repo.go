@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
 
@@ -27,6 +28,28 @@ const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, 
 type usageLogRepository struct {
 	client *dbent.Client
 	sql    sqlExecutor
+}
+
+func truncateRunes(s string, max int) string {
+	if max <= 0 || s == "" {
+		return ""
+	}
+	count := 0
+	for i := range s {
+		if count == max {
+			return s[:i]
+		}
+		count++
+	}
+	return s
+}
+
+func sanitizeUsageLogString(s string, max int) string {
+	s = strings.TrimSpace(strings.ToValidUTF8(s, ""))
+	if s == "" {
+		return ""
+	}
+	return truncateRunes(s, max)
 }
 
 func NewUsageLogRepository(client *dbent.Client, sqlDB *sql.DB) service.UsageLogRepository {
@@ -78,8 +101,49 @@ func (r *usageLogRepository) Create(ctx context.Context, log *service.UsageLog) 
 		createdAt = time.Now()
 	}
 
-	requestID := strings.TrimSpace(log.RequestID)
+	requestID := sanitizeUsageLogString(log.RequestID, 64)
+	if requestID == "" {
+		requestID = uuid.New().String()
+	}
 	log.RequestID = requestID
+
+	log.Model = sanitizeUsageLogString(log.Model, 100)
+	if log.Model == "" {
+		log.Model = "unknown"
+	}
+
+	if log.BilledModel != nil {
+		v := sanitizeUsageLogString(*log.BilledModel, 100)
+		if v == "" {
+			log.BilledModel = nil
+		} else {
+			log.BilledModel = &v
+		}
+	}
+	if log.UserAgent != nil {
+		v := sanitizeUsageLogString(*log.UserAgent, 512)
+		if v == "" {
+			log.UserAgent = nil
+		} else {
+			log.UserAgent = &v
+		}
+	}
+	if log.IPAddress != nil {
+		v := sanitizeUsageLogString(*log.IPAddress, 45)
+		if v == "" {
+			log.IPAddress = nil
+		} else {
+			log.IPAddress = &v
+		}
+	}
+	if log.ImageSize != nil {
+		v := sanitizeUsageLogString(*log.ImageSize, 10)
+		if v == "" {
+			log.ImageSize = nil
+		} else {
+			log.ImageSize = &v
+		}
+	}
 
 	rateMultiplier := log.RateMultiplier
 
@@ -137,16 +201,11 @@ func (r *usageLogRepository) Create(ctx context.Context, log *service.UsageLog) 
 	imageSize := nullString(log.ImageSize)
 	billedModel := nullString(log.BilledModel)
 
-	var requestIDArg any
-	if requestID != "" {
-		requestIDArg = requestID
-	}
-
 	args := []any{
 		log.UserID,
 		log.APIKeyID,
 		log.AccountID,
-		requestIDArg,
+		requestID,
 		log.Model,
 		billedModel,
 		groupID,

@@ -27,8 +27,21 @@
         </div>
       </div>
 
-      <!-- Right: Docs + Language + Subscriptions + Balance + User Dropdown -->
+      <!-- Right: Search + Docs + Language + Subscriptions + Balance + User Dropdown -->
       <div class="flex items-center gap-3">
+        <!-- Command Palette Trigger -->
+        <button
+          v-if="user"
+          @click="openCommandPalette"
+          class="hidden items-center gap-2 rounded-xl border border-gray-200 bg-white/50 px-3 py-1.5 text-sm text-gray-500 transition-all hover:border-gray-300 hover:bg-white dark:border-dark-600 dark:bg-dark-800/50 dark:text-gray-400 dark:hover:border-dark-500 dark:hover:bg-dark-800 sm:flex"
+        >
+          <Icon name="search" size="sm" />
+          <span class="hidden md:inline">{{ t('commandPalette.search') }}</span>
+          <kbd class="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-dark-700">
+            <span class="text-xs">{{ isMac ? '⌘' : 'Ctrl+' }}</span>K
+          </kbd>
+        </button>
+
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
 
@@ -218,6 +231,9 @@
       </div>
     </div>
   </header>
+
+  <!-- Command Palette -->
+  <CommandPalette ref="commandPaletteRef" />
 </template>
 
 <script setup lang="ts">
@@ -228,6 +244,7 @@ import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
+import CommandPalette from '@/components/common/navigation/CommandPalette.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const router = useRouter()
@@ -240,9 +257,19 @@ const onboardingStore = useOnboardingStore()
 const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
+const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => appStore.docUrl)
 const docUrlIsInternal = computed(() => docUrl.value.startsWith('/'))
+
+// Detect Mac for keyboard shortcut display
+const isMac = computed(() => {
+  return typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+})
+
+const openCommandPalette = () => {
+  commandPaletteRef.value?.open()
+}
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {

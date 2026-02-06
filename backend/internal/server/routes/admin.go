@@ -56,6 +56,9 @@ func RegisterAdminRoutes(
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
+		// 模型定价（计费用）
+		registerModelPricingRoutes(admin, h)
+
 		// 文档管理
 		registerDocsRoutes(admin, h)
 
@@ -180,6 +183,17 @@ func registerDocsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 		docs.GET("/:key", h.Admin.Setting.GetDocsPage)
 		docs.PUT("/:key", h.Admin.Setting.UpdateDocsPage)
+	}
+}
+
+func registerModelPricingRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	pricing := admin.Group("/model-pricing")
+	{
+		pricing.GET("/status", h.Admin.ModelPricing.GetStatus)
+		pricing.GET("/download", h.Admin.ModelPricing.Download)
+		pricing.POST("/import", h.Admin.ModelPricing.Import)
+		pricing.PUT("/override", h.Admin.ModelPricing.SetOverride)
+		pricing.POST("/sync", h.Admin.ModelPricing.Sync)
 	}
 }
 

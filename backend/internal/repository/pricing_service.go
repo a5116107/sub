@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -15,6 +14,11 @@ import (
 type pricingRemoteClient struct {
 	httpClient *http.Client
 }
+
+const (
+	maxPricingJSONBytes int64 = 5 << 20  // 5 MiB
+	maxPricingHashBytes int64 = 64 << 10 // 64 KiB
+)
 
 // NewPricingRemoteClient 创建定价数据远程客户端
 // proxyURL 为空时直连，支持 http/https/socks5/socks5h 协议
@@ -47,7 +51,7 @@ func (c *pricingRemoteClient) FetchPricingJSON(ctx context.Context, url string) 
 		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	return io.ReadAll(resp.Body)
+	return readAllWithLimit(resp.Body, maxPricingJSONBytes)
 }
 
 func (c *pricingRemoteClient) FetchHashText(ctx context.Context, url string) (string, error) {
@@ -66,7 +70,7 @@ func (c *pricingRemoteClient) FetchHashText(ctx context.Context, url string) (st
 		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readAllWithLimit(resp.Body, maxPricingHashBytes)
 	if err != nil {
 		return "", err
 	}

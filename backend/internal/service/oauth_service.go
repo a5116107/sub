@@ -251,17 +251,20 @@ func (s *OAuthService) exchangeCodeForToken(ctx context.Context, code, codeVerif
 
 	if tokenResp.Organization != nil && tokenResp.Organization.UUID != "" {
 		tokenInfo.OrgUUID = tokenResp.Organization.UUID
-		log.Printf("[OAuth] Got org_uuid: %s", tokenInfo.OrgUUID)
 	}
 	if tokenResp.Account != nil {
 		if tokenResp.Account.UUID != "" {
 			tokenInfo.AccountUUID = tokenResp.Account.UUID
-			log.Printf("[OAuth] Got account_uuid: %s", tokenInfo.AccountUUID)
 		}
 		if tokenResp.Account.EmailAddress != "" {
 			tokenInfo.EmailAddress = tokenResp.Account.EmailAddress
-			log.Printf("[OAuth] Got email_address: %s", tokenInfo.EmailAddress)
 		}
+	}
+
+	// Privacy: avoid logging raw identifiers (email/org/account UUID).
+	if tokenInfo.OrgUUID != "" || tokenInfo.AccountUUID != "" || tokenInfo.EmailAddress != "" {
+		log.Printf("[OAuth] Token exchange resolved identity fields (redacted): org=%t account=%t email=%t",
+			tokenInfo.OrgUUID != "", tokenInfo.AccountUUID != "", tokenInfo.EmailAddress != "")
 	}
 
 	return tokenInfo, nil

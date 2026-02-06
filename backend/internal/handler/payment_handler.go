@@ -125,6 +125,10 @@ func paymentOrderToResponse(order *service.PaymentOrder) *paymentOrderResponse {
 func (h *PaymentHandler) PayPalWebhook(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
+		if maxErr, ok := extractMaxBytesError(err); ok {
+			response.Error(c, http.StatusRequestEntityTooLarge, buildBodyTooLargeMessage(maxErr.Limit))
+			return
+		}
 		response.BadRequest(c, "Invalid body")
 		return
 	}
@@ -139,6 +143,10 @@ func (h *PaymentHandler) PayPalWebhook(c *gin.Context) {
 func (h *PaymentHandler) CreemWebhook(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
+		if maxErr, ok := extractMaxBytesError(err); ok {
+			response.Error(c, http.StatusRequestEntityTooLarge, buildBodyTooLargeMessage(maxErr.Limit))
+			return
+		}
 		response.BadRequest(c, "Invalid body")
 		return
 	}

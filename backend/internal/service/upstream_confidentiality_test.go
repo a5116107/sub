@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/gin-gonic/gin"
 )
 
@@ -41,11 +42,19 @@ func TestQwenGatewayService_UpstreamErrorDoesNotLeakDetailsToClient(t *testing.T
 	gin.SetMode(gin.TestMode)
 
 	upstreamErr := errors.New("proxyconnect tcp: dial tcp 192.0.2.1:8080: connect: connection refused?access_token=SECRET&refresh_token=SECRET")
-	svc := NewQwenGatewayService(nil, errorHTTPUpstream{err: upstreamErr}, nil, nil)
+	svc := NewQwenGatewayService(nil, errorHTTPUpstream{err: upstreamErr}, &config.Config{
+		Security: config.SecurityConfig{
+			URLAllowlist: config.URLAllowlistConfig{
+				Enabled:       true,
+				UpstreamHosts: []string{"portal.qwen.ai"},
+			},
+		},
+	}, nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"test"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
 
 	account := &Account{
 		ID:       1,
@@ -54,6 +63,7 @@ func TestQwenGatewayService_UpstreamErrorDoesNotLeakDetailsToClient(t *testing.T
 		Type:     AccountTypeAPIKey,
 		Credentials: map[string]any{
 			"api_key": "sk-test",
+			"base_url": "https://portal.qwen.ai",
 		},
 	}
 
@@ -78,11 +88,19 @@ func TestIFlowGatewayService_UpstreamErrorDoesNotLeakDetailsToClient(t *testing.
 	gin.SetMode(gin.TestMode)
 
 	upstreamErr := errors.New("dial tcp 198.51.100.10:443: i/o timeout?key=SECRET")
-	svc := NewIFlowGatewayService(errorHTTPUpstream{err: upstreamErr}, nil)
+	svc := NewIFlowGatewayService(errorHTTPUpstream{err: upstreamErr}, &config.Config{
+		Security: config.SecurityConfig{
+			URLAllowlist: config.URLAllowlistConfig{
+				Enabled:       true,
+				UpstreamHosts: []string{"apis.iflow.cn"},
+			},
+		},
+	})
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"test"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
 
 	account := &Account{
 		ID:       2,
@@ -91,6 +109,7 @@ func TestIFlowGatewayService_UpstreamErrorDoesNotLeakDetailsToClient(t *testing.
 		Type:     AccountTypeAPIKey,
 		Credentials: map[string]any{
 			"api_key": "sk-test",
+			"base_url": "https://apis.iflow.cn",
 		},
 	}
 
@@ -110,4 +129,3 @@ func TestIFlowGatewayService_UpstreamErrorDoesNotLeakDetailsToClient(t *testing.
 		}
 	}
 }
-

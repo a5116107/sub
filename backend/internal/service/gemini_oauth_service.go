@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"regexp"
@@ -81,8 +80,7 @@ func (s *GeminiOAuthService) GetOAuthConfig() *GeminiOAuthCapabilities {
 	// AI Studio OAuth is only enabled when the operator configures a custom OAuth client.
 	clientID := strings.TrimSpace(s.cfg.Gemini.OAuth.ClientID)
 	clientSecret := strings.TrimSpace(s.cfg.Gemini.OAuth.ClientSecret)
-	enabled := clientID != "" && clientSecret != "" &&
-		(clientID != geminicli.GeminiCLIOAuthClientID || clientSecret != geminicli.GeminiCLIOAuthClientSecret)
+	enabled := clientID != "" && clientSecret != "" && clientID != geminicli.GeminiCLIOAuthClientID
 
 	return &GeminiOAuthCapabilities{
 		AIStudioOAuthEnabled: enabled,
@@ -155,8 +153,7 @@ func (s *GeminiOAuthService) GenerateAuthURL(ctx context.Context, proxyID *int64
 		return nil, err
 	}
 
-	isBuiltinClient := effectiveCfg.ClientID == geminicli.GeminiCLIOAuthClientID &&
-		effectiveCfg.ClientSecret == geminicli.GeminiCLIOAuthClientSecret
+	isBuiltinClient := effectiveCfg.ClientID == geminicli.GeminiCLIOAuthClientID
 
 	// AI Studio OAuth requires a user-provided OAuth client (built-in Gemini CLI client is scope-restricted).
 	if oauthType == "ai_studio" && isBuiltinClient {
@@ -489,8 +486,7 @@ func (s *GeminiOAuthService) ExchangeCode(ctx context.Context, input *GeminiExch
 		if err != nil {
 			return nil, err
 		}
-		isBuiltinClient := effectiveCfg.ClientID == geminicli.GeminiCLIOAuthClientID &&
-			effectiveCfg.ClientSecret == geminicli.GeminiCLIOAuthClientSecret
+		isBuiltinClient := effectiveCfg.ClientID == geminicli.GeminiCLIOAuthClientID
 		if isBuiltinClient {
 			return nil, fmt.Errorf("AI Studio OAuth requires a custom OAuth Client. Please use an AI Studio API Key account, or configure GEMINI_OAUTH_CLIENT_ID / GEMINI_OAUTH_CLIENT_SECRET and re-authorize")
 		}
@@ -545,8 +541,7 @@ func (s *GeminiOAuthService) ExchangeCode(ctx context.Context, input *GeminiExch
 			projectID, tierID, err = s.fetchProjectID(ctx, tokenResp.AccessToken, proxyURL)
 			if err != nil {
 				// 记录警告但不阻断流程，允许后续补充 project_id
-				fmt.Printf("[GeminiOAuth] Warning: Failed to fetch project_id during token exchange: %v\n", err)
-				log.Printf("[GeminiOAuth] WARNING: Failed to fetch project_id: %v", err)
+				log.Printf("[GeminiOAuth] WARN: failed to fetch project_id during token exchange: %v", err)
 			} else {
 				log.Printf("[GeminiOAuth] Successfully fetched project_id: %s, tier_id: %s", projectID, tierID)
 			}
@@ -555,8 +550,7 @@ func (s *GeminiOAuthService) ExchangeCode(ctx context.Context, input *GeminiExch
 			// 用户手动填了 project_id，仍需调用 LoadCodeAssist 获取 tierID
 			_, fetchedTierID, err := s.fetchProjectID(ctx, tokenResp.AccessToken, proxyURL)
 			if err != nil {
-				fmt.Printf("[GeminiOAuth] Warning: Failed to fetch tierID: %v\n", err)
-				log.Printf("[GeminiOAuth] WARNING: Failed to fetch tier_id: %v", err)
+				log.Printf("[GeminiOAuth] WARN: failed to fetch tierID: %v", err)
 			} else {
 				tierID = fetchedTierID
 				log.Printf("[GeminiOAuth] Successfully fetched tier_id: %s", tierID)
@@ -602,8 +596,7 @@ func (s *GeminiOAuthService) ExchangeCode(ctx context.Context, input *GeminiExch
 		tierID, storageInfo, err = s.FetchGoogleOneTier(ctx, tokenResp.AccessToken, proxyURL)
 		if err != nil {
 			// Log warning but don't block - use fallback
-			fmt.Printf("[GeminiOAuth] Warning: Failed to fetch Drive tier: %v\n", err)
-			log.Printf("[GeminiOAuth] WARNING: Failed to fetch Drive tier: %v", err)
+			log.Printf("[GeminiOAuth] WARN: failed to fetch Drive tier: %v", err)
 			tierID = ""
 		} else {
 			log.Printf("[GeminiOAuth] Successfully fetched Drive tier: %s", tierID)
@@ -623,7 +616,7 @@ func (s *GeminiOAuthService) ExchangeCode(ctx context.Context, input *GeminiExch
 				log.Printf("[GeminiOAuth] Using default tier_id: %s", tierID)
 			}
 		}
-		fmt.Printf("[GeminiOAuth] Google One tierID after normalization: %s\n", tierID)
+		log.Printf("[GeminiOAuth] INFO: google one tierID normalized: %s", tierID)
 
 		// Store Drive info in extra field for caching
 		if storageInfo != nil {
@@ -817,7 +810,7 @@ func (s *GeminiOAuthService) RefreshAccountToken(ctx context.Context, account *A
 		if needDetect {
 			projectID, tierID, err := s.fetchProjectID(ctx, tokenInfo.AccessToken, proxyURL)
 			if err != nil {
-				fmt.Printf("[GeminiOAuth] Warning: failed to auto-detect project/tier: %v\n", err)
+				log.Printf("[GeminiOAuth] WARN: failed to auto-detect project/tier: %v", err)
 			} else {
 				if strings.TrimSpace(tokenInfo.ProjectID) == "" && projectID != "" {
 					tokenInfo.ProjectID = projectID
@@ -902,9 +895,9 @@ func (s *GeminiOAuthService) BuildAccountCredentials(tokenInfo *GeminiTokenInfo)
 		// Validate tier_id before storing
 		if err := validateTierID(tokenInfo.TierID); err == nil {
 			creds["tier_id"] = tokenInfo.TierID
-			fmt.Printf("[GeminiOAuth] Storing tier_id: %s\n", tokenInfo.TierID)
+			log.Printf("[GeminiOAuth] INFO: storing tier_id: %s", tokenInfo.TierID)
 		} else {
-			fmt.Printf("[GeminiOAuth] Invalid tier_id %s: %v\n", tokenInfo.TierID, err)
+			log.Printf("[GeminiOAuth] WARN: invalid tier_id %q: %v", tokenInfo.TierID, err)
 		}
 		// Silently skip invalid tier_id (don't block account creation)
 	}
@@ -1009,8 +1002,11 @@ type googleCloudProjectsResponse struct {
 	Projects []googleCloudProject `json:"projects"`
 }
 
+var googleResourceManagerProjectsURL = "https://cloudresourcemanager.googleapis.com/v1/projects"
+var googleResourceManagerAllowPrivateHosts = false
+
 func fetchProjectIDFromResourceManager(ctx context.Context, accessToken, proxyURL string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://cloudresourcemanager.googleapis.com/v1/projects", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, googleResourceManagerProjectsURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create resource manager request: %w", err)
 	}
@@ -1022,6 +1018,7 @@ func fetchProjectIDFromResourceManager(ctx context.Context, accessToken, proxyUR
 		ProxyURL:           strings.TrimSpace(proxyURL),
 		Timeout:            30 * time.Second,
 		ValidateResolvedIP: true,
+		AllowPrivateHosts:  googleResourceManagerAllowPrivateHosts,
 	})
 	if err != nil {
 		client = &http.Client{Timeout: 30 * time.Second}
@@ -1033,7 +1030,8 @@ func fetchProjectIDFromResourceManager(ctx context.Context, accessToken, proxyUR
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
+	const maxResourceManagerProjectsBytes int64 = 2 << 20 // 2 MiB
+	bodyBytes, err := readAllWithLimit(resp.Body, maxResourceManagerProjectsBytes)
 	if err != nil {
 		return "", fmt.Errorf("failed to read resource manager response: %w", err)
 	}

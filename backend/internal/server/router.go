@@ -47,6 +47,17 @@ func SetupRouter(
 		}
 	}
 
+	// Serve v2 frontend (web-app) at /v2/ path
+	if web.HasV2Frontend() {
+		v2Server, err := web.NewV2FrontendServer(settingService)
+		if err != nil {
+			log.Printf("Warning: Failed to create v2 frontend server: %v", err)
+		} else {
+			r.Use(v2Server.V2Middleware())
+			log.Println("V2 frontend (web-app) enabled at /v2/")
+		}
+	}
+
 	// 注册路由
 	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, cfg, redisClient)
 
@@ -71,6 +82,7 @@ func registerRoutes(
 
 	// API v1
 	v1 := r.Group("/api/v1")
+	v1.Use(middleware2.RequestBodyLimit(cfg.Server.APIMaxBodySize))
 
 	// 注册各模块路由
 	routes.RegisterAuthRoutes(v1, h, jwtAuth, redisClient)

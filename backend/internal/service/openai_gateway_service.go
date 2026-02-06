@@ -22,11 +22,11 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 const (
@@ -166,6 +166,10 @@ type OpenAIForwardResult struct {
 	Stream       bool
 	Duration     time.Duration
 	FirstTokenMs *int
+
+	// UsageLogID is populated after usage log persistence; used to safely link reservation finalization
+	// to the correct async RecordUsage invocation.
+	UsageLogID int64
 }
 
 // OpenAIGatewayService handles OpenAI API gateway operations
@@ -182,6 +186,7 @@ type OpenAIGatewayService struct {
 	billingService      *BillingService
 	rateLimitService    *RateLimitService
 	billingCacheService *BillingCacheService
+	billingSpoolService *BillingSpoolService
 	httpUpstream        HTTPUpstream
 	deferredService     *DeferredService
 	openAITokenProvider *OpenAITokenProvider
@@ -202,6 +207,7 @@ func NewOpenAIGatewayService(
 	billingService *BillingService,
 	rateLimitService *RateLimitService,
 	billingCacheService *BillingCacheService,
+	billingSpoolService *BillingSpoolService,
 	httpUpstream HTTPUpstream,
 	deferredService *DeferredService,
 	openAITokenProvider *OpenAITokenProvider,
@@ -220,6 +226,7 @@ func NewOpenAIGatewayService(
 		billingService:      billingService,
 		rateLimitService:    rateLimitService,
 		billingCacheService: billingCacheService,
+		billingSpoolService: billingSpoolService,
 		httpUpstream:        httpUpstream,
 		deferredService:     deferredService,
 		openAITokenProvider: openAITokenProvider,
@@ -1083,6 +1090,39 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
+	// Pricing preflight: fail-close before forwarding when pricing is missing.
+	// This prevents "upstream success but $0 billed" when cost calculation fails later.
+	if s != nil && s.cfg != nil && s.cfg.RunMode != config.RunModeSimple {
+		pricingModel := strings.TrimSpace(mappedModel)
+		if pricingModel != "" {
+			if s.billingService == nil {
+				if c != nil {
+					c.JSON(http.StatusServiceUnavailable, gin.H{
+						"type": "error",
+						"error": gin.H{
+							"type":    "billing_error",
+							"message": "Billing service temporarily unavailable. Please retry later.",
+						},
+					})
+				}
+				return nil, fmt.Errorf("billing service not initialized")
+			}
+			if _, err := s.billingService.GetModelPricing(pricingModel); err != nil {
+				log.Printf("[Billing] Missing pricing for model=%s: %v", pricingModel, err)
+				if c != nil {
+					c.JSON(http.StatusServiceUnavailable, gin.H{
+						"type": "error",
+						"error": gin.H{
+							"type":    "billing_error",
+							"message": "Billing service temporarily unavailable. Please retry later.",
+						},
+					})
+				}
+				return nil, err
+			}
+		}
+	}
+
 	// Handle max_output_tokens based on platform and account type
 	if !isCodexCLI {
 		if maxOutputTokens, hasMaxOutputTokens := reqBody["max_output_tokens"]; hasMaxOutputTokens {
@@ -1719,7 +1759,7 @@ func (s *OpenAIGatewayService) parseSSEUsage(data string, usage *OpenAIUsage) {
 }
 
 func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*OpenAIUsage, error) {
-	body, err := io.ReadAll(resp.Body)
+	body, err := readAllWithLimit(resp.Body, maxUpstreamNonStreamingBodyBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -1885,9 +1925,11 @@ func (s *OpenAIGatewayService) validateUpstreamBaseURL(raw string) (string, erro
 		return normalized, nil
 	}
 	normalized, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
-		AllowedHosts:     s.cfg.Security.URLAllowlist.UpstreamHosts,
+		AllowedHosts:     chooseAllowlist(s.cfg.Security.URLAllowlist.OpenAIHosts, s.cfg.Security.URLAllowlist.UpstreamHosts),
 		RequireAllowlist: true,
 		AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
+		AllowPorts:       []int{443},
+		RequireNoPath:    true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("invalid base_url: %w", err)
@@ -1925,6 +1967,11 @@ type OpenAIRecordUsageInput struct {
 	UserAgent    string // 请求的 User-Agent
 	IPAddress    string // 请求的客户端 IP 地址
 	ReservedUSD  float64
+
+	// ReservedUsageLogID is an optional linkage to the usage log row that corresponds to the reservation.
+	// When set, we only finalize (release/convert) the reservation if we successfully created that usage log.
+	// This prevents a stale async RecordUsage retry from releasing a reservation created by a different request.
+	ReservedUsageLogID int64
 }
 
 // RecordUsage records usage and deducts balance
@@ -1935,14 +1982,19 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	account := input.Account
 	subscription := input.Subscription
 
-	// Ensure a stable, non-empty RequestID for idempotency (usage_logs unique key).
-	clientRID, _ := ctx.Value(ctxkey.ClientRequestID).(string)
-	clientRID = strings.TrimSpace(clientRID)
-	providedRID, _ := ctx.Value(ctxkey.ClientRequestIDProvided).(bool)
-	if providedRID && clientRID != "" {
-		result.RequestID = clientRID
-	} else if strings.TrimSpace(result.RequestID) == "" && clientRID != "" {
-		result.RequestID = clientRID
+	// Billing idempotency key MUST NOT come from client headers (Idempotency-Key, X-Request-Id, etc).
+	// Prefer upstream request id; if missing, generate a server-side UUID.
+	result.RequestID = strings.TrimSpace(result.RequestID)
+	if result.RequestID == "" {
+		result.RequestID = uuid.New().String()
+	}
+
+	if s.billingService == nil {
+		log.Printf("[Billing] Billing service not initialized")
+		if s.deferredService != nil && account != nil {
+			s.deferredService.ScheduleLastUsedUpdate(account.ID)
+		}
+		return fmt.Errorf("billing service not initialized")
 	}
 
 	// 计算实际的新输入token（减去缓存读取的token）
@@ -1966,15 +2018,6 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		multiplier = apiKey.Group.RateMultiplier
 	}
 
-	pricingModel := strings.TrimSpace(result.BilledModel)
-	if pricingModel == "" {
-		pricingModel = result.Model
-	}
-	cost, err := s.billingService.CalculateCost(pricingModel, tokens, multiplier)
-	if err != nil {
-		cost = &CostBreakdown{ActualCost: 0}
-	}
-
 	// Determine billing type
 	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 	billingType := BillingTypeBalance
@@ -1982,10 +2025,14 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		billingType = BillingTypeSubscription
 	}
 
-	// If the handler reserved subscription quota, always finalize it to avoid leaking reservations.
+	// If the handler reserved subscription quota, always finalize it to avoid leaking reservations,
+	// even when we return early due to errors.
 	finalizedReservation := false
 	finalizeReservation := func(actualUSD float64) {
 		if finalizedReservation || !isSubscriptionBilling || input.ReservedUSD <= 0 || apiKey.GroupID == nil {
+			return
+		}
+		if input.ReservedUsageLogID > 0 && input.ReservedUsageLogID != result.UsageLogID {
 			return
 		}
 		finalizedReservation = true
@@ -1994,6 +2041,19 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		_ = s.billingCacheService.FinalizeSubscriptionReservation(ctx2, user.ID, *apiKey.GroupID, input.ReservedUSD, actualUSD)
 	}
 	defer finalizeReservation(0)
+
+	pricingModel := strings.TrimSpace(result.BilledModel)
+	if pricingModel == "" {
+		pricingModel = result.Model
+	}
+	cost, err := s.billingService.CalculateCost(pricingModel, tokens, multiplier)
+	if err != nil {
+		log.Printf("[Billing] Calculate cost failed: %v", err)
+		if s.deferredService != nil && account != nil {
+			s.deferredService.ScheduleLastUsedUpdate(account.ID)
+		}
+		return err
+	}
 
 	// Create usage log
 	durationMs := int(result.Duration.Milliseconds())
@@ -2043,28 +2103,93 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		usageLog.SubscriptionID = &subscription.ID
 	}
 
-	_, createErr := s.usageLogRepo.Create(ctx, usageLog)
-	if createErr != nil {
-		log.Printf("Create usage log failed: %v", createErr)
-		s.deferredService.ScheduleLastUsedUpdate(account.ID)
-		return nil
-	}
-	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		log.Printf("[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
-		s.deferredService.ScheduleLastUsedUpdate(account.ID)
-		return nil
-	}
-
+	// Compute billing deltas before inserting the usage log (used for durable spooling on failures).
 	subscriptionCostUSD := cost.TotalCost
 	if isSubscriptionBilling && s.ApplyRateMultiplierToSubscription() {
 		subscriptionCostUSD = cost.ActualCost
 	}
-
-	// Billing must be idempotent: apply charges at most once per usage_log_id.
 	deltaUSD := cost.ActualCost
 	if isSubscriptionBilling {
 		deltaUSD = subscriptionCostUSD
 	}
+
+	_, createErr := s.usageLogRepo.Create(ctx, usageLog)
+	if createErr != nil {
+		log.Printf("Create usage log failed: %v", createErr)
+
+		// Durable fallback: persist a billing event to disk for replay when infra recovers.
+		// If spooling succeeds, treat this as "recorded" to avoid silent billing bypass.
+		if s.billingSpoolService != nil && deltaUSD > 0 {
+			ev := &BillingSpoolEvent{
+				Usage: BillingSpoolUsageLog{
+					UserID:                usageLog.UserID,
+					APIKeyID:              usageLog.APIKeyID,
+					AccountID:             usageLog.AccountID,
+					RequestID:             usageLog.RequestID,
+					Model:                 usageLog.Model,
+					BilledModel:           usageLog.BilledModel,
+					GroupID:               usageLog.GroupID,
+					SubscriptionID:        usageLog.SubscriptionID,
+					InputTokens:           usageLog.InputTokens,
+					OutputTokens:          usageLog.OutputTokens,
+					CacheCreationTokens:   usageLog.CacheCreationTokens,
+					CacheReadTokens:       usageLog.CacheReadTokens,
+					CacheCreation5mTokens: usageLog.CacheCreation5mTokens,
+					CacheCreation1hTokens: usageLog.CacheCreation1hTokens,
+					InputCost:             usageLog.InputCost,
+					OutputCost:            usageLog.OutputCost,
+					CacheCreationCost:     usageLog.CacheCreationCost,
+					CacheReadCost:         usageLog.CacheReadCost,
+					TotalCost:             usageLog.TotalCost,
+					ActualCost:            usageLog.ActualCost,
+					RateMultiplier:        usageLog.RateMultiplier,
+					AccountRateMultiplier: usageLog.AccountRateMultiplier,
+					Stream:                usageLog.Stream,
+					DurationMs:            usageLog.DurationMs,
+					FirstTokenMs:          usageLog.FirstTokenMs,
+					UserAgent:             usageLog.UserAgent,
+					IPAddress:             usageLog.IPAddress,
+					ImageCount:            usageLog.ImageCount,
+					ImageSize:             usageLog.ImageSize,
+					CreatedAt:             usageLog.CreatedAt,
+				},
+				Billing: BillingSpoolBilling{
+					DeltaUSD:       deltaUSD,
+					BillingType:    billingType,
+					UserID:         user.ID,
+					APIKeyID:       apiKey.ID,
+					GroupID:        apiKey.GroupID,
+					SubscriptionID: usageLog.SubscriptionID,
+				},
+			}
+			if user != nil && user.InvitedByUserID != nil {
+				ev.InviterUserID = user.InvitedByUserID
+			}
+			if err := s.billingSpoolService.Enqueue(ctx, ev); err == nil {
+				log.Printf("[BillingSpool] queued billing event for request_id=%s api_key=%d", usageLog.RequestID, usageLog.APIKeyID)
+				if s.deferredService != nil {
+					s.deferredService.ScheduleLastUsedUpdate(account.ID)
+				}
+				return nil
+			}
+		}
+		if s.deferredService != nil {
+			s.deferredService.ScheduleLastUsedUpdate(account.ID)
+		}
+		return createErr
+	}
+	if result != nil {
+		result.UsageLogID = usageLog.ID
+	}
+	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
+		log.Printf("[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
+		if s.deferredService != nil {
+			s.deferredService.ScheduleLastUsedUpdate(account.ID)
+		}
+		return nil
+	}
+
+	// Billing must be idempotent: apply charges at most once per usage_log_id.
 	if deltaUSD > 0 {
 		entry := &BillingUsageEntry{
 			UsageLogID:  usageLog.ID,
@@ -2094,7 +2219,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 					log.Printf("Create billing usage entry failed: %v", err)
 				} else {
 					alreadyApplied, lockErr := func() (bool, error) {
-						rows, err := tx.Client().QueryContext(txCtx, "SELECT applied FROM billing_usage_entries WHERE id = $1 FOR UPDATE", entry.ID)
+						// Lock by idempotency key (usage_log_id) to ensure retries and concurrent workers
+						// serialize on the same logical billing entry.
+						rows, err := tx.Client().QueryContext(txCtx, "SELECT applied FROM billing_usage_entries WHERE usage_log_id = $1 FOR UPDATE", entry.UsageLogID)
 						if err != nil {
 							return false, err
 						}
@@ -2181,7 +2308,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		if appliedThisCall {
 			if isSubscriptionBilling {
 				finalizeReservation(appliedAmountUSD)
-				if apiKey.GroupID != nil {
+				// If we reserved subscription quota pre-forward, FinalizeSubscriptionReservation already
+				// increments cached usage. Avoid double-counting by only updating cache when no reservation was used.
+				if apiKey.GroupID != nil && input.ReservedUSD <= 0 {
 					s.billingCacheService.QueueUpdateSubscriptionUsage(user.ID, *apiKey.GroupID, appliedAmountUSD)
 				}
 			} else {

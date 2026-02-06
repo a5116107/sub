@@ -8,8 +8,8 @@
       class="h-screen w-full border-0"
       allowfullscreen
     ></iframe>
-    <!-- HTML mode - SECURITY: homeContent is admin-only setting, XSS risk is acceptable -->
-    <div v-else v-html="homeContent"></div>
+    <!-- HTML mode (sanitized) -->
+    <div v-else v-html="sanitizedHomeContent"></div>
   </div>
 
   <!-- Default Home Page -->
@@ -631,6 +631,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import DOMPurify from 'dompurify'
 import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import PricingPlanPerks from '@/components/pricing/PricingPlanPerks.vue'
@@ -655,6 +656,10 @@ const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle
 const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
 const docUrlIsInternal = computed(() => docUrl.value.startsWith('/'))
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
+const sanitizedHomeContent = computed(() => {
+  const raw = homeContent.value || ''
+  return DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } })
+})
 const landingPricingEnabled = computed(() => appStore.cachedPublicSettings?.landing_pricing_enabled ?? true)
 const pricingParseResult = computed(() =>
   parseLandingPricingConfig(appStore.cachedPublicSettings?.landing_pricing_config || '')

@@ -78,6 +78,23 @@ func (s *ClaudeUsageServiceSuite) TestFetchUsage_NonOK() {
 	require.ErrorContains(s.T(), err, "nope")
 }
 
+func (s *ClaudeUsageServiceSuite) TestFetchUsage_TooLarge() {
+	s.srv = newLocalTestServer(s.T(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(make([]byte, maxClaudeUsageBodyBytes+1))
+	}))
+
+	s.fetcher = &claudeUsageService{
+		usageURL:          s.srv.URL,
+		allowPrivateHosts: true,
+	}
+
+	_, err := s.fetcher.FetchUsage(context.Background(), "at", "")
+	require.Error(s.T(), err)
+	require.ErrorContains(s.T(), err, "too large")
+}
+
 func (s *ClaudeUsageServiceSuite) TestFetchUsage_BadJSON() {
 	s.srv = newLocalTestServer(s.T(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

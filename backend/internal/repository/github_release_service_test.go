@@ -162,6 +162,19 @@ func (s *GitHubReleaseServiceSuite) TestFetchChecksumFile_Non200() {
 	require.Error(s.T(), err, "expected error for non-200")
 }
 
+func (s *GitHubReleaseServiceSuite) TestFetchChecksumFile_TooLarge() {
+	s.srv = newLocalTestServer(s.T(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(bytes.Repeat([]byte("x"), int(maxGitHubChecksumBytes)+1))
+	}))
+
+	s.client = newTestGitHubReleaseClient()
+
+	_, err := s.client.FetchChecksumFile(context.Background(), s.srv.URL)
+	require.Error(s.T(), err, "expected error for oversized checksum")
+	require.Contains(s.T(), err.Error(), "too large")
+}
+
 func (s *GitHubReleaseServiceSuite) TestDownloadFile_ContextCancel() {
 	s.srv = newLocalTestServer(s.T(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-r.Context().Done()

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
@@ -194,7 +195,7 @@ func (s *accountRepoStub) BulkUpdate(ctx context.Context, ids []int64, updates A
 //   - Delete 方法不被调用（deletedIDs 为空）
 func TestAccountService_Delete_NotFound(t *testing.T) {
 	repo := &accountRepoStub{exists: false}
-	svc := &AccountService{accountRepo: repo}
+	svc := &AccountService{accountRepo: repo, cfg: &config.Config{}}
 
 	err := svc.Delete(context.Background(), 55)
 	require.ErrorIs(t, err, ErrAccountNotFound)
@@ -208,7 +209,7 @@ func TestAccountService_Delete_NotFound(t *testing.T) {
 //   - Delete 方法不被调用
 func TestAccountService_Delete_CheckError(t *testing.T) {
 	repo := &accountRepoStub{existsErr: errors.New("db down")}
-	svc := &AccountService{accountRepo: repo}
+	svc := &AccountService{accountRepo: repo, cfg: &config.Config{}}
 
 	err := svc.Delete(context.Background(), 55)
 	require.Error(t, err)
@@ -227,7 +228,7 @@ func TestAccountService_Delete_DeleteError(t *testing.T) {
 		exists:    true,
 		deleteErr: errors.New("delete failed"),
 	}
-	svc := &AccountService{accountRepo: repo}
+	svc := &AccountService{accountRepo: repo, cfg: &config.Config{}}
 
 	err := svc.Delete(context.Background(), 55)
 	require.Error(t, err)
@@ -243,7 +244,7 @@ func TestAccountService_Delete_DeleteError(t *testing.T) {
 //   - deletedIDs 记录了被删除的 ID
 func TestAccountService_Delete_Success(t *testing.T) {
 	repo := &accountRepoStub{exists: true}
-	svc := &AccountService{accountRepo: repo}
+	svc := &AccountService{accountRepo: repo, cfg: &config.Config{}}
 
 	err := svc.Delete(context.Background(), 55)
 	require.NoError(t, err)
