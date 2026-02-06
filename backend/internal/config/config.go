@@ -152,13 +152,15 @@ type PricingConfig struct {
 }
 
 type ServerConfig struct {
-	Host              string   `mapstructure:"host"`
-	Port              int      `mapstructure:"port"`
-	Mode              string   `mapstructure:"mode"`                // debug/release
-	ReadHeaderTimeout int      `mapstructure:"read_header_timeout"` // 读取请求头超时（秒）
-	IdleTimeout       int      `mapstructure:"idle_timeout"`        // 空闲连接超时（秒）
-	TrustedProxies    []string `mapstructure:"trusted_proxies"`     // 可信代理列表（CIDR/IP）
-	APIMaxBodySize    int64    `mapstructure:"api_max_body_size"`   // /api/v1 请求体大小限制
+	Host              string    `mapstructure:"host"`
+	Port              int       `mapstructure:"port"`
+	Mode              string    `mapstructure:"mode"`                // debug/release
+	ReadHeaderTimeout int       `mapstructure:"read_header_timeout"` // 读取请求头超时（秒）
+	IdleTimeout       int       `mapstructure:"idle_timeout"`        // 空闲连接超时（秒）
+	TrustedProxies    []string  `mapstructure:"trusted_proxies"`     // 可信代理列表（CIDR/IP）
+	APIMaxBodySize    int64     `mapstructure:"api_max_body_size"`   // /api/v1 请求体大小限制
+	EnableH2C         bool      `mapstructure:"enable_h2c"`          // 兼容旧配置：启用 HTTP/2 Cleartext
+	H2C               H2CConfig `mapstructure:"h2c"`                 // HTTP/2 Cleartext 详细配置
 
 	// FrontendBaseURL is used to generate security-sensitive links (password reset, OAuth redirect URIs).
 	// Example: "https://your-frontend.example.com"
@@ -170,6 +172,16 @@ type ServerConfig struct {
 	// DevAllowedFrontendHosts is an allowlist for derived frontend base URL hosts (debug-only).
 	// Values should be hostnames (optionally with wildcard prefix "*."), e.g. ["localhost","127.0.0.1"].
 	DevAllowedFrontendHosts []string `mapstructure:"dev_allowed_frontend_hosts"`
+}
+
+// H2CConfig HTTP/2 Cleartext 配置
+type H2CConfig struct {
+	Enabled                      bool   `mapstructure:"enabled"`                          // 是否启用 H2C
+	MaxConcurrentStreams         uint32 `mapstructure:"max_concurrent_streams"`           // 最大并发流数量
+	IdleTimeout                  int    `mapstructure:"idle_timeout"`                     // 空闲超时（秒）
+	MaxReadFrameSize             int    `mapstructure:"max_read_frame_size"`              // 最大帧大小（字节）
+	MaxUploadBufferPerConnection int    `mapstructure:"max_upload_buffer_per_connection"` // 每连接上传缓冲区（字节）
+	MaxUploadBufferPerStream     int    `mapstructure:"max_upload_buffer_per_stream"`     // 每流上传缓冲区（字节）
 }
 
 type CORSConfig struct {
@@ -893,7 +905,14 @@ func setDefaults() {
 	viper.SetDefault("server.read_header_timeout", 30) // 30秒读取请求头
 	viper.SetDefault("server.idle_timeout", 120)       // 120秒空闲超时
 	viper.SetDefault("server.trusted_proxies", []string{})
-	viper.SetDefault("server.api_max_body_size", int64(25*1024*1024)) // 25MiB (allows admin model pricing import default 20MiB)
+	viper.SetDefault("server.api_max_body_size", int64(25*1024*1024))      // 25MiB (allows admin model pricing import default 20MiB)
+	viper.SetDefault("server.enable_h2c", false)                           // 兼容旧配置：默认关闭 h2c
+	viper.SetDefault("server.h2c.enabled", false)                          // 默认关闭 h2c
+	viper.SetDefault("server.h2c.max_concurrent_streams", uint32(50))      // 50 并发流
+	viper.SetDefault("server.h2c.idle_timeout", 75)                        // 75 秒空闲超时
+	viper.SetDefault("server.h2c.max_read_frame_size", 1<<20)              // 1MiB 帧大小
+	viper.SetDefault("server.h2c.max_upload_buffer_per_connection", 2<<20) // 2MiB 连接缓冲
+	viper.SetDefault("server.h2c.max_upload_buffer_per_stream", 512<<10)   // 512KiB 流缓冲
 	viper.SetDefault("pricing.missing_policy", "fallback_claude_only")
 
 	// CORS
@@ -1534,6 +1553,24 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.APIMaxBodySize <= 0 {
 		return fmt.Errorf("server.api_max_body_size must be positive")
+	}
+	h2cEnabled := c.Server.EnableH2C || c.Server.H2C.Enabled
+	if h2cEnabled {
+		if c.Server.H2C.MaxConcurrentStreams == 0 {
+			return fmt.Errorf("server.h2c.max_concurrent_streams must be positive when h2c is enabled")
+		}
+		if c.Server.H2C.IdleTimeout <= 0 {
+			return fmt.Errorf("server.h2c.idle_timeout must be positive when h2c is enabled")
+		}
+		if c.Server.H2C.MaxReadFrameSize <= 0 {
+			return fmt.Errorf("server.h2c.max_read_frame_size must be positive when h2c is enabled")
+		}
+		if c.Server.H2C.MaxUploadBufferPerConnection <= 0 {
+			return fmt.Errorf("server.h2c.max_upload_buffer_per_connection must be positive when h2c is enabled")
+		}
+		if c.Server.H2C.MaxUploadBufferPerStream <= 0 {
+			return fmt.Errorf("server.h2c.max_upload_buffer_per_stream must be positive when h2c is enabled")
+		}
 	}
 	if strings.TrimSpace(c.Gateway.ConnectionPoolIsolation) != "" {
 		switch c.Gateway.ConnectionPoolIsolation {

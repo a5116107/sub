@@ -23,6 +23,33 @@ server:
   # Trusted proxies for X-Forwarded-For parsing (CIDR/IP). Empty disables trusted proxies.
   # 信任的代理地址（CIDR/IP 格式），用于解析 X-Forwarded-For 头。留空则禁用代理信任。
   trusted_proxies: []
+  # /api/v1 request body size limit in bytes
+  # /api/v1 请求体大小限制（字节）
+  api_max_body_size: 26214400
+  # Legacy flag for h2c enablement (prefer server.h2c.enabled)
+  # 兼容旧版 h2c 开关（优先使用 server.h2c.enabled）
+  enable_h2c: false
+  # HTTP/2 Cleartext (h2c) configuration
+  # HTTP/2 Cleartext (h2c) 配置
+  h2c:
+    # Enable HTTP/2 Cleartext for client connections
+    # 启用 HTTP/2 Cleartext 客户端连接
+    enabled: false
+    # Max concurrent streams per connection
+    # 每个连接的最大并发流数量
+    max_concurrent_streams: 50
+    # Idle timeout in seconds
+    # 空闲超时时间（秒）
+    idle_timeout: 75
+    # Max frame size in bytes (16KB~16MB)
+    # 最大帧大小（字节，范围 16KB~16MB）
+    max_read_frame_size: 1048576
+    # Max upload buffer per connection in bytes
+    # 每连接上传缓冲区大小（字节）
+    max_upload_buffer_per_connection: 2097152
+    # Max upload buffer per stream in bytes
+    # 每流上传缓冲区大小（字节）
+    max_upload_buffer_per_stream: 524288
   # Frontend base URL used to generate security-sensitive links (password reset, OAuth redirect URIs).
   # 用于生成安全敏感链接的前端 Base URL（密码重置、OAuth 回调等），必须为绝对 http(s) URL。
   # Example: "https://your-frontend.example.com"
