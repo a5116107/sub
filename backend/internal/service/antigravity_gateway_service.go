@@ -31,8 +31,11 @@ const (
 )
 
 const (
-	antigravityMaxRetriesEnv     = "GATEWAY_ANTIGRAVITY_MAX_RETRIES"
-	antigravityScopeRateLimitEnv = "GATEWAY_ANTIGRAVITY_429_SCOPE_LIMIT"
+	antigravityMaxRetriesEnv            = "GATEWAY_ANTIGRAVITY_MAX_RETRIES"
+	antigravityMaxRetriesClaudeEnv      = "GATEWAY_ANTIGRAVITY_MAX_RETRIES_CLAUDE"
+	antigravityMaxRetriesGeminiTextEnv  = "GATEWAY_ANTIGRAVITY_MAX_RETRIES_GEMINI_TEXT"
+	antigravityMaxRetriesGeminiImageEnv = "GATEWAY_ANTIGRAVITY_MAX_RETRIES_GEMINI_IMAGE"
+	antigravityScopeRateLimitEnv        = "GATEWAY_ANTIGRAVITY_429_SCOPE_LIMIT"
 )
 
 // antigravityRetryLoopParams 重试循环的参数
@@ -49,6 +52,7 @@ type antigravityRetryLoopParams struct {
 	httpUpstream   HTTPUpstream
 	settingService *SettingService
 	handleError    func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope)
+	maxRetries     int // optional; <=0 means platform default
 }
 
 // antigravityRetryLoopResult 重试循环的结果
@@ -62,7 +66,10 @@ func antigravityRetryLoop(p antigravityRetryLoopParams) (*antigravityRetryLoopRe
 	if len(availableURLs) == 0 {
 		availableURLs = antigravity.BaseURLs
 	}
-	maxRetries := antigravityMaxRetries()
+	maxRetries := p.maxRetries
+	if maxRetries <= 0 {
+		maxRetries = antigravityMaxRetries()
+	}
 
 	var resp *http.Response
 	var usedBaseURL string
@@ -764,6 +771,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		httpUpstream:   s.httpUpstream,
 		settingService: s.settingService,
 		handleError:    s.handleUpstreamError,
+		maxRetries:     antigravityMaxRetriesForModel(originalModel),
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -847,6 +855,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 					httpUpstream:   s.httpUpstream,
 					settingService: s.settingService,
 					handleError:    s.handleUpstreamError,
+					maxRetries:     antigravityMaxRetriesForModel(originalModel),
 				})
 				if retryErr != nil {
 					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -1362,6 +1371,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		httpUpstream:   s.httpUpstream,
 		settingService: s.settingService,
 		handleError:    s.handleUpstreamError,
+		maxRetries:     antigravityMaxRetriesForModel(originalModel),
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -1575,6 +1585,28 @@ func antigravityMaxRetries() int {
 		return antigravityDefaultMaxRetries
 	}
 	return value
+}
+
+// antigravityMaxRetriesForModel returns retry count by model class with fallback.
+func antigravityMaxRetriesForModel(model string) int {
+	var envKey string
+	if strings.HasPrefix(model, "claude-") {
+		envKey = antigravityMaxRetriesClaudeEnv
+	} else if isImageGenerationModel(model) {
+		envKey = antigravityMaxRetriesGeminiImageEnv
+	} else if strings.HasPrefix(model, "gemini-") {
+		envKey = antigravityMaxRetriesGeminiTextEnv
+	}
+
+	if envKey != "" {
+		if raw := strings.TrimSpace(os.Getenv(envKey)); raw != "" {
+			if value, err := strconv.Atoi(raw); err == nil && value > 0 {
+				return value
+			}
+		}
+	}
+
+	return antigravityMaxRetries()
 }
 
 func (s *AntigravityGatewayService) handleUpstreamError(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
