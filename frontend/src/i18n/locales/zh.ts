@@ -3629,6 +3629,52 @@ export default {
       failedToSave: '保存设置失败',
       failedToTestSmtp: 'SMTP 连接测试失败',
       failedToSendTestEmail: '发送测试邮件失败'
+    },
+    errorPassthrough: {
+      title: '错误透传规则',
+      description: '配置如何将上游错误返回给客户端',
+      createRule: '新建规则',
+      editRule: '编辑规则',
+      noRules: '暂无规则',
+      allPlatforms: '全部平台',
+      columns: {
+        priority: '优先级',
+        name: '名称',
+        conditions: '匹配条件',
+        platforms: '平台',
+        status: '状态',
+        actions: '操作'
+      },
+      matchMode: {
+        any: '任一条件匹配',
+        all: '全部条件匹配'
+      },
+      form: {
+        name: '规则名称',
+        priority: '优先级',
+        description: '说明',
+        errorCodes: '错误码',
+        errorCodesPlaceholder: '422, 400, 429',
+        keywords: '关键字',
+        keywordsPlaceholder: '每行一个关键字',
+        matchMode: '匹配模式',
+        platforms: '平台',
+        passthroughCode: '透传上游状态码',
+        responseCode: '自定义状态码',
+        passthroughBody: '透传上游错误信息',
+        customMessage: '自定义错误信息',
+        enabled: '启用此规则'
+      },
+      nameRequired: '请输入规则名称',
+      conditionsRequired: '请至少配置一个错误码或关键字',
+      ruleCreated: '规则创建成功',
+      ruleUpdated: '规则更新成功',
+      ruleDeleted: '规则删除成功',
+      deleteConfirm: '确定删除规则“{name}”？',
+      failedToLoad: '加载规则失败',
+      failedToSave: '保存规则失败',
+      failedToDelete: '删除规则失败',
+      failedToToggle: '切换规则状态失败'
     }
   },
 

@@ -3483,6 +3483,52 @@ export default {
       failedToSave: 'Failed to save settings',
       failedToTestSmtp: 'SMTP connection test failed',
       failedToSendTestEmail: 'Failed to send test email'
+    },
+    errorPassthrough: {
+      title: 'Error Passthrough Rules',
+      description: 'Configure how upstream errors are returned to clients',
+      createRule: 'Create Rule',
+      editRule: 'Edit Rule',
+      noRules: 'No rules configured',
+      allPlatforms: 'All platforms',
+      columns: {
+        priority: 'Priority',
+        name: 'Name',
+        conditions: 'Conditions',
+        platforms: 'Platforms',
+        status: 'Status',
+        actions: 'Actions'
+      },
+      matchMode: {
+        any: 'Any condition',
+        all: 'All conditions'
+      },
+      form: {
+        name: 'Rule Name',
+        priority: 'Priority',
+        description: 'Description',
+        errorCodes: 'Error Codes',
+        errorCodesPlaceholder: '422, 400, 429',
+        keywords: 'Keywords',
+        keywordsPlaceholder: 'one keyword per line',
+        matchMode: 'Match Mode',
+        platforms: 'Platforms',
+        passthroughCode: 'Passthrough upstream status code',
+        responseCode: 'Custom status code',
+        passthroughBody: 'Passthrough upstream error message',
+        customMessage: 'Custom error message',
+        enabled: 'Enable this rule'
+      },
+      nameRequired: 'Please enter rule name',
+      conditionsRequired: 'Please configure at least one error code or keyword',
+      ruleCreated: 'Rule created successfully',
+      ruleUpdated: 'Rule updated successfully',
+      ruleDeleted: 'Rule deleted successfully',
+      deleteConfirm: 'Delete rule "{name}"?',
+      failedToLoad: 'Failed to load rules',
+      failedToSave: 'Failed to save rule',
+      failedToDelete: 'Failed to delete rule',
+      failedToToggle: 'Failed to toggle rule status'
     }
   },
 

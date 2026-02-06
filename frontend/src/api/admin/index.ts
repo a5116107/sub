@@ -23,6 +23,7 @@ import usageAPI from './usage'
 import userAttributesAPI from './userAttributes'
 import usersAPI from './users'
 import modelPricingAPI from './modelPricing'
+import errorPassthroughAPI from './errorPassthrough'
 
 /**
  * Unified admin API object for convenient access
@@ -47,7 +48,8 @@ export const adminAPI = {
 	qwen: qwenAPI,
 	antigravity: antigravityAPI,
 	userAttributes: userAttributesAPI,
-	ops: opsAPI
+	ops: opsAPI,
+	errorPassthrough: errorPassthroughAPI
 }
 
 export {
@@ -70,7 +72,10 @@ export {
 	qwenAPI,
 	antigravityAPI,
 	userAttributesAPI,
-	opsAPI
+	opsAPI,
+	errorPassthroughAPI
 }
 
 export default adminAPI
+
+export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'
