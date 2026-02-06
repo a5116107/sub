@@ -425,6 +425,8 @@ func isSensitiveKey(key string) bool {
 	}
 
 	// Whitelist: non-sensitive API parameters and usage counters.
+	// Whitelist: known non-sensitive fields that contain sensitive substrings
+	// (e.g., "max_tokens" contains "token" but is just an API parameter).
 	switch k {
 	case "max_tokens", "max_completion_tokens", "max_output_tokens",
 		"completion_tokens", "prompt_tokens", "total_tokens",
