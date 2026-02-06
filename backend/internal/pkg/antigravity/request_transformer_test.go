@@ -5,6 +5,47 @@ import (
 	"testing"
 )
 
+func TestBuildGenerationConfig_MaxOutputTokensLimit(t *testing.T) {
+	tests := []struct {
+		name     string
+		model    string
+		maxToken int
+		want     int
+	}{
+		{
+			name:     "claude model clamps to 64000",
+			model:    "claude-3-5-sonnet",
+			maxToken: 65000,
+			want:     64000,
+		},
+		{
+			name:     "non-claude model clamps to 65000",
+			model:    "gemini-2.5-pro",
+			maxToken: 70000,
+			want:     65000,
+		},
+		{
+			name:     "within limit keeps requested value",
+			model:    "gemini-2.5-pro",
+			maxToken: 32000,
+			want:     32000,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &ClaudeRequest{
+				Model:     tt.model,
+				MaxTokens: tt.maxToken,
+			}
+			cfg := buildGenerationConfig(req)
+			if cfg.MaxOutputTokens != tt.want {
+				t.Fatalf("MaxOutputTokens = %d, want %d", cfg.MaxOutputTokens, tt.want)
+			}
+		})
+	}
+}
+
 // TestBuildParts_ThinkingBlockWithoutSignature 测试thinking block无signature时的处理
 func TestBuildParts_ThinkingBlockWithoutSignature(t *testing.T) {
 	tests := []struct {

@@ -492,15 +492,32 @@ func parseToolResultContent(content json.RawMessage, isError bool) string {
 }
 
 // buildGenerationConfig 构建 generationConfig
+const (
+	defaultMaxOutputTokens    = 64000
+	maxOutputTokensUpperBound = 65000
+	maxOutputTokensClaude     = 64000
+)
+
+func maxOutputTokensLimit(model string) int {
+	if strings.HasPrefix(model, "claude-") {
+		return maxOutputTokensClaude
+	}
+	return maxOutputTokensUpperBound
+}
+
 func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
+	maxLimit := maxOutputTokensLimit(req.Model)
 	config := &GeminiGenerationConfig{
-		MaxOutputTokens: 64000, // 默认最大输出
+		MaxOutputTokens: defaultMaxOutputTokens, // 默认最大输出
 		StopSequences:   DefaultStopSequences,
 	}
 
 	// 如果请求中指定了 MaxTokens，使用请求值
 	if req.MaxTokens > 0 {
 		config.MaxOutputTokens = req.MaxTokens
+	}
+	if config.MaxOutputTokens > maxLimit {
+		config.MaxOutputTokens = maxLimit
 	}
 
 	// Thinking 配置
