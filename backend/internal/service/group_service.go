@@ -29,6 +29,8 @@ type GroupRepository interface {
 	ExistsByName(ctx context.Context, name string) (bool, error)
 	GetAccountCount(ctx context.Context, groupID int64) (int64, error)
 	DeleteAccountGroupsByGroupID(ctx context.Context, groupID int64) (int64, error)
+	GetAccountIDsByGroupIDs(ctx context.Context, groupIDs []int64) ([]int64, error)
+	BindAccountsToGroup(ctx context.Context, groupID int64, accountIDs []int64) error
 }
 
 // CreateGroupRequest 创建分组请求

@@ -55,6 +55,7 @@ type AdminService interface {
 	GetAllProxies(ctx context.Context) ([]Proxy, error)
 	GetAllProxiesWithAccountCount(ctx context.Context) ([]ProxyWithAccountCount, error)
 	GetProxy(ctx context.Context, id int64) (*Proxy, error)
+	GetProxiesByIDs(ctx context.Context, ids []int64) ([]Proxy, error)
 	CreateProxy(ctx context.Context, input *CreateProxyInput) (*Proxy, error)
 	UpdateProxy(ctx context.Context, id int64, input *UpdateProxyInput) (*Proxy, error)
 	DeleteProxy(ctx context.Context, id int64) error
@@ -96,15 +97,16 @@ type UpdateUserInput struct {
 }
 
 type CreateGroupInput struct {
-	Name             string
-	Description      string
-	Platform         string
-	RateMultiplier   float64
-	IsExclusive      bool
-	SubscriptionType string   // standard/subscription
-	DailyLimitUSD    *float64 // 日限额 (USD)
-	WeeklyLimitUSD   *float64 // 周限额 (USD)
-	MonthlyLimitUSD  *float64 // 月限额 (USD)
+	Name                     string
+	Description              string
+	Platform                 string
+	RateMultiplier           float64
+	IsExclusive              bool
+	SubscriptionType         string   // standard/subscription
+	DailyLimitUSD            *float64 // 日限额 (USD)
+	WeeklyLimitUSD           *float64 // 周限额 (USD)
+	MonthlyLimitUSD          *float64 // 月限额 (USD)
+	CopyAccountsFromGroupIDs []int64
 	// UserConcurrency: 分组维度并发（0 表示不覆盖用户默认并发）
 	UserConcurrency int
 	// 图片生成计费配置（仅 antigravity 平台使用）
@@ -119,16 +121,17 @@ type CreateGroupInput struct {
 }
 
 type UpdateGroupInput struct {
-	Name             string
-	Description      string
-	Platform         string
-	RateMultiplier   *float64 // 使用指针以支持设置为0
-	IsExclusive      *bool
-	Status           string
-	SubscriptionType string   // standard/subscription
-	DailyLimitUSD    *float64 // 日限额 (USD)
-	WeeklyLimitUSD   *float64 // 周限额 (USD)
-	MonthlyLimitUSD  *float64 // 月限额 (USD)
+	Name                     string
+	Description              string
+	Platform                 string
+	RateMultiplier           *float64 // 使用指针以支持设置为0
+	IsExclusive              *bool
+	Status                   string
+	SubscriptionType         string   // standard/subscription
+	DailyLimitUSD            *float64 // 日限额 (USD)
+	WeeklyLimitUSD           *float64 // 周限额 (USD)
+	MonthlyLimitUSD          *float64 // 月限额 (USD)
+	CopyAccountsFromGroupIDs []int64
 	// UserConcurrency: 分组维度并发（0 表示不覆盖用户默认并发）
 	UserConcurrency *int
 	// 图片生成计费配置（仅 antigravity 平台使用）
@@ -156,6 +159,8 @@ type CreateAccountInput struct {
 	GroupIDs           []int64
 	ExpiresAt          *int64
 	AutoPauseOnExpired *bool
+	// SkipDefaultGroupBind skips binding platform-default group when GroupIDs is empty.
+	SkipDefaultGroupBind bool
 	// SkipMixedChannelCheck skips the mixed channel risk check when binding groups.
 	// This should only be set when the caller has explicitly confirmed the risk.
 	SkipMixedChannelCheck bool
@@ -601,6 +606,37 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		}
 	}
 
+	// 如果指定了复制账号的源分组，先获取账号 ID 列表
+	var accountIDsToCopy []int64
+	if len(input.CopyAccountsFromGroupIDs) > 0 {
+		seen := make(map[int64]struct{}, len(input.CopyAccountsFromGroupIDs))
+		uniqueSourceGroupIDs := make([]int64, 0, len(input.CopyAccountsFromGroupIDs))
+		for _, srcGroupID := range input.CopyAccountsFromGroupIDs {
+			if _, exists := seen[srcGroupID]; exists {
+				continue
+			}
+			seen[srcGroupID] = struct{}{}
+			uniqueSourceGroupIDs = append(uniqueSourceGroupIDs, srcGroupID)
+		}
+
+		// 校验源分组的平台是否与新分组一致
+		for _, srcGroupID := range uniqueSourceGroupIDs {
+			srcGroup, err := s.groupRepo.GetByIDLite(ctx, srcGroupID)
+			if err != nil {
+				return nil, fmt.Errorf("source group %d not found: %w", srcGroupID, err)
+			}
+			if srcGroup.Platform != platform {
+				return nil, fmt.Errorf("source group %d platform mismatch: expected %s, got %s", srcGroupID, platform, srcGroup.Platform)
+			}
+		}
+
+		var err error
+		accountIDsToCopy, err = s.groupRepo.GetAccountIDsByGroupIDs(ctx, uniqueSourceGroupIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get accounts from source groups: %w", err)
+		}
+	}
+
 	group := &Group{
 		Name:             input.Name,
 		Description:      input.Description,
@@ -622,6 +658,13 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	}
 	if err := s.groupRepo.Create(ctx, group); err != nil {
 		return nil, err
+	}
+
+	if len(accountIDsToCopy) > 0 {
+		if err := s.groupRepo.BindAccountsToGroup(ctx, group.ID, accountIDsToCopy); err != nil {
+			return nil, fmt.Errorf("failed to bind accounts to new group: %w", err)
+		}
+		group.AccountCount = int64(len(accountIDsToCopy))
 	}
 	return group, nil
 }
@@ -768,6 +811,49 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if err := s.groupRepo.Update(ctx, group); err != nil {
 		return nil, err
 	}
+
+	// 如果指定了复制账号的源分组，同步绑定（替换当前分组的账号）
+	if len(input.CopyAccountsFromGroupIDs) > 0 {
+		seen := make(map[int64]struct{}, len(input.CopyAccountsFromGroupIDs))
+		uniqueSourceGroupIDs := make([]int64, 0, len(input.CopyAccountsFromGroupIDs))
+		for _, srcGroupID := range input.CopyAccountsFromGroupIDs {
+			if srcGroupID == id {
+				return nil, fmt.Errorf("cannot copy accounts from self")
+			}
+			if _, exists := seen[srcGroupID]; exists {
+				continue
+			}
+			seen[srcGroupID] = struct{}{}
+			uniqueSourceGroupIDs = append(uniqueSourceGroupIDs, srcGroupID)
+		}
+
+		// 校验源分组的平台是否与当前分组一致
+		for _, srcGroupID := range uniqueSourceGroupIDs {
+			srcGroup, err := s.groupRepo.GetByIDLite(ctx, srcGroupID)
+			if err != nil {
+				return nil, fmt.Errorf("source group %d not found: %w", srcGroupID, err)
+			}
+			if srcGroup.Platform != group.Platform {
+				return nil, fmt.Errorf("source group %d platform mismatch: expected %s, got %s", srcGroupID, group.Platform, srcGroup.Platform)
+			}
+		}
+
+		accountIDsToCopy, err := s.groupRepo.GetAccountIDsByGroupIDs(ctx, uniqueSourceGroupIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get accounts from source groups: %w", err)
+		}
+
+		if _, err := s.groupRepo.DeleteAccountGroupsByGroupID(ctx, id); err != nil {
+			return nil, fmt.Errorf("failed to clear existing account bindings: %w", err)
+		}
+
+		if len(accountIDsToCopy) > 0 {
+			if err := s.groupRepo.BindAccountsToGroup(ctx, id, accountIDsToCopy); err != nil {
+				return nil, fmt.Errorf("failed to bind accounts to group: %w", err)
+			}
+		}
+	}
+
 	if s.authCacheInvalidator != nil {
 		s.authCacheInvalidator.InvalidateAuthCacheByGroupID(ctx, id)
 	}
@@ -882,7 +968,7 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	// 绑定分组
 	groupIDs := input.GroupIDs
 	// 如果没有指定分组,自动绑定对应平台的默认分组
-	if len(groupIDs) == 0 {
+	if len(groupIDs) == 0 && !input.SkipDefaultGroupBind {
 		defaultGroupName := input.Platform + "-default"
 		groups, err := s.groupRepo.ListActiveByPlatform(ctx, input.Platform)
 		if err == nil {
@@ -1333,6 +1419,10 @@ func (s *adminServiceImpl) GetAllProxiesWithAccountCount(ctx context.Context) ([
 
 func (s *adminServiceImpl) GetProxy(ctx context.Context, id int64) (*Proxy, error) {
 	return s.proxyRepo.GetByID(ctx, id)
+}
+
+func (s *adminServiceImpl) GetProxiesByIDs(ctx context.Context, ids []int64) ([]Proxy, error) {
+	return s.proxyRepo.ListByIDs(ctx, ids)
 }
 
 func (s *adminServiceImpl) CreateProxy(ctx context.Context, input *CreateProxyInput) (*Proxy, error) {

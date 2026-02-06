@@ -42,8 +42,9 @@ type CreateGroupRequest struct {
 	ClaudeCodeOnly  bool     `json:"claude_code_only"`
 	FallbackGroupID *int64   `json:"fallback_group_id"`
 	// 模型路由配置（仅 anthropic 平台使用）
-	ModelRouting        map[string][]int64 `json:"model_routing"`
-	ModelRoutingEnabled bool               `json:"model_routing_enabled"`
+	ModelRouting             map[string][]int64 `json:"model_routing"`
+	ModelRoutingEnabled      bool               `json:"model_routing_enabled"`
+	CopyAccountsFromGroupIDs []int64            `json:"copy_accounts_from_group_ids"`
 }
 
 // UpdateGroupRequest represents update group request
@@ -66,8 +67,9 @@ type UpdateGroupRequest struct {
 	ClaudeCodeOnly  *bool    `json:"claude_code_only"`
 	FallbackGroupID *int64   `json:"fallback_group_id"`
 	// 模型路由配置（仅 anthropic 平台使用）
-	ModelRouting        map[string][]int64 `json:"model_routing"`
-	ModelRoutingEnabled *bool              `json:"model_routing_enabled"`
+	ModelRouting             map[string][]int64 `json:"model_routing"`
+	ModelRoutingEnabled      *bool              `json:"model_routing_enabled"`
+	CopyAccountsFromGroupIDs []int64            `json:"copy_accounts_from_group_ids"`
 }
 
 // List handles listing all groups with pagination
@@ -157,23 +159,24 @@ func (h *GroupHandler) Create(c *gin.Context) {
 	}
 
 	group, err := h.adminService.CreateGroup(c.Request.Context(), &service.CreateGroupInput{
-		Name:                req.Name,
-		Description:         req.Description,
-		Platform:            req.Platform,
-		RateMultiplier:      req.RateMultiplier,
-		IsExclusive:         req.IsExclusive,
-		SubscriptionType:    req.SubscriptionType,
-		DailyLimitUSD:       req.DailyLimitUSD,
-		WeeklyLimitUSD:      req.WeeklyLimitUSD,
-		MonthlyLimitUSD:     req.MonthlyLimitUSD,
-		UserConcurrency:     req.UserConcurrency,
-		ImagePrice1K:        req.ImagePrice1K,
-		ImagePrice2K:        req.ImagePrice2K,
-		ImagePrice4K:        req.ImagePrice4K,
-		ClaudeCodeOnly:      req.ClaudeCodeOnly,
-		FallbackGroupID:     req.FallbackGroupID,
-		ModelRouting:        req.ModelRouting,
-		ModelRoutingEnabled: req.ModelRoutingEnabled,
+		Name:                     req.Name,
+		Description:              req.Description,
+		Platform:                 req.Platform,
+		RateMultiplier:           req.RateMultiplier,
+		IsExclusive:              req.IsExclusive,
+		SubscriptionType:         req.SubscriptionType,
+		DailyLimitUSD:            req.DailyLimitUSD,
+		WeeklyLimitUSD:           req.WeeklyLimitUSD,
+		MonthlyLimitUSD:          req.MonthlyLimitUSD,
+		UserConcurrency:          req.UserConcurrency,
+		ImagePrice1K:             req.ImagePrice1K,
+		ImagePrice2K:             req.ImagePrice2K,
+		ImagePrice4K:             req.ImagePrice4K,
+		ClaudeCodeOnly:           req.ClaudeCodeOnly,
+		FallbackGroupID:          req.FallbackGroupID,
+		ModelRouting:             req.ModelRouting,
+		ModelRoutingEnabled:      req.ModelRoutingEnabled,
+		CopyAccountsFromGroupIDs: req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -199,24 +202,25 @@ func (h *GroupHandler) Update(c *gin.Context) {
 	}
 
 	group, err := h.adminService.UpdateGroup(c.Request.Context(), groupID, &service.UpdateGroupInput{
-		Name:                req.Name,
-		Description:         req.Description,
-		Platform:            req.Platform,
-		RateMultiplier:      req.RateMultiplier,
-		IsExclusive:         req.IsExclusive,
-		Status:              req.Status,
-		SubscriptionType:    req.SubscriptionType,
-		DailyLimitUSD:       req.DailyLimitUSD,
-		WeeklyLimitUSD:      req.WeeklyLimitUSD,
-		MonthlyLimitUSD:     req.MonthlyLimitUSD,
-		UserConcurrency:     req.UserConcurrency,
-		ImagePrice1K:        req.ImagePrice1K,
-		ImagePrice2K:        req.ImagePrice2K,
-		ImagePrice4K:        req.ImagePrice4K,
-		ClaudeCodeOnly:      req.ClaudeCodeOnly,
-		FallbackGroupID:     req.FallbackGroupID,
-		ModelRouting:        req.ModelRouting,
-		ModelRoutingEnabled: req.ModelRoutingEnabled,
+		Name:                     req.Name,
+		Description:              req.Description,
+		Platform:                 req.Platform,
+		RateMultiplier:           req.RateMultiplier,
+		IsExclusive:              req.IsExclusive,
+		Status:                   req.Status,
+		SubscriptionType:         req.SubscriptionType,
+		DailyLimitUSD:            req.DailyLimitUSD,
+		WeeklyLimitUSD:           req.WeeklyLimitUSD,
+		MonthlyLimitUSD:          req.MonthlyLimitUSD,
+		UserConcurrency:          req.UserConcurrency,
+		ImagePrice1K:             req.ImagePrice1K,
+		ImagePrice2K:             req.ImagePrice2K,
+		ImagePrice4K:             req.ImagePrice4K,
+		ClaudeCodeOnly:           req.ClaudeCodeOnly,
+		FallbackGroupID:          req.FallbackGroupID,
+		ModelRouting:             req.ModelRouting,
+		ModelRoutingEnabled:      req.ModelRoutingEnabled,
+		CopyAccountsFromGroupIDs: req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
