@@ -52,6 +52,31 @@
               <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
             </button>
             <button
+              @click="handleExportData"
+              :disabled="exportingData"
+              class="btn btn-secondary"
+              :title="t('admin.proxies.exportData')"
+            >
+              <Icon name="download" size="md" class="mr-2" />
+              {{ exportingData ? t('admin.proxies.exporting') : t('admin.proxies.exportData') }}
+            </button>
+            <button
+              @click="openImportDataFilePicker"
+              :disabled="importingData"
+              class="btn btn-secondary"
+              :title="t('admin.proxies.importData')"
+            >
+              <Icon name="upload" size="md" class="mr-2" />
+              {{ importingData ? t('admin.proxies.importingData') : t('admin.proxies.importData') }}
+            </button>
+            <input
+              ref="importDataInput"
+              type="file"
+              accept=".json,application/json"
+              class="hidden"
+              @change="handleImportDataFile"
+            />
+            <button
               @click="handleBatchTest"
               :disabled="batchTesting || loading"
               class="btn btn-secondary"
@@ -659,7 +684,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
-import type { Proxy, ProxyAccountSummary, ProxyProtocol } from '@/types'
+import type { Proxy, ProxyAccountSummary, ProxyProtocol, AdminDataPayload } from '@/types'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -735,6 +760,9 @@ const showDeleteDialog = ref(false)
 const showBatchDeleteDialog = ref(false)
 const showAccountsModal = ref(false)
 const submitting = ref(false)
+const exportingData = ref(false)
+const importingData = ref(false)
+const importDataInput = ref<HTMLInputElement | null>(null)
 const testingProxyIds = ref<Set<number>>(new Set())
 const batchTesting = ref(false)
 const selectedProxyIds = ref<Set<number>>(new Set())
@@ -1180,6 +1208,96 @@ const fetchAllProxiesForBatch = async (): Promise<Proxy[]> => {
   }
 
   return result
+}
+
+const openImportDataFilePicker = () => {
+  if (importingData.value) return
+  importDataInput.value?.click()
+}
+
+const resetImportDataInput = () => {
+  if (importDataInput.value) {
+    importDataInput.value.value = ''
+  }
+}
+
+const handleExportData = async () => {
+  exportingData.value = true
+  try {
+    const ids = Array.from(selectedProxyIds.value)
+    const payload = await adminAPI.proxies.exportData(
+      ids.length > 0
+        ? { ids }
+        : {
+            filters: {
+              protocol: filters.protocol || undefined,
+              status: (filters.status || undefined) as 'active' | 'inactive' | undefined,
+              search: searchQuery.value.trim() || undefined
+            }
+          }
+    )
+    const now = new Date().toISOString().replace(/[:.]/g, '-')
+    const filename = `proxies-data-${now}.json`
+    const content = JSON.stringify({ data: payload }, null, 2)
+    const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    appStore.showSuccess(t('admin.proxies.exportSuccess'))
+  } catch (error: any) {
+    appStore.showError(error.response?.data?.detail || t('admin.proxies.failedToExportData'))
+    console.error('Error exporting proxy data:', error)
+  } finally {
+    exportingData.value = false
+  }
+}
+
+const handleImportDataFile = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) {
+    return
+  }
+  if (file.size <= 0) {
+    appStore.showError(t('admin.proxies.importEmptyFile'))
+    resetImportDataInput()
+    return
+  }
+
+  importingData.value = true
+  try {
+    const text = await file.text()
+    const parsed = JSON.parse(text)
+    const payload = (parsed?.data ?? parsed) as AdminDataPayload
+    if (!payload || !Array.isArray(payload.proxies) || !Array.isArray(payload.accounts)) {
+      appStore.showError(t('admin.proxies.importInvalidFormat'))
+      return
+    }
+
+    const result = await adminAPI.proxies.importData({ data: payload })
+    appStore.showSuccess(
+      t('admin.proxies.importSuccess', {
+        created: result.proxy_created || 0,
+        reused: result.proxy_reused || 0,
+        failed: result.proxy_failed || 0
+      })
+    )
+    await loadProxies()
+  } catch (error: any) {
+    const message = error instanceof SyntaxError
+      ? t('admin.proxies.importInvalidFormat')
+      : error.response?.data?.detail || error.message || t('admin.proxies.failedToImportData')
+    appStore.showError(message)
+    console.error('Error importing proxy data:', error)
+  } finally {
+    importingData.value = false
+    resetImportDataInput()
+  }
 }
 
 const runBatchProxyTests = async (ids: number[]) => {

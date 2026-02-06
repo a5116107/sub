@@ -2092,6 +2092,17 @@ export default {
       batchImportSuccess: 'Successfully imported {created} proxies, skipped {skipped} duplicates',
       batchImportAllSkipped: 'All {skipped} proxies already exist, skipped import',
       failedToImport: 'Failed to batch import',
+      exportData: 'Export Data',
+      importData: 'Import Data',
+      exporting: 'Exporting...',
+      importingData: 'Importing data...',
+      exportSuccess: 'Data exported successfully',
+      importSuccess:
+        'Import complete: created {created}, reused {reused}, failed {failed}',
+      importEmptyFile: 'Please select a JSON file to import',
+      importInvalidFormat: 'Invalid import file format',
+      failedToExportData: 'Failed to export data',
+      failedToImportData: 'Failed to import data',
       // Other messages
       creating: 'Creating...',
       updating: 'Updating...',
