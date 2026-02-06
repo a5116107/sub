@@ -29,7 +29,7 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			abortWithGoogleError(c, 400, "Query parameter api_key is deprecated. Use Authorization header or key instead.")
 			return
 		}
-		apiKeyString := extractAPIKeyFromRequest(c, cfg)
+		apiKeyString := extractAPIKeyForGoogle(c, cfg)
 		if apiKeyString == "" {
 			abortWithGoogleError(c, 401, "API key is required")
 			return
@@ -178,23 +178,27 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 	}
 }
 
-func extractAPIKeyFromRequest(c *gin.Context, cfg *config.Config) string {
-	authHeader := c.GetHeader("Authorization")
+func extractAPIKeyForGoogle(c *gin.Context, cfg *config.Config) string {
+	if key := strings.TrimSpace(c.GetHeader("x-goog-api-key")); key != "" {
+		return key
+	}
+
+	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
 	if authHeader != "" {
 		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) == 2 && parts[0] == "Bearer" && strings.TrimSpace(parts[1]) != "" {
-			return strings.TrimSpace(parts[1])
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+			if key := strings.TrimSpace(parts[1]); key != "" {
+				return key
+			}
 		}
 	}
-	if v := strings.TrimSpace(c.GetHeader("x-api-key")); v != "" {
-		return v
-	}
-	if v := strings.TrimSpace(c.GetHeader("x-goog-api-key")); v != "" {
-		return v
+
+	if key := strings.TrimSpace(c.GetHeader("x-api-key")); key != "" {
+		return key
 	}
 	if allowGoogleQueryKey(cfg, c.Request.URL.Path) {
-		if v := strings.TrimSpace(c.Query("key")); v != "" {
-			return v
+		if key := strings.TrimSpace(c.Query("key")); key != "" {
+			return key
 		}
 	}
 	return ""

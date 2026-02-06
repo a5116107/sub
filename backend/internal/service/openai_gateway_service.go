@@ -1077,8 +1077,12 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
-	if account.Type == AccountTypeOAuth && !isCodexCLI {
-		codexResult := applyCodexOAuthTransform(reqBody)
+	if stripUnsupportedOpenAIRequestFields(reqBody) {
+		bodyModified = true
+	}
+
+	if account.Type == AccountTypeOAuth {
+		codexResult := applyCodexOAuthTransform(reqBody, isCodexCLI)
 		if codexResult.Modified {
 			bodyModified = true
 		}
@@ -2460,4 +2464,15 @@ func (s *OpenAIGatewayService) updateCodexUsageSnapshot(ctx context.Context, acc
 		defer cancel()
 		_ = s.accountRepo.UpdateExtra(updateCtx, accountID, updates)
 	}()
+}
+
+func stripUnsupportedOpenAIRequestFields(reqBody map[string]any) bool {
+	modified := false
+	for _, field := range []string{"prompt_cache_retention", "safety_identifier", "previous_response_id"} {
+		if _, ok := reqBody[field]; ok {
+			delete(reqBody, field)
+			modified = true
+		}
+	}
+	return modified
 }

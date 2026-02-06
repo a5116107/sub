@@ -1053,3 +1053,37 @@ func TestOpenAIValidateUpstreamBaseURLEnabledEnforcesAllowlist(t *testing.T) {
 		t.Fatalf("expected non-allowlisted host to fail")
 	}
 }
+
+func TestStripUnsupportedOpenAIRequestFields_RemovesKnownFields(t *testing.T) {
+	reqBody := map[string]any{
+		"model":                  "gpt-5.2",
+		"prompt_cache_retention": true,
+		"safety_identifier":      "abc",
+		"previous_response_id":   "resp_1",
+	}
+
+	modified := stripUnsupportedOpenAIRequestFields(reqBody)
+	if !modified {
+		t.Fatalf("expected modified=true when unsupported fields exist")
+	}
+	if _, ok := reqBody["prompt_cache_retention"]; ok {
+		t.Fatalf("expected prompt_cache_retention to be removed")
+	}
+	if _, ok := reqBody["safety_identifier"]; ok {
+		t.Fatalf("expected safety_identifier to be removed")
+	}
+	if _, ok := reqBody["previous_response_id"]; ok {
+		t.Fatalf("expected previous_response_id to be removed")
+	}
+	if reqBody["model"] != "gpt-5.2" {
+		t.Fatalf("expected supported fields to remain unchanged")
+	}
+}
+
+func TestStripUnsupportedOpenAIRequestFields_NoChange(t *testing.T) {
+	reqBody := map[string]any{"model": "gpt-5.2"}
+	modified := stripUnsupportedOpenAIRequestFields(reqBody)
+	if modified {
+		t.Fatalf("expected modified=false when no unsupported fields exist")
+	}
+}

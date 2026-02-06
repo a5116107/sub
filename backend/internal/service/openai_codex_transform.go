@@ -75,7 +75,7 @@ type opencodeCacheMetadata struct {
 	LastChecked int64  `json:"lastChecked"`
 }
 
-func applyCodexOAuthTransform(reqBody map[string]any) codexTransformResult {
+func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool) codexTransformResult {
 	result := codexTransformResult{}
 	// 工具续链需求会影响存储策略与 input 过滤逻辑。
 	needsToolContinuation := NeedsToolContinuation(reqBody)
@@ -121,22 +121,8 @@ func applyCodexOAuthTransform(reqBody map[string]any) codexTransformResult {
 		result.PromptCacheKey = strings.TrimSpace(v)
 	}
 
-	instructions := strings.TrimSpace(getOpenCodeCodexHeader())
-	existingInstructions, _ := reqBody["instructions"].(string)
-	existingInstructions = strings.TrimSpace(existingInstructions)
-
-	if instructions != "" {
-		if existingInstructions != instructions {
-			reqBody["instructions"] = instructions
-			result.Modified = true
-		}
-	} else if existingInstructions == "" {
-		// 未获取到 opencode 指令时，回退使用 Codex CLI 指令。
-		codexInstructions := strings.TrimSpace(getCodexCLIInstructions())
-		if codexInstructions != "" {
-			reqBody["instructions"] = codexInstructions
-			result.Modified = true
-		}
+	if applyInstructions(reqBody, isCodexCLI) {
+		result.Modified = true
 	}
 
 	// 续链场景保留 item_reference 与 id，避免 call_id 上下文丢失。
@@ -277,6 +263,65 @@ func GetOpenCodeInstructions() string {
 // GetCodexCLIInstructions 返回内置的 Codex CLI 指令内容。
 func GetCodexCLIInstructions() string {
 	return getCodexCLIInstructions()
+}
+
+func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
+	if isCodexCLI {
+		return applyCodexCLIInstructions(reqBody)
+	}
+	return applyOpenCodeInstructions(reqBody)
+}
+
+func applyCodexCLIInstructions(reqBody map[string]any) bool {
+	if !isInstructionsEmpty(reqBody) {
+		return false
+	}
+
+	instructions := strings.TrimSpace(getOpenCodeCodexHeader())
+	if instructions == "" {
+		return false
+	}
+
+	reqBody["instructions"] = instructions
+	return true
+}
+
+func applyOpenCodeInstructions(reqBody map[string]any) bool {
+	instructions := strings.TrimSpace(getOpenCodeCodexHeader())
+	existingInstructions, _ := reqBody["instructions"].(string)
+	existingInstructions = strings.TrimSpace(existingInstructions)
+
+	if instructions != "" {
+		if existingInstructions != instructions {
+			reqBody["instructions"] = instructions
+			return true
+		}
+		return false
+	}
+
+	if existingInstructions != "" {
+		return false
+	}
+
+	codexInstructions := strings.TrimSpace(getCodexCLIInstructions())
+	if codexInstructions == "" {
+		return false
+	}
+	reqBody["instructions"] = codexInstructions
+	return true
+}
+
+func isInstructionsEmpty(reqBody map[string]any) bool {
+	val, exists := reqBody["instructions"]
+	if !exists || val == nil {
+		return true
+	}
+
+	text, ok := val.(string)
+	if !ok {
+		return true
+	}
+	return strings.TrimSpace(text) == ""
 }
 
 // ReplaceWithCodexInstructions 将请求 instructions 替换为内置 Codex 指令（必要时）。

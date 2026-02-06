@@ -661,3 +661,63 @@ func TestApiKeyAuthWithSubscriptionGoogle_InsufficientBalance(t *testing.T) {
 	require.Equal(t, "Insufficient account balance", resp.Error.Message)
 	require.Equal(t, "PERMISSION_DENIED", resp.Error.Status)
 }
+
+func TestExtractAPIKeyForGoogle_Priority(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1beta/test?key=query-key", nil)
+	req.Header.Set("x-goog-api-key", "goog-key")
+	req.Header.Set("Authorization", "Bearer bearer-key")
+	req.Header.Set("x-api-key", "x-api-key")
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = req
+
+	cfg := &config.Config{}
+	cfg.Gateway.AllowGoogleQueryKey = true
+
+	got := extractAPIKeyForGoogle(c, cfg)
+	require.Equal(t, "goog-key", got)
+}
+
+func TestExtractAPIKeyForGoogle_BearerFallbackAndCaseInsensitive(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
+	req.Header.Set("Authorization", "bearer bearer-key")
+	req.Header.Set("x-api-key", "x-api-key")
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = req
+
+	got := extractAPIKeyForGoogle(c, &config.Config{})
+	require.Equal(t, "bearer-key", got)
+}
+
+func TestExtractAPIKeyForGoogle_QueryKeyRequiresConfigAndPath(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("allowed when enabled on v1beta", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1beta/test?key=query-key", nil)
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = req
+
+		cfg := &config.Config{}
+		cfg.Gateway.AllowGoogleQueryKey = true
+		got := extractAPIKeyForGoogle(c, cfg)
+		require.Equal(t, "query-key", got)
+	})
+
+	t.Run("blocked when path is not allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v2/test?key=query-key", nil)
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = req
+
+		cfg := &config.Config{}
+		cfg.Gateway.AllowGoogleQueryKey = true
+		got := extractAPIKeyForGoogle(c, cfg)
+		require.Equal(t, "", got)
+	})
+}

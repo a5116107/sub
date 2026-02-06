@@ -3624,13 +3624,21 @@ func (s *GatewayService) parseSSEUsage(data string, usage *ClaudeUsage) {
 	var msgStart struct {
 		Type    string `json:"type"`
 		Message struct {
-			Usage ClaudeUsage `json:"usage"`
+			Usage struct {
+				InputTokens              int `json:"input_tokens"`
+				OutputTokens             int `json:"output_tokens"`
+				CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+				CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+				CachedTokens             int `json:"cached_tokens"`
+			} `json:"usage"`
 		} `json:"message"`
 	}
 	if json.Unmarshal([]byte(data), &msgStart) == nil && msgStart.Type == "message_start" {
 		usage.InputTokens = msgStart.Message.Usage.InputTokens
+		usage.OutputTokens = msgStart.Message.Usage.OutputTokens
 		usage.CacheCreationInputTokens = msgStart.Message.Usage.CacheCreationInputTokens
 		usage.CacheReadInputTokens = msgStart.Message.Usage.CacheReadInputTokens
+		applyCachedTokensFallback(&usage.CacheReadInputTokens, msgStart.Message.Usage.CachedTokens)
 	}
 
 	// 解析message_delta获取tokens（兼容GLM等把所有usage放在delta中的API）
@@ -3641,6 +3649,7 @@ func (s *GatewayService) parseSSEUsage(data string, usage *ClaudeUsage) {
 			OutputTokens             int `json:"output_tokens"`
 			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+			CachedTokens             int `json:"cached_tokens"`
 		} `json:"usage"`
 	}
 	if json.Unmarshal([]byte(data), &msgDelta) == nil && msgDelta.Type == "message_delta" {
@@ -3659,6 +3668,7 @@ func (s *GatewayService) parseSSEUsage(data string, usage *ClaudeUsage) {
 		if msgDelta.Usage.CacheReadInputTokens > 0 {
 			usage.CacheReadInputTokens = msgDelta.Usage.CacheReadInputTokens
 		}
+		applyCachedTokensFallback(&usage.CacheReadInputTokens, msgDelta.Usage.CachedTokens)
 	}
 }
 
@@ -3677,6 +3687,15 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("parse response: %w", err)
+	}
+	if response.Usage.CacheReadInputTokens == 0 {
+		cachedTokens := int(gjson.GetBytes(body, "usage.cached_tokens").Int())
+		if cachedTokens > 0 {
+			response.Usage.CacheReadInputTokens = cachedTokens
+			if newBody, err := sjson.SetBytes(body, "usage.cache_read_input_tokens", cachedTokens); err == nil {
+				body = newBody
+			}
+		}
 	}
 
 	// 如果有模型映射，替换响应中的model字段
@@ -3718,6 +3737,16 @@ func (s *GatewayService) replaceModelInResponseBody(body []byte, fromModel, toMo
 	}
 
 	return newBody
+}
+
+func applyCachedTokensFallback(cacheRead *int, cachedTokens int) {
+	if cacheRead == nil {
+		return
+	}
+	if *cacheRead > 0 || cachedTokens <= 0 {
+		return
+	}
+	*cacheRead = cachedTokens
 }
 
 // RecordUsageInput 记录使用量的输入参数
