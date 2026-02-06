@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -137,6 +138,37 @@ var (
 	sseDataRe            = regexp.MustCompile(`^data:\s*`)
 	sessionIDRegex       = regexp.MustCompile(`session_([a-f0-9-]{36})`)
 	claudeCliUserAgentRe = regexp.MustCompile(`^claude-cli/\d+\.\d+\.\d+`)
+	toolPrefixRe         = regexp.MustCompile(`(?i)^(?:oc_|mcp_)`)
+	toolNameBoundaryRe   = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	toolNameCamelRe      = regexp.MustCompile(`([a-z0-9])([A-Z])`)
+
+	claudeToolNameOverrides = map[string]string{
+		"bash":      "Bash",
+		"read":      "Read",
+		"edit":      "Edit",
+		"write":     "Write",
+		"task":      "Task",
+		"glob":      "Glob",
+		"grep":      "Grep",
+		"webfetch":  "WebFetch",
+		"websearch": "WebSearch",
+		"todowrite": "TodoWrite",
+		"question":  "AskUserQuestion",
+	}
+
+	openCodeToolOverrides = map[string]string{
+		"Bash":            "bash",
+		"Read":            "read",
+		"Edit":            "edit",
+		"Write":           "write",
+		"Task":            "task",
+		"Glob":            "glob",
+		"Grep":            "grep",
+		"WebFetch":        "webfetch",
+		"WebSearch":       "websearch",
+		"TodoWrite":       "todowrite",
+		"AskUserQuestion": "question",
+	}
 
 	// claudeCodePromptPrefixes 用于检测 Claude Code 系统提示词的前缀列表
 	// 支持多种变体：标准版、Agent SDK 版、Explore Agent 版、Compact 版等
@@ -512,6 +544,243 @@ func (s *GatewayService) replaceModelInBody(body []byte, newModel string) []byte
 		return body
 	}
 	return newBody
+}
+
+func stripToolPrefix(name string) string {
+	return toolPrefixRe.ReplaceAllString(name, "")
+}
+
+func toSnakeCase(input string) string {
+	if input == "" {
+		return input
+	}
+	s := toolNameCamelRe.ReplaceAllString(input, "${1}_${2}")
+	s = toolNameBoundaryRe.ReplaceAllString(s, "_")
+	s = strings.Trim(s, "_")
+	return strings.ToLower(s)
+}
+
+func toPascalCase(input string) string {
+	if input == "" {
+		return input
+	}
+	s := toolNameCamelRe.ReplaceAllString(input, "${1} ${2}")
+	s = toolNameBoundaryRe.ReplaceAllString(s, " ")
+	parts := strings.Fields(strings.ToLower(s))
+	if len(parts) == 0 {
+		return input
+	}
+	for idx, part := range parts {
+		runes := []rune(part)
+		runes[0] = unicode.ToUpper(runes[0])
+		parts[idx] = string(runes)
+	}
+	return strings.Join(parts, "")
+}
+
+func normalizeToolNameForClaude(name string, cache map[string]string) string {
+	if name == "" {
+		return name
+	}
+	stripped := stripToolPrefix(name)
+	if mapped, ok := claudeToolNameOverrides[strings.ToLower(stripped)]; ok {
+		if cache != nil && mapped != name {
+			cache[mapped] = name
+		}
+		return mapped
+	}
+	mapped := toPascalCase(stripped)
+	if cache != nil && mapped != name {
+		cache[mapped] = name
+	}
+	return mapped
+}
+
+func normalizeToolNameForOpenCode(name string, cache map[string]string) string {
+	if name == "" {
+		return name
+	}
+	if cache != nil {
+		if mapped, ok := cache[name]; ok {
+			return mapped
+		}
+	}
+	if mapped, ok := openCodeToolOverrides[name]; ok {
+		return mapped
+	}
+	return toSnakeCase(name)
+}
+
+func normalizeClaudeOAuthRequestBody(body []byte, modelID string) ([]byte, string, map[string]string) {
+	if len(body) == 0 {
+		return body, modelID, nil
+	}
+
+	var req map[string]any
+	if err := json.Unmarshal(body, &req); err != nil {
+		return body, modelID, nil
+	}
+
+	toolNameMap := make(map[string]string)
+	changed := false
+
+	rewriteToolName := func(name string) string {
+		return normalizeToolNameForClaude(name, toolNameMap)
+	}
+
+	if tools, ok := req["tools"].([]any); ok {
+		for _, tool := range tools {
+			toolMap, ok := tool.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, ok := toolMap["name"].(string)
+			if !ok || name == "" {
+				continue
+			}
+			mapped := rewriteToolName(name)
+			if mapped != name {
+				toolMap["name"] = mapped
+				changed = true
+			}
+		}
+	}
+
+	if messages, ok := req["messages"].([]any); ok {
+		for _, message := range messages {
+			messageMap, ok := message.(map[string]any)
+			if !ok {
+				continue
+			}
+			content, ok := messageMap["content"].([]any)
+			if !ok {
+				continue
+			}
+			for _, block := range content {
+				blockMap, ok := block.(map[string]any)
+				if !ok {
+					continue
+				}
+				blockType, _ := blockMap["type"].(string)
+				if blockType != "tool_use" {
+					continue
+				}
+				name, _ := blockMap["name"].(string)
+				if name == "" {
+					continue
+				}
+				mapped := rewriteToolName(name)
+				if mapped != name {
+					blockMap["name"] = mapped
+					changed = true
+				}
+			}
+		}
+	}
+
+	if toolChoice, ok := req["tool_choice"].(map[string]any); ok {
+		if name, ok := toolChoice["name"].(string); ok && name != "" {
+			mapped := rewriteToolName(name)
+			if mapped != name {
+				toolChoice["name"] = mapped
+				changed = true
+			}
+		}
+	}
+
+	normalizedModel := claude.NormalizeModelID(modelID)
+	if normalizedModel != "" && normalizedModel != modelID {
+		req["model"] = normalizedModel
+		modelID = normalizedModel
+		changed = true
+	}
+
+	if !changed {
+		if len(toolNameMap) == 0 {
+			return body, modelID, nil
+		}
+		return body, modelID, toolNameMap
+	}
+
+	newBody, err := json.Marshal(req)
+	if err != nil {
+		return body, modelID, toolNameMap
+	}
+	return newBody, modelID, toolNameMap
+}
+
+func rewriteToolNamesInValue(value any, toolNameMap map[string]string) bool {
+	switch v := value.(type) {
+	case map[string]any:
+		changed := false
+		if blockType, _ := v["type"].(string); blockType == "tool_use" {
+			if name, ok := v["name"].(string); ok {
+				mapped := normalizeToolNameForOpenCode(name, toolNameMap)
+				if mapped != name {
+					v["name"] = mapped
+					changed = true
+				}
+			}
+		}
+		for _, item := range v {
+			if rewriteToolNamesInValue(item, toolNameMap) {
+				changed = true
+			}
+		}
+		return changed
+	case []any:
+		changed := false
+		for _, item := range v {
+			if rewriteToolNamesInValue(item, toolNameMap) {
+				changed = true
+			}
+		}
+		return changed
+	default:
+		return false
+	}
+}
+
+func replaceToolNamesInText(text string, toolNameMap map[string]string) string {
+	if text == "" || len(toolNameMap) == 0 {
+		return text
+	}
+	output := text
+	for mapped, original := range toolNameMap {
+		if mapped == "" || original == "" || mapped == original {
+			continue
+		}
+		output = strings.ReplaceAll(output, "\"name\":\""+mapped+"\"", "\"name\":\""+original+"\"")
+		output = strings.ReplaceAll(output, "\\\"name\\\":\\\""+mapped+"\\\"", "\\\"name\\\":\\\""+original+"\\\"")
+	}
+	return output
+}
+
+func (s *GatewayService) replaceToolNamesInSSELine(line string, toolNameMap map[string]string) string {
+	if !sseDataRe.MatchString(line) {
+		return line
+	}
+	data := sseDataRe.ReplaceAllString(line, "")
+	if data == "" || data == "[DONE]" {
+		return line
+	}
+
+	var event map[string]any
+	if err := json.Unmarshal([]byte(data), &event); err != nil {
+		replaced := replaceToolNamesInText(data, toolNameMap)
+		if replaced == data {
+			return line
+		}
+		return "data: " + replaced
+	}
+	if !rewriteToolNamesInValue(event, toolNameMap) {
+		return line
+	}
+	newData, err := json.Marshal(event)
+	if err != nil {
+		return line
+	}
+	return "data: " + string(newData)
 }
 
 // SelectAccount 选择账号（粘性会话+优先级）
@@ -2404,6 +2673,8 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	body := parsed.Body
 	reqModel := parsed.Model
 	reqStream := parsed.Stream
+	originalModel := reqModel
+	var toolNameMap map[string]string
 
 	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, parsed.MetadataUserID)
 
@@ -2415,12 +2686,14 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		!systemIncludesClaudeCodePrompt(parsed.System) {
 		body = injectClaudeCodePrompt(body, parsed.System)
 	}
+	if account.IsOAuth() && applyClaudeCompat {
+		body, reqModel, toolNameMap = normalizeClaudeOAuthRequestBody(body, reqModel)
+	}
 
 	// 强制执行 cache_control 块数量限制（最多 4 个）
 	body = enforceCacheControlLimit(body, s.cacheControlLimitRemovalStrategy())
 
 	// 应用模型映射（仅对apikey类型账号）
-	originalModel := reqModel
 	if account.Type == AccountTypeAPIKey {
 		mappedModel := account.GetMappedModel(reqModel)
 		if mappedModel != reqModel {
@@ -2904,7 +3177,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	var firstTokenMs *int
 	var clientDisconnect bool
 	if reqStream {
-		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, reqModel)
+		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, reqModel, toolNameMap, account.IsOAuth() && applyClaudeCompat)
 		if err != nil {
 			if err.Error() == "have error in stream" {
 				return nil, &UpstreamFailoverError{
@@ -2917,7 +3190,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		firstTokenMs = streamResult.firstTokenMs
 		clientDisconnect = streamResult.clientDisconnect
 	} else {
-		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, reqModel)
+		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, reqModel, toolNameMap, account.IsOAuth() && applyClaudeCompat)
 		if err != nil {
 			return nil, err
 		}
@@ -3601,7 +3874,7 @@ type streamingResult struct {
 	clientDisconnect bool // 客户端是否在流式传输过程中断开
 }
 
-func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel string) (*streamingResult, error) {
+func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel string, toolNameMap map[string]string, mimicClaudeCode bool) (*streamingResult, error) {
 	// 更新5h窗口状态
 	s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 
@@ -3740,6 +4013,9 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 				if needModelReplace {
 					line = s.replaceModelInSSELine(line, mappedModel, originalModel)
 				}
+				if mimicClaudeCode && len(toolNameMap) > 0 {
+					line = s.replaceToolNamesInSSELine(line, toolNameMap)
+				}
 			}
 
 			// 写入客户端（统一处理 data 行和非 data 行）
@@ -3875,7 +4151,7 @@ func (s *GatewayService) parseSSEUsage(data string, usage *ClaudeUsage) {
 	}
 }
 
-func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*ClaudeUsage, error) {
+func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string, toolNameMap map[string]string, mimicClaudeCode bool) (*ClaudeUsage, error) {
 	// 更新5h窗口状态
 	s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 
@@ -3904,6 +4180,9 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 	// 如果有模型映射，替换响应中的model字段
 	if originalModel != mappedModel {
 		body = s.replaceModelInResponseBody(body, mappedModel, originalModel)
+	}
+	if mimicClaudeCode && len(toolNameMap) > 0 {
+		body = s.replaceToolNamesInResponseBody(body, toolNameMap)
 	}
 
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.cfg.Security.ResponseHeaders)
@@ -3939,6 +4218,29 @@ func (s *GatewayService) replaceModelInResponseBody(body []byte, fromModel, toMo
 		return body
 	}
 
+	return newBody
+}
+
+func (s *GatewayService) replaceToolNamesInResponseBody(body []byte, toolNameMap map[string]string) []byte {
+	if len(body) == 0 || len(toolNameMap) == 0 {
+		return body
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(body, &resp); err != nil {
+		replaced := replaceToolNamesInText(string(body), toolNameMap)
+		if replaced == string(body) {
+			return body
+		}
+		return []byte(replaced)
+	}
+	if !rewriteToolNamesInValue(resp, toolNameMap) {
+		return body
+	}
+	newBody, err := json.Marshal(resp)
+	if err != nil {
+		return body
+	}
 	return newBody
 }
 
@@ -4357,6 +4659,11 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 
 	body := parsed.Body
 	reqModel := parsed.Model
+	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, parsed.MetadataUserID)
+
+	if account.IsOAuth() && applyClaudeCompat {
+		body, reqModel, _ = normalizeClaudeOAuthRequestBody(body, reqModel)
+	}
 
 	// Antigravity 账户不支持 count_tokens 转发，直接返回空值
 	if account.Platform == PlatformAntigravity {
