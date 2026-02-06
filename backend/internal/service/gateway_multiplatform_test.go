@@ -1030,6 +1030,26 @@ func TestGatewayService_isModelSupportedByAccount(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "Anthropic OAuth-短模型ID自动归一化后命中映射",
+			account: &Account{
+				Platform:    PlatformAnthropic,
+				Type:        AccountTypeOAuth,
+				Credentials: map[string]any{"model_mapping": map[string]any{"claude-sonnet-4-5-20250929": "x"}},
+			},
+			model:    "claude-sonnet-4-5",
+			expected: true,
+		},
+		{
+			name: "Anthropic APIKey-短模型ID不归一化避免误命中",
+			account: &Account{
+				Platform:    PlatformAnthropic,
+				Type:        AccountTypeAPIKey,
+				Credentials: map[string]any{"model_mapping": map[string]any{"claude-sonnet-4-5-20250929": "x"}},
+			},
+			model:    "claude-sonnet-4-5",
+			expected: false,
+		},
+		{
 			name: "Anthropic平台-有映射配置-只支持配置的模型",
 			account: &Account{
 				Platform:    PlatformAnthropic,

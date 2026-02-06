@@ -2126,6 +2126,10 @@ func (s *GatewayService) isModelSupportedByAccount(account *Account, requestedMo
 		// Antigravity 平台使用专门的模型支持检查
 		return IsAntigravityModelSupported(requestedModel)
 	}
+	// OAuth/SetupToken 账号使用 Anthropic 标准映射（短ID → 长ID）
+	if account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
+		requestedModel = claude.NormalizeModelID(requestedModel)
+	}
 	// Gemini API Key 账户直接透传，由上游判断模型是否支持
 	if account.Platform == PlatformGemini && account.Type == AccountTypeAPIKey {
 		return true
@@ -2569,14 +2573,30 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	// 强制执行 cache_control 块数量限制（最多 4 个）
 	body = enforceCacheControlLimit(body, s.cacheControlLimitRemovalStrategy())
 
-	// 应用模型映射（仅对apikey类型账号）
-	if account.Type == AccountTypeAPIKey {
-		mappedModel := account.GetMappedModel(reqModel)
+	// 应用模型映射：
+	// - APIKey 账号：使用账号级别的显式映射（如果配置），否则透传原始模型名
+	// - OAuth/SetupToken 账号：使用 Anthropic 标准映射（短ID → 长ID）
+	if reqModel != "" {
+		mappedModel := reqModel
+		mappingSource := ""
+		if account.Type == AccountTypeAPIKey {
+			byAccount := account.GetMappedModel(reqModel)
+			if byAccount != reqModel {
+				mappedModel = byAccount
+				mappingSource = "account"
+			}
+		}
+		if mappingSource == "" && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
+			normalized := claude.NormalizeModelID(reqModel)
+			if normalized != reqModel {
+				mappedModel = normalized
+				mappingSource = "normalize"
+			}
+		}
 		if mappedModel != reqModel {
-			// 替换请求体中的模型名
 			body = s.replaceModelInBody(body, mappedModel)
 			reqModel = mappedModel
-			log.Printf("Model mapping applied: %s -> %s (account: %s)", originalModel, mappedModel, account.Name)
+			log.Printf("Model mapping applied: %s -> %s (account: %s source=%s)", originalModel, mappedModel, account.Name, mappingSource)
 		}
 	}
 
@@ -4519,15 +4539,30 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		return nil
 	}
 
-	// 应用模型映射（仅对 apikey 类型账号）
-	if account.Type == AccountTypeAPIKey {
-		if reqModel != "" {
-			mappedModel := account.GetMappedModel(reqModel)
-			if mappedModel != reqModel {
-				body = s.replaceModelInBody(body, mappedModel)
-				reqModel = mappedModel
-				log.Printf("CountTokens model mapping applied: %s -> %s (account: %s)", parsed.Model, mappedModel, account.Name)
+	// 应用模型映射：
+	// - APIKey 账号：使用账号级别的显式映射（如果配置），否则透传原始模型名
+	// - OAuth/SetupToken 账号：使用 Anthropic 标准映射（短ID → 长ID）
+	if reqModel != "" {
+		mappedModel := reqModel
+		mappingSource := ""
+		if account.Type == AccountTypeAPIKey {
+			byAccount := account.GetMappedModel(reqModel)
+			if byAccount != reqModel {
+				mappedModel = byAccount
+				mappingSource = "account"
 			}
+		}
+		if mappingSource == "" && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
+			normalized := claude.NormalizeModelID(reqModel)
+			if normalized != reqModel {
+				mappedModel = normalized
+				mappingSource = "normalize"
+			}
+		}
+		if mappedModel != reqModel {
+			body = s.replaceModelInBody(body, mappedModel)
+			reqModel = mappedModel
+			log.Printf("CountTokens model mapping applied: %s -> %s (account: %s source=%s)", parsed.Model, mappedModel, account.Name, mappingSource)
 		}
 	}
 
