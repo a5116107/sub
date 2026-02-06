@@ -110,6 +110,17 @@ func (s *GatewayService) shouldApplyClaudeCodeCompat(userAgent, metadataUserID s
 	}
 }
 
+func (s *GatewayService) shouldApplyClaudeCodeCompatByRequest(ctx context.Context, c *gin.Context, metadataUserID string) bool {
+	switch s.claudeCodeCompatMode() {
+	case "always":
+		return true
+	case "never":
+		return false
+	default: // "auto"
+		return !isClaudeCodeRequest(ctx, c, metadataUserID)
+	}
+}
+
 func shortSessionHash(sessionHash string) string {
 	if sessionHash == "" {
 		return ""
@@ -2106,6 +2117,16 @@ func isClaudeCodeClient(userAgent string, metadataUserID string) bool {
 	return claudeCliUserAgentRe.MatchString(userAgent)
 }
 
+func isClaudeCodeRequest(ctx context.Context, c *gin.Context, metadataUserID string) bool {
+	if IsClaudeCodeClient(ctx) {
+		return true
+	}
+	if c == nil {
+		return false
+	}
+	return isClaudeCodeClient(c.GetHeader("User-Agent"), metadataUserID)
+}
+
 // systemIncludesClaudeCodePrompt 检查 system 中是否已包含 Claude Code 提示词
 // 使用前缀匹配支持多种变体（标准版、Agent SDK 版等）
 func systemIncludesClaudeCodePrompt(system any) bool {
@@ -2384,7 +2405,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	reqModel := parsed.Model
 	reqStream := parsed.Stream
 
-	applyClaudeCompat := s.shouldApplyClaudeCodeCompat(c.GetHeader("User-Agent"), parsed.MetadataUserID)
+	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, parsed.MetadataUserID)
 
 	// Claude Code compat: 智能注入 Claude Code 系统提示词（仅 OAuth/SetupToken 账号需要）
 	// 额外条件：1) 非 Haiku 模型  2) system 中还没有 Claude Code 提示词
@@ -2932,7 +2953,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	if len(body) > 0 {
 		metadataUserID = gjson.GetBytes(body, "metadata.user_id").String()
 	}
-	applyClaudeCompat := s.shouldApplyClaudeCodeCompat(c.GetHeader("User-Agent"), metadataUserID)
+	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, metadataUserID)
 
 	// OAuth账号：应用统一指纹
 	var fingerprint *Fingerprint
@@ -3185,17 +3206,8 @@ func oauthClientUserID(account *Account, fp *Fingerprint) string {
 		return ""
 	}
 
-	candidates := []string{
-		account.GetExtraString("claude_user_id"),
-		account.GetExtraString("anthropic_user_id"),
-		account.GetCredential("claude_user_id"),
-		account.GetCredential("anthropic_user_id"),
-	}
-	for _, candidate := range candidates {
-		candidate = strings.TrimSpace(candidate)
-		if candidate != "" {
-			return candidate
-		}
+	if candidate := strings.TrimSpace(account.GetClaudeUserID()); candidate != "" {
+		return candidate
 	}
 
 	if fp != nil {
@@ -4514,7 +4526,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	if len(body) > 0 {
 		metadataUserID = gjson.GetBytes(body, "metadata.user_id").String()
 	}
-	applyClaudeCompat := s.shouldApplyClaudeCodeCompat(c.GetHeader("User-Agent"), metadataUserID)
+	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, metadataUserID)
 
 	// OAuth 账号：应用统一指纹和重写 userID
 	// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
