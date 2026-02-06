@@ -1,7 +1,10 @@
 <template>
   <Teleport to="body">
     <div
-      class="pointer-events-none fixed right-4 top-4 z-[9999] space-y-3"
+      :class="[
+        'pointer-events-none fixed z-[9999] space-y-3',
+        positionClasses
+      ]"
       aria-live="polite"
       aria-atomic="true"
     >
@@ -82,9 +85,31 @@ import { computed, onMounted, onUnmounted } from 'vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores/app'
 
+type ToastPosition = 'top-right' | 'top-left' | 'top-center' | 'bottom-right' | 'bottom-left' | 'bottom-center'
+
+interface Props {
+  position?: ToastPosition
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  position: 'top-right'
+})
+
 const appStore = useAppStore()
 
 const toasts = computed(() => appStore.toasts)
+
+const positionClasses = computed(() => {
+  const positions: Record<ToastPosition, string> = {
+    'top-right': 'top-4 right-4',
+    'top-left': 'top-4 left-4',
+    'top-center': 'top-4 left-1/2 -translate-x-1/2',
+    'bottom-right': 'bottom-4 right-4',
+    'bottom-left': 'bottom-4 left-4',
+    'bottom-center': 'bottom-4 left-1/2 -translate-x-1/2'
+  }
+  return positions[props.position]
+})
 
 const getToastIconName = (type: string): 'checkCircle' | 'xCircle' | 'exclamationTriangle' | 'infoCircle' => {
   switch (type) {

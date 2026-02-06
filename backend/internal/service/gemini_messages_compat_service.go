@@ -401,9 +401,11 @@ func (s *GeminiMessagesCompatService) validateUpstreamBaseURL(raw string) (strin
 		return normalized, nil
 	}
 	normalized, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
-		AllowedHosts:     s.cfg.Security.URLAllowlist.UpstreamHosts,
+		AllowedHosts:     chooseAllowlist(s.cfg.Security.URLAllowlist.GeminiHosts, s.cfg.Security.URLAllowlist.UpstreamHosts),
 		RequireAllowlist: true,
 		AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
+		AllowPorts:       []int{443},
+		RequireNoPath:    true,
 	})
 	if err != nil {
 		return "", fmt.Errorf("invalid base_url: %w", err)
@@ -2252,7 +2254,7 @@ func (s *GeminiMessagesCompatService) handleNativeNonStreamingResponse(c *gin.Co
 	}
 	log.Printf("[GeminiAPI] ========================================")
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := readAllWithLimit(resp.Body, maxUpstreamNonStreamingBodyBytes)
 	if err != nil {
 		return nil, err
 	}

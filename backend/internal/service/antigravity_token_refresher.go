@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -43,7 +42,7 @@ func (r *AntigravityTokenRefresher) NeedsRefresh(account *Account, _ time.Durati
 	timeUntilExpiry := time.Until(*expiresAt)
 	needsRefresh := timeUntilExpiry < antigravityRefreshWindow
 	if needsRefresh {
-		fmt.Printf("[AntigravityTokenRefresher] Account %d needs refresh: expires_at=%s, time_until_expiry=%v, window=%v\n",
+		log.Printf("[AntigravityTokenRefresher] INFO: account=%d needs refresh: expires_at=%s, time_until_expiry=%v, window=%v",
 			account.ID, expiresAt.Format("2006-01-02 15:04:05"), timeUntilExpiry, antigravityRefreshWindow)
 	}
 	return needsRefresh

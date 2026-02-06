@@ -58,6 +58,19 @@ main() {
     echo "=========================================="
     echo ""
 
+    # Check if Docker is available (this script prepares Docker deployment)
+    if command_exists docker; then
+        if ! docker info >/dev/null 2>&1; then
+            print_warning "Docker CLI is installed but Docker daemon is not reachable."
+            print_warning "You can still generate deployment files now; starting containers will fail until Docker is running."
+            print_warning "Tip (Windows): start Docker Desktop and ensure the Linux engine is running."
+            echo ""
+        fi
+    else
+        print_warning "Docker CLI not found. This script can generate deployment files, but you will need Docker to run them."
+        echo ""
+    fi
+
     # Check if openssl is available
     if ! command_exists openssl; then
         print_error "openssl is not installed. Please install openssl first."

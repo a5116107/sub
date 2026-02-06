@@ -56,6 +56,14 @@ func (b *billingCacheWorkerStub) FinalizeSubscriptionUsage(ctx context.Context, 
 	return nil
 }
 
+func (b *billingCacheWorkerStub) ReserveSubscriptionUsageByKey(ctx context.Context, userID, groupID int64, key string, reserveUSD float64, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64) (int, error) {
+	return 1, nil
+}
+
+func (b *billingCacheWorkerStub) FinalizeSubscriptionUsageByKey(ctx context.Context, userID, groupID int64, key string, reservedUSD, actualUSD float64) error {
+	return nil
+}
+
 func (b *billingCacheWorkerStub) InvalidateSubscriptionCache(ctx context.Context, userID, groupID int64) error {
 	return nil
 }

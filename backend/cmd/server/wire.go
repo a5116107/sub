@@ -76,6 +76,7 @@ func provideCleanup(
 	pricing *service.PricingService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
+	billingSpool *service.BillingSpoolService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
 	qwenOAuth *service.QwenOAuthService,
@@ -136,6 +137,12 @@ func provideCleanup(
 			{"BillingReconcileService", func() error {
 				if billingReconcile != nil {
 					billingReconcile.Stop()
+				}
+				return nil
+			}},
+			{"BillingSpoolService", func() error {
+				if billingSpool != nil {
+					billingSpool.Stop()
 				}
 				return nil
 			}},

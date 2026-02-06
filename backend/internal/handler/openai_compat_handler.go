@@ -439,6 +439,7 @@ func (h *OpenAIGatewayHandler) asyncRecordUsage(
 			UserAgent:    ua,
 			IPAddress:    ip,
 			ReservedUSD:  reservedUSD,
+			ReservedUsageLogID: result.UsageLogID,
 		}); err != nil {
 			log.Printf("Record usage failed: %v", err)
 		}

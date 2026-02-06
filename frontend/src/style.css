@@ -101,6 +101,67 @@
       scroll-behavior: auto !important;
     }
   }
+
+  /* ============ Dark Mode Optimizations ============ */
+  /* Improved text contrast in dark mode */
+  .dark {
+    --text-primary: theme('colors.gray.100');
+    --text-secondary: theme('colors.gray.300');
+    --text-muted: theme('colors.gray.400');
+  }
+
+  /* Reduce glass effect intensity in dark mode for better readability */
+  .dark .glass,
+  .dark .glass-card,
+  .dark .card,
+  .dark .card-glass {
+    --tw-bg-opacity: 0.65;
+    backdrop-filter: blur(16px);
+  }
+
+  /* Increase surface opacity for better contrast */
+  .dark .neo-surface {
+    --tw-bg-opacity: 0.70;
+  }
+
+  /* Enhanced text visibility on glass surfaces */
+  .dark .glass p,
+  .dark .glass-card p,
+  .dark .card p {
+    @apply text-gray-200;
+  }
+
+  /* Improved border visibility in dark mode */
+  .dark .border-gray-200 {
+    border-color: rgb(51 65 85); /* dark-700 */
+  }
+
+  /* Better input contrast in dark mode */
+  .dark .input {
+    @apply bg-dark-800/80 border-dark-600 text-gray-100;
+  }
+
+  .dark .input::placeholder {
+    @apply text-gray-500;
+  }
+
+  .dark .input:focus {
+    @apply border-primary-400 ring-primary-400/30;
+  }
+
+  /* Improved badge visibility */
+  .dark .badge-gray {
+    @apply bg-dark-600 text-gray-200;
+  }
+
+  /* Better dropdown contrast */
+  .dark .dropdown {
+    @apply bg-dark-800/95 border-dark-600;
+  }
+
+  .dark .dropdown-item:hover {
+    @apply bg-dark-700;
+  }
 }
 
 @layer components {
@@ -1229,6 +1290,27 @@
 }
 
 @layer utilities {
+  /* ============ Layout Width Utilities ============ */
+  /* For forms, settings pages - narrow content */
+  .layout-narrow {
+    @apply mx-auto w-full max-w-3xl;
+  }
+
+  /* Default layout - most pages */
+  .layout-normal {
+    @apply mx-auto w-full max-w-7xl;
+  }
+
+  /* For tables, dashboards - wider content */
+  .layout-wide {
+    @apply mx-auto w-full max-w-[96rem];
+  }
+
+  /* Full width - no max-width constraint */
+  .layout-full {
+    @apply w-full;
+  }
+
   /* 文字渐变 */
   .text-gradient {
     @apply bg-gradient-to-r from-primary-500 to-accent-500 bg-clip-text text-transparent;
@@ -1262,6 +1344,80 @@
   /* Focus ring enhancement */
   .focus-ring-primary {
     @apply focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:ring-offset-2;
+  }
+
+  /* ============ Micro-interactions ============ */
+  /* Button hover lift effect */
+  .btn-hover-lift {
+    @apply transition-all duration-200 ease-out;
+  }
+
+  .btn-hover-lift:hover:not(:disabled) {
+    @apply -translate-y-0.5 shadow-lg;
+  }
+
+  .btn-hover-lift:active:not(:disabled) {
+    @apply translate-y-0 shadow-md;
+    animation: btnPress 0.15s ease-out;
+  }
+
+  /* Button success state */
+  .btn-success-state {
+    animation: btnSuccess 0.4s ease-out;
+  }
+
+  /* Interactive card press effect */
+  .press-effect {
+    @apply transition-transform duration-150 ease-out;
+  }
+
+  .press-effect:active {
+    @apply scale-[0.98];
+  }
+
+  /* List item animations */
+  .list-enter-active {
+    animation: listItemIn 0.3s ease-out;
+  }
+
+  .list-leave-active {
+    animation: listItemOut 0.2s ease-in;
+  }
+
+  .list-move {
+    transition: transform 0.3s ease-out;
+  }
+
+  /* Page transition */
+  .page-enter-active {
+    animation: pageEnter 0.35s ease-out;
+  }
+
+  .page-leave-active {
+    @apply transition-opacity duration-200 ease-in;
+  }
+
+  .page-leave-to {
+    @apply opacity-0;
+  }
+
+  /* Smooth reorder for sortable lists */
+  .sortable-ghost {
+    @apply opacity-50;
+  }
+
+  .sortable-drag {
+    @apply shadow-float;
+  }
+
+  /* Icon spin on hover */
+  .icon-spin-hover:hover {
+    animation: spin 0.5s ease-in-out;
+  }
+
+  /* Pulse on focus */
+  .pulse-focus:focus {
+    animation: pulseRing 0.5s ease-out;
   }
 
   /* Gradient border */

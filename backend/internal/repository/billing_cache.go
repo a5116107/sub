@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -125,6 +126,98 @@ var (
 		end
 
 		redis.call('EXPIRE', KEYS[1], ttl)
+		return 1
+	`)
+
+	reserveSubUsageByKeyScript = redis.NewScript(`
+		local base = KEYS[1]
+		local rkey = KEYS[2]
+
+		local exists = redis.call('EXISTS', base)
+		if exists == 0 then
+			return 0
+		end
+
+		local reserve = tonumber(ARGV[1])
+		if reserve == nil or reserve <= 0 then
+			return 0
+		end
+
+		local ttl = tonumber(ARGV[2])
+		local dailyLimit = tonumber(ARGV[3])
+		local weeklyLimit = tonumber(ARGV[4])
+		local monthlyLimit = tonumber(ARGV[5])
+
+		local dailyUsage = tonumber(redis.call('HGET', base, 'daily_usage') or '0')
+		local weeklyUsage = tonumber(redis.call('HGET', base, 'weekly_usage') or '0')
+		local monthlyUsage = tonumber(redis.call('HGET', base, 'monthly_usage') or '0')
+
+		local reservedTotal = tonumber(redis.call('HGET', base, 'reserved_usage') or '0')
+		local already = tonumber(redis.call('GET', rkey) or '0')
+		if already ~= nil and already > 0 then
+			-- idempotent: already reserved under this key
+			redis.call('EXPIRE', rkey, ttl)
+			redis.call('EXPIRE', base, ttl)
+			return 2
+		end
+
+		if dailyLimit ~= nil and dailyLimit >= 0 and (dailyUsage + reservedTotal + reserve) > dailyLimit then
+			return -1
+		end
+		if weeklyLimit ~= nil and weeklyLimit >= 0 and (weeklyUsage + reservedTotal + reserve) > weeklyLimit then
+			return -2
+		end
+		if monthlyLimit ~= nil and monthlyLimit >= 0 and (monthlyUsage + reservedTotal + reserve) > monthlyLimit then
+			return -3
+		end
+
+		redis.call('SET', rkey, reserve, 'EX', ttl)
+		redis.call('HINCRBYFLOAT', base, 'reserved_usage', reserve)
+		redis.call('EXPIRE', base, ttl)
+		return 1
+	`)
+
+	finalizeSubUsageByKeyScript = redis.NewScript(`
+		local base = KEYS[1]
+		local rkey = KEYS[2]
+
+		local exists = redis.call('EXISTS', base)
+		if exists == 0 then
+			return 0
+		end
+
+		local ttl = tonumber(ARGV[3])
+		local reservedDelta = tonumber(ARGV[1])
+		local actual = tonumber(ARGV[2])
+
+		local held = tonumber(redis.call('GET', rkey) or '0')
+		if held == nil or held <= 0 then
+			-- already finalized or never reserved under this key
+			redis.call('EXPIRE', base, ttl)
+			return 2
+		end
+
+		-- Do not allow releasing more than held
+		local release = held
+		if reservedDelta ~= nil and reservedDelta > 0 and reservedDelta < held then
+			release = reservedDelta
+		end
+
+		local reservedTotal = tonumber(redis.call('HGET', base, 'reserved_usage') or '0')
+		local newReserved = reservedTotal - release
+		if newReserved < 0 then
+			newReserved = 0
+		end
+		redis.call('HSET', base, 'reserved_usage', newReserved)
+
+		if actual ~= nil and actual > 0 then
+			redis.call('HINCRBYFLOAT', base, 'daily_usage', actual)
+			redis.call('HINCRBYFLOAT', base, 'weekly_usage', actual)
+			redis.call('HINCRBYFLOAT', base, 'monthly_usage', actual)
+		end
+
+		redis.call('DEL', rkey)
+		redis.call('EXPIRE', base, ttl)
 		return 1
 	`)
 )
@@ -288,6 +381,45 @@ func (c *billingCache) FinalizeSubscriptionUsage(ctx context.Context, userID, gr
 	_, err := finalizeSubUsageScript.Run(ctx, c.rdb, []string{key}, reservedUSD, actualUSD, int(billingCacheTTL.Seconds())).Result()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		log.Printf("Warning: finalize subscription usage cache failed for user %d group %d: %v", userID, groupID, err)
+		return err
+	}
+	return nil
+}
+
+func (c *billingCache) ReserveSubscriptionUsageByKey(ctx context.Context, userID, groupID int64, key string, reserveUSD float64, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64) (int, error) {
+	base := billingSubKey(userID, groupID)
+	rkey := fmt.Sprintf("%sres:%s", base+":", strings.TrimSpace(key))
+
+	limitArg := func(v *float64) float64 {
+		if v == nil || *v <= 0 {
+			return -1
+		}
+		return *v
+	}
+
+	res, err := reserveSubUsageByKeyScript.Run(
+		ctx,
+		c.rdb,
+		[]string{base, rkey},
+		reserveUSD,
+		int(billingCacheTTL.Seconds()),
+		limitArg(dailyLimitUSD),
+		limitArg(weeklyLimitUSD),
+		limitArg(monthlyLimitUSD),
+	).Int()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		log.Printf("Warning: reserve subscription usage by key failed for user %d group %d: %v", userID, groupID, err)
+		return 0, err
+	}
+	return res, nil
+}
+
+func (c *billingCache) FinalizeSubscriptionUsageByKey(ctx context.Context, userID, groupID int64, key string, reservedUSD, actualUSD float64) error {
+	base := billingSubKey(userID, groupID)
+	rkey := fmt.Sprintf("%sres:%s", base+":", strings.TrimSpace(key))
+	_, err := finalizeSubUsageByKeyScript.Run(ctx, c.rdb, []string{base, rkey}, reservedUSD, actualUSD, int(billingCacheTTL.Seconds())).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		log.Printf("Warning: finalize subscription usage by key failed for user %d group %d: %v", userID, groupID, err)
 		return err
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
@@ -153,6 +154,7 @@ func TestAccountService_TestCredentials_AnthropicOAuth(t *testing.T) {
 				},
 			},
 		},
+		cfg: &config.Config{},
 	}
 
 	err := svc.TestCredentials(context.Background(), 1)
@@ -175,6 +177,7 @@ func TestAccountService_TestCredentials_OpenAIApiKey_InvalidBaseURL(t *testing.T
 				},
 			},
 		},
+		cfg: &config.Config{},
 	}
 
 	err := svc.TestCredentials(context.Background(), 1)
@@ -198,6 +201,7 @@ func TestAccountService_TestCredentials_OpenAIOAuth_ExpiredWithoutRefreshToken(t
 				},
 			},
 		},
+		cfg: &config.Config{},
 	}
 
 	err := svc.TestCredentials(context.Background(), 1)
@@ -218,6 +222,7 @@ func TestAccountService_TestCredentials_GeminiOAuth_MissingTokens(t *testing.T) 
 				},
 			},
 		},
+		cfg: &config.Config{},
 	}
 
 	err := svc.TestCredentials(context.Background(), 1)

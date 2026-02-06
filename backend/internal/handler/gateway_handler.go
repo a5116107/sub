@@ -246,7 +246,24 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		}
 	}
 
-	reservation, err := h.billingCacheService.CheckBillingEligibilityAndReserve(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, reserveUSD)
+	// Bind reservation to an idempotency key (server-side request id) to prevent late finalization from releasing
+	// a different request's reservation under concurrency/retry.
+	reservationKey := ""
+	if subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType() {
+		// Prefer a server-generated request id from middleware; do NOT rely on client-provided idempotency keys.
+		reservationKey, _ = c.Request.Context().Value(ctxkey.ClientRequestID).(string)
+		reservationKey = strings.TrimSpace(reservationKey)
+		provided, _ := c.Request.Context().Value(ctxkey.ClientRequestIDProvided).(bool)
+		if provided {
+			reservationKey = ""
+		}
+	}
+	reservation, err := func() (*service.SubscriptionUsageReservation, error) {
+		if reservationKey != "" {
+			return h.billingCacheService.CheckBillingEligibilityAndReserveByKey(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, reservationKey, reserveUSD)
+		}
+		return h.billingCacheService.CheckBillingEligibilityAndReserve(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, reserveUSD)
+	}()
 	released := false
 	defer func() {
 		if reservation == nil || released {
@@ -254,6 +271,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
+		if reservationKey != "" {
+			_ = h.billingCacheService.FinalizeSubscriptionReservationByKey(ctx, reservation.UserID, reservation.GroupID, reservationKey, reservation.AmountUSD, 0)
+			return
+		}
 		_ = h.billingCacheService.FinalizeSubscriptionReservation(ctx, reservation.UserID, reservation.GroupID, reservation.AmountUSD, 0)
 	}()
 
@@ -403,11 +424,15 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// 异步记录使用量（subscription已在函数开头获取）
 			clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
 			reservedUSD := 0.0
+			var reservedUsageLogID int64
 			if reservation != nil {
 				reservedUSD = reservation.AmountUSD
 				released = true
 			}
-			go func(result *service.ForwardResult, usedAccount *service.Account, ua, clientIP, clientRequestID string, reservedUSD float64) {
+			if result != nil {
+				reservedUsageLogID = result.UsageLogID
+			}
+			go func(result *service.ForwardResult, usedAccount *service.Account, ua, clientIP, clientRequestID string, reservedUSD float64, reservedUsageLogID int64) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				if strings.TrimSpace(clientRequestID) != "" {
@@ -422,10 +447,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					UserAgent:    ua,
 					IPAddress:    clientIP,
 					ReservedUSD:  reservedUSD,
+					ReservedUsageLogID: reservedUsageLogID,
 				}); err != nil {
 					log.Printf("Record usage failed: %v", err)
 				}
-			}(result, account, userAgent, clientIP, clientRequestID, reservedUSD)
+			}(result, account, userAgent, clientIP, clientRequestID, reservedUSD, reservedUsageLogID)
 			return
 		}
 	}

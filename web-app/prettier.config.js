@@ -1,0 +1,11 @@
+/** @type {import('prettier').Config} */
+export default {
+  semi: false,
+  singleQuote: true,
+  tabWidth: 2,
+  trailingComma: 'none',
+  printWidth: 100,
+  arrowParens: 'avoid',
+  endOfLine: 'lf',
+  vueIndentScriptAndStyle: false
+}

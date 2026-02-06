@@ -512,11 +512,13 @@ const adminNavItems = computed(() => {
     const filtered = baseItems.filter(item => !item.hideInSimpleMode)
     filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon })
     filtered.push({ path: '/admin/docs', label: t('nav.docs'), icon: BookIcon })
+    filtered.push({ path: '/admin/model-pricing', label: t('nav.modelPricing'), icon: CreditCardIcon })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
     return filtered
   }
 
   baseItems.push({ path: '/admin/docs', label: t('nav.docs'), icon: BookIcon })
+  baseItems.push({ path: '/admin/model-pricing', label: t('nav.modelPricing'), icon: CreditCardIcon })
   baseItems.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
   return baseItems
 })

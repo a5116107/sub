@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,8 @@ import (
 const (
 	opencodeCodexHeaderURL = "https://raw.githubusercontent.com/anomalyco/opencode/dev/packages/opencode/src/session/prompt/codex_header.txt"
 	codexCacheTTL          = 15 * time.Minute
+	opencodeFetchTimeout   = 3 * time.Second
+	opencodeFetchMaxBytes  = 256 << 10
 )
 
 //go:embed prompts/codex_cli_instructions.md
@@ -520,15 +523,20 @@ func writeJSON(path string, value any) error {
 }
 
 func fetchWithETag(url, etag string) (string, string, int, error) {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), opencodeFetchTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", "", 0, err
 	}
 	req.Header.Set("User-Agent", "sub2api-codex")
+	req.Header.Set("Accept", "text/plain")
 	if etag != "" {
 		req.Header.Set("If-None-Match", etag)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: opencodeFetchTimeout}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", 0, err
 	}
@@ -536,9 +544,12 @@ func fetchWithETag(url, etag string) (string, string, int, error) {
 		_ = resp.Body.Close()
 	}()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, opencodeFetchMaxBytes+1))
 	if err != nil {
 		return "", "", resp.StatusCode, err
+	}
+	if len(body) > opencodeFetchMaxBytes {
+		return "", "", resp.StatusCode, fmt.Errorf("opencode fetch response too large")
 	}
 	return string(body), resp.Header.Get("etag"), resp.StatusCode, nil
 }

@@ -15,6 +15,27 @@ type ValidationOptions struct {
 	AllowedHosts     []string
 	RequireAllowlist bool
 	AllowPrivate     bool
+	AllowPorts       []int
+	RequireNoPath    bool
+}
+
+func isAllowedPort(port string, allowed []int) error {
+	if port == "" {
+		return nil
+	}
+	num, err := strconv.Atoi(port)
+	if err != nil || num <= 0 || num > 65535 {
+		return fmt.Errorf("invalid port: %s", port)
+	}
+	if len(allowed) == 0 {
+		return fmt.Errorf("port is not allowed: %d", num)
+	}
+	for _, p := range allowed {
+		if p == num {
+			return nil
+		}
+	}
+	return fmt.Errorf("port is not allowed: %d", num)
 }
 
 func ValidateURLFormat(raw string, allowInsecureHTTP bool) (string, error) {
@@ -67,6 +88,9 @@ func ValidateHTTPSURL(raw string, opts ValidationOptions) (string, error) {
 	if host == "" {
 		return "", errors.New("invalid host")
 	}
+	if err := isAllowedPort(parsed.Port(), opts.AllowPorts); err != nil {
+		return "", err
+	}
 	if !opts.AllowPrivate && isBlockedHost(host) {
 		return "", fmt.Errorf("host is not allowed: %s", host)
 	}
@@ -77,6 +101,13 @@ func ValidateHTTPSURL(raw string, opts ValidationOptions) (string, error) {
 	}
 	if len(allowlist) > 0 && !isAllowedHost(host, allowlist) {
 		return "", fmt.Errorf("host is not allowed: %s", host)
+	}
+
+	if opts.RequireNoPath {
+		path := strings.TrimSpace(parsed.EscapedPath())
+		if path != "" && path != "/" {
+			return "", fmt.Errorf("url path is not allowed: %s", parsed.Path)
+		}
 	}
 
 	parsed.Path = strings.TrimRight(parsed.Path, "/")

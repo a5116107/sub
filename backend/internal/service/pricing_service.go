@@ -126,6 +126,10 @@ func (s *PricingService) startUpdateScheduler() {
 		for {
 			select {
 			case <-ticker.C:
+				// If local override is enabled, do not auto-sync with remote pricing.
+				if s.IsOverrideEnabled() {
+					continue
+				}
 				if err := s.syncWithRemote(); err != nil {
 					log.Printf("[Pricing] Sync failed: %v", err)
 				}
@@ -141,9 +145,14 @@ func (s *PricingService) startUpdateScheduler() {
 // checkAndUpdatePricing 检查并更新价格数据
 func (s *PricingService) checkAndUpdatePricing() error {
 	pricingFile := s.getPricingFilePath()
+	overrideEnabled := s.IsOverrideEnabled()
 
 	// 检查本地文件是否存在
 	if _, err := os.Stat(pricingFile); os.IsNotExist(err) {
+		if overrideEnabled {
+			log.Println("[Pricing] Override enabled but local pricing file not found, using fallback...")
+			return s.useFallbackPricing()
+		}
 		log.Println("[Pricing] Local pricing file not found, downloading...")
 		return s.downloadPricingData()
 	}
@@ -151,6 +160,10 @@ func (s *PricingService) checkAndUpdatePricing() error {
 	// 检查文件是否过期
 	info, err := os.Stat(pricingFile)
 	if err != nil {
+		if overrideEnabled {
+			log.Println("[Pricing] Override enabled but local pricing file stat failed, using fallback...")
+			return s.useFallbackPricing()
+		}
 		return s.downloadPricingData()
 	}
 
@@ -158,9 +171,13 @@ func (s *PricingService) checkAndUpdatePricing() error {
 	maxAge := time.Duration(s.cfg.Pricing.UpdateIntervalHours) * time.Hour
 
 	if fileAge > maxAge {
-		log.Printf("[Pricing] Local file is %v old, updating...", fileAge.Round(time.Hour))
-		if err := s.downloadPricingData(); err != nil {
-			log.Printf("[Pricing] Download failed, using existing file: %v", err)
+		if overrideEnabled {
+			log.Printf("[Pricing] Override enabled; skipping auto update (file age=%v)", fileAge.Round(time.Hour))
+		} else {
+			log.Printf("[Pricing] Local file is %v old, updating...", fileAge.Round(time.Hour))
+			if err := s.downloadPricingData(); err != nil {
+				log.Printf("[Pricing] Download failed, using existing file: %v", err)
+			}
 		}
 	}
 
@@ -425,6 +442,8 @@ func (s *PricingService) validatePricingURL(raw string) (string, error) {
 		AllowedHosts:     s.cfg.Security.URLAllowlist.PricingHosts,
 		RequireAllowlist: true,
 		AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
+		AllowPorts:       []int{443},
+		RequireNoPath:    false,
 	})
 	if err != nil {
 		return "", fmt.Errorf("invalid pricing url: %w", err)

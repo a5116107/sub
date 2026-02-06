@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 )
 
 const defaultClaudeUsageURL = "https://api.anthropic.com/api/oauth/usage"
+const maxClaudeUsageBodyBytes int64 = 1 << 20 // 1 MiB
 
 // 默认 User-Agent，与用户抓包的请求一致
 const defaultUsageUserAgent = "claude-code/2.1.7"
@@ -94,12 +94,16 @@ func (s *claudeUsageService) FetchUsageWithOptions(ctx context.Context, opts *se
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := readAllWithLimit(resp.Body, maxClaudeUsageBodyBytes)
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var usageResp service.ClaudeUsageResponse
-	if err := json.NewDecoder(resp.Body).Decode(&usageResp); err != nil {
+	body, err := readAllWithLimit(resp.Body, maxClaudeUsageBodyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("decode response failed: %w", err)
+	}
+	if err := json.Unmarshal(body, &usageResp); err != nil {
 		return nil, fmt.Errorf("decode response failed: %w", err)
 	}
 

@@ -1,7 +1,8 @@
 # Task Tracker
 
-> **Last Updated**: 2026-01-30
-> **Active**: 0 | **Pending**: 4 | **Completed This Week**: 109
+> **Last Updated**: 2026-02-03
+> **Last Updated**: 2026-02-03
+> **Active**: 0 | **Pending**: 3 | **Completed This Week**: 21
 
 ---
 
@@ -9,6 +10,27 @@
 
 | ID | Task | Priority | Status | Owner | Start Date | Source |
 |----|------|----------|--------|-------|------------|--------|
+| SEC-045 | Security/SSRF: provider-specific upstream allowlists | P2 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-045.md` |
+| SEC-044 | Security/SSRF: enforce URL allowlist for iFlow/Qwen base_url | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-044.md` |
+| SEC-043 | Security/SSRF: restrict base_url ports and paths | P2 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-043.md` |
+| SEC-042 | Security/SSRF: default allow_private_hosts to false | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-042.md` |
+| SEC-041 | Security: default allow_insecure_http to false | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-041.md` |
+| SEC-040 | Security/SSRF: make URL allowlist enforcement default-on | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-040.md` |
+| SEC-039 | Privacy: eliminate fmt.Printf logging in OAuth flows | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-039.md` |
+| SEC-038 | Security: remove hardcoded OAuth client secrets (Gemini CLI/Antigravity) | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-038.md` |
+| BILL-018 | Billing: default pricing missing policy must not undercharge unknown models | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/BILL-018.md` |
+| SEC-037 | Security/DoS: apply RequestBodyLimit to /api/v1 and return 413 for webhooks | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-037.md` |
+| SEC-035 | Security/DoS: cap remaining external HTTP response bodies | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-035.md` |
+| SEC-034 | Security/DoS: cap upstream non-streaming response bodies in gateway services | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-034.md` |
+| SEC-033 | Security/DoS: cap remote HTTP response bodies (pricing/hash/checksum) | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-033.md` |
+| SEC-032 | Security/DoS: opencode instructions fetch must have timeout and size limit | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-032.md` |
+| SEC-031 | Security/DoS: proxy probe should avoid plaintext HTTP and cap response body | P2 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-031.md` |
+| BILL-017 | Billing: avoid subscription cache double-count on reservation finalize | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/BILL-017.md` |
+| BILL-016 | Billing: durable ledger when usage log write fails (infra outage) | P1 | Completed |  | 2026-02-03 | `docs/project/tasks/BILL-016.md` |
+| BILL-015 | Billing: pricing missing must not bill as $0 | P1 | Completed |  | 2026-02-02 | `docs/project/tasks/BILL-015.md` |
+| BILL-014 | Billing: close usage log insert bypass + fix idempotency undercharge | P1 | Completed |  | 2026-02-02 | `docs/project/tasks/BILL-014.md` |
+| SEC-030 | XSS: harden public HomeContent rendering (v-html) | P2 | Completed |  | 2026-02-02 | `docs/project/tasks/SEC-030.md` |
+| SEC-029 | Privacy: redact OAuth exchange logs (email/org/account uuid) | P2 | Completed |  | 2026-02-02 | `docs/project/tasks/SEC-029.md` |
 | SUB-007 | User: subscription single progress endpoint + contract alignment | P1 | Completed |  | 2026-01-30 | `docs/project/tasks/SUB-007.md` |
 | SUB-006 | Admin: feature toggles for subscriptions/pricing | P2 | Completed |  | 2026-01-27 | `docs/project/tasks/SUB-006.md` |
 | SEC-028 | Security: scope sticky session keys per-user (avoid cross-user pinning) | P2 | Completed |  | 2026-01-27 | `docs/project/tasks/SEC-028.md` |
@@ -63,6 +85,19 @@
 
 | ID | Task | Completed | Verified |
 |----|------|-----------|----------|
+| BILL-018 | Billing: default pricing missing policy must not undercharge unknown models | 2026-02-03 | `cd backend; go test ./...` PASS |
+| SEC-037 | Security/DoS: apply RequestBodyLimit to /api/v1 and return 413 for webhooks | 2026-02-03 | `cd backend; go test ./...` PASS |
+| SEC-035 | Security/DoS: cap remaining external HTTP response bodies | 2026-02-03 | `cd backend; go test ./...` PASS |
+| SEC-034 | Security/DoS: cap upstream non-streaming response bodies in gateway services | 2026-02-03 | `cd backend; go test ./...` PASS |
+| SEC-033 | Security/DoS: cap remote HTTP response bodies (pricing/hash/checksum) | 2026-02-03 | `cd backend; go test ./...` PASS |
+| SEC-032 | Security/DoS: opencode instructions fetch must have timeout and size limit | 2026-02-03 | `cd backend; go test ./...` PASS; `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS |
+| SEC-031 | Security/DoS: proxy probe should avoid plaintext HTTP and cap response body | 2026-02-03 | `cd backend; go test ./...` PASS |
+| BILL-017 | Billing: avoid subscription cache double-count on reservation finalize | 2026-02-03 | `cd backend; go test ./...` PASS |
+| BILL-016 | Billing: durable ledger when usage log write fails (infra outage) | 2026-02-03 | `cd backend; go test ./...` PASS; `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS |
+| BILL-015 | Billing: pricing missing must not bill as $0 | 2026-02-02 | `cd backend; go test ./...` PASS |
+| BILL-014 | Billing: close usage log insert bypass + fix idempotency undercharge | 2026-02-02 | `cd backend; go test ./...` PASS |
+| SEC-030 | XSS: harden public HomeContent rendering (v-html) | 2026-02-02 | `cd backend; go test ./...` PASS; `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS |
+| SEC-029 | Privacy: redact OAuth exchange logs (email/org/account uuid) | 2026-02-02 | `cd backend; go test ./...` PASS |
 | SUB-007 | User: subscription single progress endpoint + contract alignment | 2026-01-30 | `cd backend; go test ./...` PASS; `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS |
 | SUB-006 | Admin: feature toggles for subscriptions/pricing | 2026-01-27 | `cd backend; go test ./...` PASS; `pnpm -C frontend build` PASS |
 | SEC-028 | Security: scope sticky session keys per-user (avoid cross-user pinning) | 2026-01-27 | `cd backend; go test ./...` PASS |

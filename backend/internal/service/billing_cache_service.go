@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -524,6 +525,90 @@ func (s *BillingCacheService) CheckBillingEligibilityAndReserve(ctx context.Cont
 	return &SubscriptionUsageReservation{UserID: user.ID, GroupID: group.ID, AmountUSD: reserveUSD}, nil
 }
 
+// CheckBillingEligibilityAndReserveByKey is like CheckBillingEligibilityAndReserve but binds the reservation
+// to a key (e.g. server request id) to make reservation/finalization idempotent.
+func (s *BillingCacheService) CheckBillingEligibilityAndReserveByKey(ctx context.Context, user *User, apiKey *APIKey, group *Group, subscription *UserSubscription, key string, reserveUSD float64) (*SubscriptionUsageReservation, error) {
+	// 简易模式：跳过所有计费检查
+	if s.cfg.RunMode == config.RunModeSimple {
+		return nil, nil
+	}
+	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
+		return nil, ErrBillingServiceUnavailable
+	}
+
+	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
+	if !isSubscriptionMode {
+		return nil, s.checkBalanceEligibility(ctx, user.ID)
+	}
+	if reserveUSD <= 0 {
+		return nil, ErrBillingServiceUnavailable
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		// Fallback to legacy behavior when no safe key provided.
+		return s.CheckBillingEligibilityAndReserve(ctx, user, apiKey, group, subscription, reserveUSD)
+	}
+
+	// Ensure cache key exists by fetching status once, mirroring reserveSubscriptionEligibility behavior.
+	subData, err := s.getSubscriptionStatusEnsureCache(ctx, user.ID, group.ID)
+	if err != nil {
+		if s.circuitBreaker != nil {
+			s.circuitBreaker.OnFailure(err)
+		}
+		log.Printf("ALERT: billing subscription check failed for user %d group %d: %v", user.ID, group.ID, err)
+		return nil, ErrBillingServiceUnavailable.WithCause(err)
+	}
+	if s.circuitBreaker != nil {
+		s.circuitBreaker.OnSuccess()
+	}
+
+	if subData.Status != SubscriptionStatusActive || time.Now().After(subData.ExpiresAt) {
+		return nil, ErrSubscriptionInvalid
+	}
+
+	code, err := s.ReserveSubscriptionReservationByKey(ctx, user.ID, group.ID, key, reserveUSD, group.DailyLimitUSD, group.WeeklyLimitUSD, group.MonthlyLimitUSD)
+	if err != nil {
+		if s.circuitBreaker != nil {
+			s.circuitBreaker.OnFailure(err)
+		}
+		return nil, ErrBillingServiceUnavailable.WithCause(err)
+	}
+	switch code {
+	case 1, 2:
+		return &SubscriptionUsageReservation{UserID: user.ID, GroupID: group.ID, AmountUSD: reserveUSD}, nil
+	case 0:
+		// Key missing: refresh cache synchronously then retry once (same as reserveSubscriptionEligibility).
+		s.setSubscriptionCache(ctx, user.ID, group.ID, subData)
+		code2, err2 := s.ReserveSubscriptionReservationByKey(ctx, user.ID, group.ID, key, reserveUSD, group.DailyLimitUSD, group.WeeklyLimitUSD, group.MonthlyLimitUSD)
+		if err2 != nil {
+			if s.circuitBreaker != nil {
+				s.circuitBreaker.OnFailure(err2)
+			}
+			return nil, ErrBillingServiceUnavailable.WithCause(err2)
+		}
+		switch code2 {
+		case 1, 2:
+			return &SubscriptionUsageReservation{UserID: user.ID, GroupID: group.ID, AmountUSD: reserveUSD}, nil
+		case -1:
+			return nil, ErrDailyLimitExceeded
+		case -2:
+			return nil, ErrWeeklyLimitExceeded
+		case -3:
+			return nil, ErrMonthlyLimitExceeded
+		default:
+			return nil, ErrBillingServiceUnavailable
+		}
+	case -1:
+		return nil, ErrDailyLimitExceeded
+	case -2:
+		return nil, ErrWeeklyLimitExceeded
+	case -3:
+		return nil, ErrMonthlyLimitExceeded
+	default:
+		return nil, ErrBillingServiceUnavailable
+	}
+}
+
 func (s *BillingCacheService) reserveSubscriptionEligibility(ctx context.Context, userID int64, group *Group, subscription *UserSubscription, reserveUSD float64) error {
 	if s.cache == nil {
 		return ErrBillingServiceUnavailable
@@ -600,6 +685,23 @@ func (s *BillingCacheService) FinalizeSubscriptionReservation(ctx context.Contex
 		return nil
 	}
 	return s.cache.FinalizeSubscriptionUsage(ctx, userID, groupID, reservedUSD, actualUSD)
+}
+
+// ReserveSubscriptionReservationByKey reserves subscription quota for a specific idempotency key.
+// This avoids "late finalize releases the wrong reservation" issues by binding reserved quota to a key.
+func (s *BillingCacheService) ReserveSubscriptionReservationByKey(ctx context.Context, userID, groupID int64, key string, reserveUSD float64, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64) (int, error) {
+	if s == nil || s.cache == nil {
+		return 0, ErrBillingServiceUnavailable
+	}
+	return s.cache.ReserveSubscriptionUsageByKey(ctx, userID, groupID, key, reserveUSD, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD)
+}
+
+// FinalizeSubscriptionReservationByKey finalizes reservation for a specific idempotency key.
+func (s *BillingCacheService) FinalizeSubscriptionReservationByKey(ctx context.Context, userID, groupID int64, key string, reservedUSD, actualUSD float64) error {
+	if s == nil || s.cache == nil {
+		return nil
+	}
+	return s.cache.FinalizeSubscriptionUsageByKey(ctx, userID, groupID, key, reservedUSD, actualUSD)
 }
 
 // checkBalanceEligibility 检查余额模式资格

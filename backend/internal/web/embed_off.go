@@ -46,3 +46,21 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 func HasEmbeddedFrontend() bool {
 	return false
 }
+
+// HasV2Frontend checks if the v2 frontend (web-app) is embedded
+func HasV2Frontend() bool {
+	return false
+}
+
+// NewV2FrontendServer returns an error when frontend is not embedded
+func NewV2FrontendServer(settingsProvider PublicSettingsProvider) (*FrontendServer, error) {
+	return nil, errors.New("v2 frontend not embedded")
+}
+
+// V2Middleware returns a handler that returns 404 for non-embed builds
+func (s *FrontendServer) V2Middleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.String(http.StatusNotFound, "V2 frontend not embedded. Build with -tags embed to include frontend.")
+		c.Abort()
+	}
+}

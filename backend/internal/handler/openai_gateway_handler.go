@@ -201,6 +201,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			UserAgent:    ua,
 			IPAddress:    ip,
 			ReservedUSD:  reservedUSD,
+			ReservedUsageLogID: result.UsageLogID,
 		}); err != nil {
 			log.Printf("Record usage failed: %v", err)
 		}
@@ -322,7 +323,21 @@ func (h *OpenAIGatewayHandler) forwardWithFailover(
 		}
 	}
 
-	reservation, err := h.billingCacheService.CheckBillingEligibilityAndReserve(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, reserveUSD)
+	reservationKey := ""
+	if subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType() {
+		reservationKey, _ = c.Request.Context().Value(ctxkey.ClientRequestID).(string)
+		reservationKey = strings.TrimSpace(reservationKey)
+		provided, _ := c.Request.Context().Value(ctxkey.ClientRequestIDProvided).(bool)
+		if provided {
+			reservationKey = ""
+		}
+	}
+	reservation, err := func() (*service.SubscriptionUsageReservation, error) {
+		if reservationKey != "" {
+			return h.billingCacheService.CheckBillingEligibilityAndReserveByKey(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, reservationKey, reserveUSD)
+		}
+		return h.billingCacheService.CheckBillingEligibilityAndReserve(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, reserveUSD)
+	}()
 	released := false
 	defer func() {
 		if reservation == nil || released {
@@ -330,6 +345,10 @@ func (h *OpenAIGatewayHandler) forwardWithFailover(
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
+		if reservationKey != "" {
+			_ = h.billingCacheService.FinalizeSubscriptionReservationByKey(ctx, reservation.UserID, reservation.GroupID, reservationKey, reservation.AmountUSD, 0)
+			return
+		}
 		_ = h.billingCacheService.FinalizeSubscriptionReservation(ctx, reservation.UserID, reservation.GroupID, reservation.AmountUSD, 0)
 	}()
 

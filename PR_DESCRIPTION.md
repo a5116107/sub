@@ -1,164 +1,110 @@
-## 概述
+## 概要
 
-全面增强运维监控系统（Ops）的错误日志管理和告警静默功能，优化前端 UI 组件代码质量和用户体验。本次更新重构了核心服务层和数据访问层，提升系统可维护性和运维效率。
+本 PR 合并 `feat/apikey-policy-quota-strict` 分支到目标仓库主分支，主要聚焦于：
 
-## 主要改动
+- 网关与上游转发的安全/健壮性增强（请求体读取限制、URL 校验、上游信息保密）
+- 计费链路增强（缓存、幂等锁、异步落盘/补偿能力）
+- 管理端模型定价能力补齐（后端接口 + 前端页面）
+- 前端管理台体验优化（组件、导航、筛选/批量操作）
+- 文档与运维脚本补充
 
-### 1. 错误日志查询优化
+---
 
-**功能特性：**
-- 新增 GetErrorLogByID 接口，支持按 ID 精确查询错误详情
-- 优化错误日志过滤逻辑，支持多维度筛选（平台、阶段、来源、所有者等）
-- 改进查询参数处理，简化代码结构
-- 增强错误分类和标准化处理
-- 支持错误解决状态追踪（resolved 字段）
+## 主要变更
 
-**技术实现：**
-- `ops_handler.go` - 新增单条错误日志查询接口
-- `ops_repo.go` - 优化数据查询和过滤条件构建
-- `ops_models.go` - 扩展错误日志数据模型
-- 前端 API 接口同步更新
+### 1) 后端安全与稳定性
 
-### 2. 告警静默功能
+- 新增并接入 HTTP body 读取上限，降低超大请求导致的资源风险
+- 强化 URL 校验能力（含端口场景），补充对应测试
+- 增强上游错误与敏感信息处理，避免返回/记录不必要的机密细节
+- 网关相关 handler/service 多处联动调整，提升异常处理一致性
 
-**功能特性：**
-- 支持按规则、平台、分组、区域等维度静默告警
-- 可设置静默时长和原因说明
-- 静默记录可追溯，记录创建人和创建时间
-- 自动过期机制，避免永久静默
+### 2) 计费与账单链路增强
 
-**技术实现：**
-- `037_ops_alert_silences.sql` - 新增告警静默表
-- `ops_alerts.go` - 告警静默逻辑实现
-- `ops_alerts_handler.go` - 告警静默 API 接口
-- `OpsAlertEventsCard.vue` - 前端告警静默操作界面
+- 扩展 billing cache 逻辑与按 key 查询能力
+- 增加 billing 幂等锁相关能力与测试
+- 新增 billing spool service（及测试），提升失败场景下的可恢复性
+- pricing service 与相关 repository/service/handler 协同更新
 
-**数据库结构：**
+### 3) 管理端模型定价能力
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| rule_id | BIGINT | 告警规则 ID |
-| platform | VARCHAR(64) | 平台标识 |
-| group_id | BIGINT | 分组 ID（可选） |
-| region | VARCHAR(64) | 区域（可选） |
-| until | TIMESTAMPTZ | 静默截止时间 |
-| reason | TEXT | 静默原因 |
-| created_by | BIGINT | 创建人 ID |
+- 新增后端管理接口与服务逻辑：
+  - `backend/internal/handler/admin/model_pricing_handler.go`
+  - `backend/internal/service/pricing_admin.go`
+- 前端新增模型定价页面与 API：
+  - `frontend/src/views/admin/ModelPricingView.vue`
+  - `frontend/src/api/admin/modelPricing.ts`
 
-### 3. 错误分类标准化
+### 4) 前端管理台体验优化
 
-**功能特性：**
-- 统一错误阶段分类（request|auth|routing|upstream|network|internal）
-- 规范错误归属分类（client|provider|platform）
-- 标准化错误来源分类（client_request|upstream_http|gateway）
-- 自动迁移历史数据到新分类体系
+- 新增/改造通用组件与组合式逻辑（筛选、批量操作、搜索、导航等）
+- 头部、首页、统计卡片、Toast、样式与 Tailwind 配置调整
+- 国际化文案（`en` / `zh`）补充与路由更新
 
-**技术实现：**
-- `038_ops_errors_resolution_retry_results_and_standardize_classification.sql` - 分类标准化迁移
-- 自动映射历史遗留分类到新标准
-- 自动解决已恢复的上游错误（客户端状态码 < 400）
+### 5) 资产与工程化文件
 
-### 4. Gateway 服务集成
+- 新增 `backend/internal/web/dist-v2/` 构建产物
+- 新增 `web-app/`、`web-app-v/` 目录内容（前端工程相关）
+- 补充文档与运维脚本（例如 `docs/API_REFERENCE.md`、`deploy/docker_status.ps1`）
 
-**功能特性：**
-- 完善各 Gateway 服务的 Ops 集成
-- 统一错误日志记录接口
-- 增强上游错误追踪能力
+---
 
-**涉及服务：**
-- `antigravity_gateway_service.go` - Antigravity 网关集成
-- `gateway_service.go` - 通用网关集成
-- `gemini_messages_compat_service.go` - Gemini 兼容层集成
-- `openai_gateway_service.go` - OpenAI 网关集成
+## 变更规模（概览）
 
-### 5. 前端 UI 优化
+- 1 个提交：`b3f915b`
+- 约 `414` 个文件变更
+- 约 `+46122 / -431`
 
-**代码重构：**
-- 大幅简化错误详情模态框代码（从 828 行优化到 450 行）
-- 优化错误日志表格组件，提升可读性
-- 清理未使用的 i18n 翻译，减少冗余
-- 统一组件代码风格和格式
-- 优化骨架屏组件，更好匹配实际看板布局
+> 说明：本次包含较多新增目录与构建产物，请 reviewer 按“核心逻辑文件优先”进行审阅。
 
-**布局改进：**
-- 修复模态框内容溢出和滚动问题
-- 优化表格布局，使用 flex 布局确保正确显示
-- 改进看板头部布局和交互
-- 提升响应式体验
-- 骨架屏支持全屏模式适配
+---
 
-**交互优化：**
-- 优化告警事件卡片功能和展示
-- 改进错误详情展示逻辑
-- 增强请求详情模态框
-- 完善运行时设置卡片
-- 改进加载动画效果
+## 重点审阅建议
 
-### 6. 国际化完善
+请优先关注以下区域：
 
-**文案补充：**
-- 补充错误日志相关的英文翻译
-- 添加告警静默功能的中英文文案
-- 完善提示文本和错误信息
-- 统一术语翻译标准
+- 网关请求处理链路与上游转发策略
+- 计费幂等、缓存与补偿（spool）相关逻辑
+- 管理端模型定价 API 合约与前后端字段一致性
+- 安全相关限制（读取上限、URL allowlist/validator）是否符合预期
 
-## 文件变更
+---
 
-**后端（26 个文件）：**
-- `backend/internal/handler/admin/ops_alerts_handler.go` - 告警接口增强
-- `backend/internal/handler/admin/ops_handler.go` - 错误日志接口优化
-- `backend/internal/handler/ops_error_logger.go` - 错误记录器增强
-- `backend/internal/repository/ops_repo.go` - 数据访问层重构
-- `backend/internal/repository/ops_repo_alerts.go` - 告警数据访问增强
-- `backend/internal/service/ops_*.go` - 核心服务层重构（10 个文件）
-- `backend/internal/service/*_gateway_service.go` - Gateway 集成（4 个文件）
-- `backend/internal/server/routes/admin.go` - 路由配置更新
-- `backend/migrations/*.sql` - 数据库迁移（2 个文件）
-- 测试文件更新（5 个文件）
+## 验证结果
 
-**前端（13 个文件）：**
-- `frontend/src/views/admin/ops/OpsDashboard.vue` - 看板主页优化
-- `frontend/src/views/admin/ops/components/*.vue` - 组件重构（10 个文件）
-- `frontend/src/api/admin/ops.ts` - API 接口扩展
-- `frontend/src/i18n/locales/*.ts` - 国际化文本（2 个文件）
+已在本地完成以下检查并通过：
 
-## 代码统计
+- 后端测试：`go test ./...`（`backend/`）
+- 后端静态检查：`go vet ./...`（`backend/`）
+- 前端构建：`pnpm run build`（`frontend/`）
+- 前端 lint：`pnpm run lint:check`（`frontend/`）
 
-- 44 个文件修改
-- 3733 行新增
-- 995 行删除
-- 净增加 2738 行
+补充说明：
 
-## 核心改进
+- `git diff --check` 检出若干前端文件存在 trailing whitespace，不影响构建与测试结果，可后续单独整理。
 
-**可维护性提升：**
-- 重构核心服务层，职责更清晰
-- 简化前端组件代码，降低复杂度
-- 统一代码风格和命名规范
-- 清理冗余代码和未使用的翻译
-- 标准化错误分类体系
+---
 
-**功能完善：**
-- 告警静默功能，减少告警噪音
-- 错误日志查询优化，提升运维效率
-- Gateway 服务集成完善，统一监控能力
-- 错误解决状态追踪，便于问题管理
+## 风险与回滚
 
-**用户体验优化：**
-- 修复多个 UI 布局问题
-- 优化交互流程
-- 完善国际化支持
-- 提升响应式体验
-- 改进加载状态展示
+### 风险点
 
-## 测试验证
+- 网关与计费链路改动面较大，建议关注高并发与异常请求场景
+- 管理端模型定价为新增能力，需确认与现网配置/权限模型兼容
+- 构建产物与新增子工程目录体量较大，需确认仓库收敛策略
 
-- ✅ 错误日志查询和过滤功能
-- ✅ 告警静默创建和自动过期
-- ✅ 错误分类标准化迁移
-- ✅ Gateway 服务错误日志记录
-- ✅ 前端组件布局和交互
-- ✅ 骨架屏全屏模式适配
-- ✅ 国际化文本完整性
-- ✅ API 接口功能正确性
-- ✅ 数据库迁移执行成功
+### 回滚方案
+
+- 如出现回归，可先回滚到提交 `8caf76f`
+- 或按模块回滚：优先回退网关/计费关键文件后再逐步恢复
+
+---
+
+## 合并前检查清单
+
+- [x] 本地后端测试通过
+- [x] 本地前端构建通过
+- [x] 本地前端 lint 检查通过
+- [ ] Reviewer 完成网关与计费链路重点审阅
+- [ ] 确认 `dist-v2` / `web-app*` 目录纳入仓库策略
+

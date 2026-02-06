@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
@@ -114,14 +115,20 @@ type UpdateAccountRequest struct {
 type AccountService struct {
 	accountRepo AccountRepository
 	groupRepo   GroupRepository
+	cfg         *config.Config
 }
 
 // NewAccountService 创建账号服务实例
-func NewAccountService(accountRepo AccountRepository, groupRepo GroupRepository) *AccountService {
+func NewAccountService(accountRepo AccountRepository, groupRepo GroupRepository, cfg *config.Config) *AccountService {
 	return &AccountService{
 		accountRepo: accountRepo,
 		groupRepo:   groupRepo,
+		cfg:         cfg,
 	}
+}
+
+func (s *AccountService) GetConfig() *config.Config {
+	return s.cfg
 }
 
 // Create 创建账号
@@ -343,6 +350,29 @@ func validateOptionalPublicHTTPSBaseURL(raw string) error {
 	return err
 }
 
+func validateOptionalAllowlistedBaseURL(raw string, cfg *config.Config, allowlist []string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if cfg == nil {
+		return fmt.Errorf("config is required")
+	}
+	if cfg.Security.URLAllowlist.Enabled {
+		hosts := chooseAllowlist(allowlist, cfg.Security.URLAllowlist.UpstreamHosts)
+		_, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
+			AllowedHosts:     hosts,
+			RequireAllowlist: true,
+			AllowPrivate:     cfg.Security.URLAllowlist.AllowPrivateHosts,
+			AllowPorts:       []int{443},
+			RequireNoPath:    true,
+		})
+		return err
+	}
+	_, err := urlvalidator.ValidateURLFormat(raw, cfg.Security.URLAllowlist.AllowInsecureHTTP)
+	return err
+}
+
 // TestCredentials validates credential fields for supported platforms.
 func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 	account, err := s.accountRepo.GetByID(ctx, id)
@@ -370,7 +400,11 @@ func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 			if apiKey == "" {
 				return fmt.Errorf("missing api_key")
 			}
-			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+			if err := validateOptionalAllowlistedBaseURL(
+				account.GetCredential("base_url"),
+				s.GetConfig(),
+				s.GetConfig().Security.URLAllowlist.AnthropicHosts,
+			); err != nil {
 				return fmt.Errorf("invalid base_url: %w", err)
 			}
 			return nil
@@ -393,7 +427,11 @@ func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 			if apiKey == "" {
 				return fmt.Errorf("missing api_key")
 			}
-			if err := validateOptionalPublicHTTPSBaseURL(account.GetOpenAIBaseURL()); err != nil {
+			if err := validateOptionalAllowlistedBaseURL(
+				account.GetOpenAIBaseURL(),
+				s.GetConfig(),
+				s.GetConfig().Security.URLAllowlist.OpenAIHosts,
+			); err != nil {
 				return fmt.Errorf("invalid base_url: %w", err)
 			}
 			return nil
@@ -410,7 +448,11 @@ func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 			if expiresAt != nil && !now.Before(*expiresAt) && refreshToken == "" {
 				return fmt.Errorf("token expired and refresh_token is missing")
 			}
-			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+			if err := validateOptionalAllowlistedBaseURL(
+				account.GetCredential("base_url"),
+				s.GetConfig(),
+				s.GetConfig().Security.URLAllowlist.GeminiHosts,
+			); err != nil {
 				return fmt.Errorf("invalid base_url: %w", err)
 			}
 			return nil
@@ -420,7 +462,11 @@ func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 			if apiKey == "" {
 				return fmt.Errorf("missing api_key")
 			}
-			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+			if err := validateOptionalAllowlistedBaseURL(
+				account.GetCredential("base_url"),
+				s.GetConfig(),
+				s.GetConfig().Security.URLAllowlist.GeminiHosts,
+			); err != nil {
 				return fmt.Errorf("invalid base_url: %w", err)
 			}
 			return nil
@@ -437,7 +483,7 @@ func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 			if expiresAt != nil && !now.Before(*expiresAt) && refreshToken == "" {
 				return fmt.Errorf("token expired and refresh_token is missing")
 			}
-			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+			if err := validateOptionalAllowlistedBaseURL(account.GetCredential("base_url"), s.GetConfig(), s.GetConfig().Security.URLAllowlist.QwenHosts); err != nil {
 				return fmt.Errorf("invalid base_url: %w", err)
 			}
 			return nil
@@ -447,7 +493,7 @@ func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 			if apiKey == "" {
 				return fmt.Errorf("missing api_key")
 			}
-			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+			if err := validateOptionalAllowlistedBaseURL(account.GetCredential("base_url"), s.GetConfig(), s.GetConfig().Security.URLAllowlist.QwenHosts); err != nil {
 				return fmt.Errorf("invalid base_url: %w", err)
 			}
 			return nil
@@ -459,7 +505,7 @@ func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 			if apiKey == "" {
 				return fmt.Errorf("missing api_key")
 			}
-			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+			if err := validateOptionalAllowlistedBaseURL(account.GetCredential("base_url"), s.GetConfig(), s.GetConfig().Security.URLAllowlist.IFlowHosts); err != nil {
 				return fmt.Errorf("invalid base_url: %w", err)
 			}
 			return nil

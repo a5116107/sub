@@ -60,9 +60,24 @@ func (s *QwenGatewayService) validateUpstreamBaseURL(raw string) (string, error)
 	if raw == "" {
 		raw = qwenDefaultBaseURL
 	}
+	if s.cfg == nil || !s.cfg.Security.URLAllowlist.Enabled {
+		u, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
+			AllowPrivate:     false,
+			RequireAllowlist: false,
+			AllowPorts:       []int{443},
+			RequireNoPath:    true,
+		})
+		if err != nil {
+			return "", err
+		}
+		return u, nil
+	}
 	u, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
-		AllowPrivate:     false,
-		RequireAllowlist: false,
+		AllowedHosts:     chooseAllowlist(s.cfg.Security.URLAllowlist.QwenHosts, s.cfg.Security.URLAllowlist.UpstreamHosts),
+		RequireAllowlist: true,
+		AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
+		AllowPorts:       []int{443},
+		RequireNoPath:    true,
 	})
 	if err != nil {
 		return "", err
@@ -439,7 +454,7 @@ func (s *QwenGatewayService) ForwardChatCompletions(ctx context.Context, c *gin.
 	}
 
 	if !stream {
-		respBody, err := io.ReadAll(resp.Body)
+		respBody, err := readAllWithLimit(resp.Body, maxUpstreamNonStreamingBodyBytes)
 		if err != nil {
 			if c != nil {
 				writeOpenAIError(c, http.StatusBadGateway, "Failed to read upstream response")

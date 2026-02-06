@@ -158,6 +158,7 @@ type ServerConfig struct {
 	ReadHeaderTimeout int      `mapstructure:"read_header_timeout"` // 读取请求头超时（秒）
 	IdleTimeout       int      `mapstructure:"idle_timeout"`        // 空闲连接超时（秒）
 	TrustedProxies    []string `mapstructure:"trusted_proxies"`     // 可信代理列表（CIDR/IP）
+	APIMaxBodySize    int64    `mapstructure:"api_max_body_size"`   // /api/v1 请求体大小限制
 
 	// FrontendBaseURL is used to generate security-sensitive links (password reset, OAuth redirect URIs).
 	// Example: "https://your-frontend.example.com"
@@ -187,6 +188,11 @@ type SecurityConfig struct {
 type URLAllowlistConfig struct {
 	Enabled           bool     `mapstructure:"enabled"`
 	UpstreamHosts     []string `mapstructure:"upstream_hosts"`
+	OpenAIHosts       []string `mapstructure:"openai_hosts"`
+	AnthropicHosts    []string `mapstructure:"anthropic_hosts"`
+	GeminiHosts       []string `mapstructure:"gemini_hosts"`
+	IFlowHosts        []string `mapstructure:"iflow_hosts"`
+	QwenHosts         []string `mapstructure:"qwen_hosts"`
 	PricingHosts      []string `mapstructure:"pricing_hosts"`
 	CRSHosts          []string `mapstructure:"crs_hosts"`
 	AllowPrivateHosts bool     `mapstructure:"allow_private_hosts"`
@@ -226,6 +232,9 @@ type BillingConfig struct {
 
 	// Reconcile controls the optional background reconcile loop for unapplied billing ledger entries.
 	Reconcile BillingReconcileConfig `mapstructure:"reconcile"`
+
+	// Spool controls an on-disk durable billing event spool used when usage log writes fail.
+	Spool BillingSpoolConfig `mapstructure:"spool"`
 }
 
 type BillingReconcileConfig struct {
@@ -233,6 +242,14 @@ type BillingReconcileConfig struct {
 	Interval  time.Duration `mapstructure:"interval"`
 	BatchSize int           `mapstructure:"batch_size"`
 	Timeout   time.Duration `mapstructure:"timeout"`
+}
+
+type BillingSpoolConfig struct {
+	Enabled       bool          `mapstructure:"enabled"`
+	Dir           string        `mapstructure:"dir"`
+	FlushInterval time.Duration `mapstructure:"flush_interval"`
+	BatchSize     int           `mapstructure:"batch_size"`
+	Timeout       time.Duration `mapstructure:"timeout"`
 }
 
 type CircuitBreakerConfig struct {
@@ -876,29 +893,48 @@ func setDefaults() {
 	viper.SetDefault("server.read_header_timeout", 30) // 30秒读取请求头
 	viper.SetDefault("server.idle_timeout", 120)       // 120秒空闲超时
 	viper.SetDefault("server.trusted_proxies", []string{})
+	viper.SetDefault("server.api_max_body_size", int64(25*1024*1024)) // 25MiB (allows admin model pricing import default 20MiB)
+	viper.SetDefault("pricing.missing_policy", "fallback_claude_only")
 
 	// CORS
 	viper.SetDefault("cors.allowed_origins", []string{})
 	viper.SetDefault("cors.allow_credentials", true)
 
 	// Security
-	viper.SetDefault("security.url_allowlist.enabled", false)
+	viper.SetDefault("security.url_allowlist.enabled", true)
+	// Backward-compatible shared allowlist. Prefer provider-specific lists below.
 	viper.SetDefault("security.url_allowlist.upstream_hosts", []string{
 		"api.openai.com",
 		"api.anthropic.com",
-		"api.kimi.com",
-		"open.bigmodel.cn",
-		"api.minimaxi.com",
 		"generativelanguage.googleapis.com",
 		"cloudcode-pa.googleapis.com",
 		"*.openai.azure.com",
+		"apis.iflow.cn",
+		"portal.qwen.ai",
+	})
+	viper.SetDefault("security.url_allowlist.openai_hosts", []string{
+		"api.openai.com",
+		"*.openai.azure.com",
+	})
+	viper.SetDefault("security.url_allowlist.anthropic_hosts", []string{
+		"api.anthropic.com",
+	})
+	viper.SetDefault("security.url_allowlist.gemini_hosts", []string{
+		"generativelanguage.googleapis.com",
+		"cloudcode-pa.googleapis.com",
+	})
+	viper.SetDefault("security.url_allowlist.iflow_hosts", []string{
+		"apis.iflow.cn",
+	})
+	viper.SetDefault("security.url_allowlist.qwen_hosts", []string{
+		"portal.qwen.ai",
 	})
 	viper.SetDefault("security.url_allowlist.pricing_hosts", []string{
 		"raw.githubusercontent.com",
 	})
 	viper.SetDefault("security.url_allowlist.crs_hosts", []string{})
-	viper.SetDefault("security.url_allowlist.allow_private_hosts", true)
-	viper.SetDefault("security.url_allowlist.allow_insecure_http", true)
+	viper.SetDefault("security.url_allowlist.allow_private_hosts", false)
+	viper.SetDefault("security.url_allowlist.allow_insecure_http", false)
 	viper.SetDefault("security.response_headers.enabled", false)
 	viper.SetDefault("security.response_headers.additional_allowed", []string{})
 	viper.SetDefault("security.response_headers.force_remove", []string{})
@@ -1020,6 +1056,11 @@ func setDefaults() {
 	viper.SetDefault("billing.reconcile.interval", 60*time.Second)
 	viper.SetDefault("billing.reconcile.batch_size", 200)
 	viper.SetDefault("billing.reconcile.timeout", 5*time.Second)
+	viper.SetDefault("billing.spool.enabled", true)
+	viper.SetDefault("billing.spool.dir", "./data/billing_spool")
+	viper.SetDefault("billing.spool.flush_interval", 30*time.Second)
+	viper.SetDefault("billing.spool.batch_size", 200)
+	viper.SetDefault("billing.spool.timeout", 5*time.Second)
 
 	// RateLimit
 	viper.SetDefault("rate_limit.overload_cooldown_minutes", 10)
@@ -1236,6 +1277,20 @@ func (c *Config) Validate() error {
 		}
 		if c.Billing.Reconcile.Timeout <= 0 {
 			return fmt.Errorf("billing.reconcile.timeout must be positive when billing.reconcile.enabled=true")
+		}
+	}
+	if c.Billing.Spool.Enabled {
+		if strings.TrimSpace(c.Billing.Spool.Dir) == "" {
+			return fmt.Errorf("billing.spool.dir is required when billing.spool.enabled=true")
+		}
+		if c.Billing.Spool.FlushInterval <= 0 {
+			return fmt.Errorf("billing.spool.flush_interval must be positive when billing.spool.enabled=true")
+		}
+		if c.Billing.Spool.BatchSize <= 0 {
+			return fmt.Errorf("billing.spool.batch_size must be positive when billing.spool.enabled=true")
+		}
+		if c.Billing.Spool.Timeout <= 0 {
+			return fmt.Errorf("billing.spool.timeout must be positive when billing.spool.enabled=true")
 		}
 	}
 	if c.Payment.Enabled {
@@ -1476,6 +1531,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.MaxBodySize <= 0 {
 		return fmt.Errorf("gateway.max_body_size must be positive")
+	}
+	if c.Server.APIMaxBodySize <= 0 {
+		return fmt.Errorf("server.api_max_body_size must be positive")
 	}
 	if strings.TrimSpace(c.Gateway.ConnectionPoolIsolation) != "" {
 		switch c.Gateway.ConnectionPoolIsolation {

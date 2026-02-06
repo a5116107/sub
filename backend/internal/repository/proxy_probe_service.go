@@ -36,8 +36,9 @@ func NewProxyExitInfoProber(cfg *config.Config) service.ProxyExitInfoProber {
 }
 
 const (
-	defaultIPInfoURL         = "http://ip-api.com/json/?lang=zh-CN"
+	defaultIPInfoURL         = "https://ip-api.com/json/?lang=zh-CN"
 	defaultProxyProbeTimeout = 30 * time.Second
+	maxProxyProbeBodyBytes   = 1 << 20
 )
 
 type proxyProbeService struct {
@@ -89,7 +90,7 @@ func (s *proxyProbeService) ProbeProxy(ctx context.Context, proxyURL string) (*s
 		CountryCode string `json:"countryCode"`
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxProxyProbeBodyBytes))
 	if err != nil {
 		return nil, latencyMs, fmt.Errorf("failed to read response: %w", err)
 	}
