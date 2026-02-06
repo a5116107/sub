@@ -18,6 +18,7 @@ type TokenRefreshService struct {
 	refreshers       []TokenRefresher
 	cfg              *config.TokenRefreshConfig
 	cacheInvalidator TokenCacheInvalidator
+	schedulerCache   SchedulerCache // 同步调度器缓存，避免 token 刷新后短窗口不一致
 
 	stopCh chan struct{}
 	wg     sync.WaitGroup
@@ -32,12 +33,14 @@ func NewTokenRefreshService(
 	geminiOAuthService *GeminiOAuthService,
 	antigravityOAuthService *AntigravityOAuthService,
 	cacheInvalidator TokenCacheInvalidator,
+	schedulerCache SchedulerCache,
 	cfg *config.Config,
 ) *TokenRefreshService {
 	s := &TokenRefreshService{
 		accountRepo:      accountRepo,
 		cfg:              &cfg.TokenRefresh,
 		cacheInvalidator: cacheInvalidator,
+		schedulerCache:   schedulerCache,
 		stopCh:           make(chan struct{}),
 	}
 
@@ -198,6 +201,13 @@ func (s *TokenRefreshService) refreshWithRetry(ctx context.Context, account *Acc
 					log.Printf("[TokenRefresh] Failed to invalidate token cache for account %d: %v", account.ID, err)
 				} else {
 					log.Printf("[TokenRefresh] Token cache invalidated for account %d", account.ID)
+				}
+			}
+			if s.schedulerCache != nil {
+				if err := s.schedulerCache.SetAccount(ctx, account); err != nil {
+					log.Printf("[TokenRefresh] Failed to sync scheduler cache for account %d: %v", account.ID, err)
+				} else {
+					log.Printf("[TokenRefresh] Scheduler cache synced for account %d", account.ID)
 				}
 			}
 			return nil
