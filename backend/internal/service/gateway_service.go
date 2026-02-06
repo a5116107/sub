@@ -484,11 +484,15 @@ func (s *GatewayService) hashContent(content string) string {
 
 // replaceModelInBody 替换请求体中的model字段
 func (s *GatewayService) replaceModelInBody(body []byte, newModel string) []byte {
-	var req map[string]any
+	var req map[string]json.RawMessage
 	if err := json.Unmarshal(body, &req); err != nil {
 		return body
 	}
-	req["model"] = newModel
+	modelBytes, err := json.Marshal(newModel)
+	if err != nil {
+		return body
+	}
+	req["model"] = modelBytes
 	newBody, err := json.Marshal(req)
 	if err != nil {
 		return body
@@ -3105,6 +3109,13 @@ func (s *GatewayService) isThinkingBlockSignatureError(respBody []byte) bool {
 	// 例如: "Expected `thinking` or `redacted_thinking`, but found `text`"
 	if strings.Contains(msg, "expected") && (strings.Contains(msg, "thinking") || strings.Contains(msg, "redacted_thinking")) {
 		log.Printf("[SignatureCheck] Detected thinking block type error")
+		return true
+	}
+
+	// 检测 thinking block 被修改的错误
+	// 例如: "thinking or redacted_thinking blocks in the latest assistant message cannot be modified"
+	if strings.Contains(msg, "cannot be modified") && (strings.Contains(msg, "thinking") || strings.Contains(msg, "redacted_thinking")) {
+		log.Printf("[SignatureCheck] Detected thinking block modification error")
 		return true
 	}
 

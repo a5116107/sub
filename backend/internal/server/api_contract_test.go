@@ -529,9 +529,9 @@ func TestAPIContracts(t *testing.T) {
 					service.SettingKeyOpsQueryModeDefault:          "auto",
 					service.SettingKeyOpsMetricsIntervalSeconds:    "60",
 
-					service.SettingKeyLandingPricingEnabled: "true",
-					service.SettingKeyLandingPricingConfig:  "{}",
-					service.SettingKeySubscriptionsEnabled:  "true",
+					service.SettingKeyLandingPricingEnabled:         "true",
+					service.SettingKeyLandingPricingConfig:          "{}",
+					service.SettingKeySubscriptionsEnabled:          "true",
 					service.SettingKeyGatewayFixOrphanedToolResults: "true",
 				})
 			},
@@ -1775,6 +1775,10 @@ func (r *stubUsageLogRepo) GetBatchAPIKeyUsageStats(ctx context.Context, apiKeyI
 }
 
 func (r *stubUsageLogRepo) GetUserDashboardStats(ctx context.Context, userID int64) (*usagestats.UserDashboardStats, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *stubUsageLogRepo) GetAPIKeyDashboardStats(ctx context.Context, apiKeyID int64) (*usagestats.UserDashboardStats, error) {
 	return nil, errors.New("not implemented")
 }
 

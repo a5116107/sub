@@ -82,6 +82,9 @@ func (s *usageLogRepoBilledModelStub) GetBatchAPIKeyUsageStats(ctx context.Conte
 func (s *usageLogRepoBilledModelStub) GetUserDashboardStats(ctx context.Context, userID int64) (*usagestats.UserDashboardStats, error) {
 	return nil, errors.New("not implemented")
 }
+func (s *usageLogRepoBilledModelStub) GetAPIKeyDashboardStats(ctx context.Context, apiKeyID int64) (*usagestats.UserDashboardStats, error) {
+	return nil, errors.New("not implemented")
+}
 func (s *usageLogRepoBilledModelStub) GetUserUsageTrendByUserID(ctx context.Context, userID int64, startTime, endTime time.Time, granularity string) ([]usagestats.TrendDataPoint, error) {
 	return nil, errors.New("not implemented")
 }

@@ -45,16 +45,32 @@ Validation:
 - `go test ./internal/service -run "CodexOAuthTransform|IsInstructionsEmpty|StripUnsupportedOpenAIRequestFields|CachedTokens|ParseSSEUsage" -count=1`
 - `go test ./...` (backend full pass)
 
-### Batch 2 (Recommended Next)
+### Batch 2 (Completed in this branch)
 
-Goal: gateway tool-call/thinking compatibility and retry correctness.
+Goal: gateway tool-call/thinking compatibility and `/v1/usage` behavior alignment.
 
-Candidate upstream commits/features:
+Absorbed upstream intent:
 
-- `d182ef03` / `05af95da`: tool-name rewrite regression fixes
 - `ad90bb46`: thinking block mutation safety
-- `8f397548`: model prefix mapping fix
-- `fa3ea5ee` / `c441638f`: `/v1/usage` behavior alignment
+  - preserve raw bytes when rewriting `model` and `metadata.user_id`
+  - detect `"cannot be modified"` retry trigger in gateway/antigravity paths
+- `c441638f`: enrich `/v1/usage` response payload
+  - add `usage` object (today/total/cost/rpm/tpm)
+  - add `subscription` details for subscription groups
+  - add `balance` field for wallet mode
+- `fa3ea5ee`: filter `/v1/usage` usage stats by current API key
+  - add `GetAPIKeyDashboardStats` repo/service path
+  - add API-key-scoped RPM/TPM helper
+
+Notes:
+
+- `d182ef03` / `05af95da` tool-name rewrite regression is **already absent** in current fork code path; no extra patch required.
+- `8f397548` model-prefix fix targets a mapping path that does not exist in current fork implementation (no equivalent buggy prefix truncation logic).
+
+Validation:
+
+- `go test ./internal/service -run "TestReplaceModelInBody_PreservesMessagesRawBytes|TestIsThinkingBlockSignatureError_DetectsCannotBeModified|TestIsSignatureRelatedError_DetectsCannotBeModified|TestRewriteUserID_PreservesMessagesRawBytes|TestRewriteUserIDWithMasking_PreservesMessagesRawBytes|TestGatewayService_RecordUsage_BillsByBilledModel" -count=1`
+- `go test ./...` (backend full pass)
 
 ### Batch 3 (Recommended Next)
 
@@ -75,4 +91,3 @@ Candidate upstream commits/features:
 - `49a3c437`: refresh token mechanism
 - `39a0359d` / `97a5c1ac`: h2c support
 - antigravity tuning group (retry/cooldown/routing mapping)
-
