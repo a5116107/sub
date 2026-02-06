@@ -76,6 +76,7 @@ func RegisterAdminRoutes(
 
 		// 用户属性管理
 		registerUserAttributeRoutes(admin, h)
+		registerErrorPassthroughRoutes(admin, h)
 	}
 }
 
@@ -432,5 +433,16 @@ func registerUserAttributeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		attrs.PUT("/reorder", h.Admin.UserAttribute.ReorderDefinitions)
 		attrs.PUT("/:id", h.Admin.UserAttribute.UpdateDefinition)
 		attrs.DELETE("/:id", h.Admin.UserAttribute.DeleteDefinition)
+	}
+}
+
+func registerErrorPassthroughRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	rules := admin.Group("/error-passthrough-rules")
+	{
+		rules.GET("", h.Admin.ErrorPassthrough.List)
+		rules.GET("/:id", h.Admin.ErrorPassthrough.GetByID)
+		rules.POST("", h.Admin.ErrorPassthrough.Create)
+		rules.PUT("/:id", h.Admin.ErrorPassthrough.Update)
+		rules.DELETE("/:id", h.Admin.ErrorPassthrough.Delete)
 	}
 }

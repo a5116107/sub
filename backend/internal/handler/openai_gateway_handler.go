@@ -26,14 +26,15 @@ import (
 
 // OpenAIGatewayHandler handles OpenAI API gateway requests
 type OpenAIGatewayHandler struct {
-	gatewayService      *service.OpenAIGatewayService
-	qwenGatewayService  *service.QwenGatewayService
-	iflowGatewayService *service.IFlowGatewayService
-	billingCacheService *service.BillingCacheService
-	concurrencyHelper   *ConcurrencyHelper
-	maxAccountSwitches  int
-	payloadRulesEngine  *payloadrules.Engine
-	payloadRulesStats   *payloadrules.StatsCollector
+	gatewayService          *service.OpenAIGatewayService
+	qwenGatewayService      *service.QwenGatewayService
+	iflowGatewayService     *service.IFlowGatewayService
+	billingCacheService     *service.BillingCacheService
+	errorPassthroughService *service.ErrorPassthroughService
+	concurrencyHelper       *ConcurrencyHelper
+	maxAccountSwitches      int
+	payloadRulesEngine      *payloadrules.Engine
+	payloadRulesStats       *payloadrules.StatsCollector
 }
 
 // NewOpenAIGatewayHandler creates a new OpenAIGatewayHandler
@@ -43,6 +44,7 @@ func NewOpenAIGatewayHandler(
 	iflowGatewayService *service.IFlowGatewayService,
 	concurrencyService *service.ConcurrencyService,
 	billingCacheService *service.BillingCacheService,
+	errorPassthroughService *service.ErrorPassthroughService,
 	cfg *config.Config,
 ) *OpenAIGatewayHandler {
 	pingInterval := time.Duration(0)
@@ -64,14 +66,15 @@ func NewOpenAIGatewayHandler(
 		}
 	}
 	return &OpenAIGatewayHandler{
-		gatewayService:      gatewayService,
-		qwenGatewayService:  qwenGatewayService,
-		iflowGatewayService: iflowGatewayService,
-		billingCacheService: billingCacheService,
-		concurrencyHelper:   NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
-		maxAccountSwitches:  maxAccountSwitches,
-		payloadRulesEngine:  rulesEngine,
-		payloadRulesStats:   rulesStats,
+		gatewayService:          gatewayService,
+		qwenGatewayService:      qwenGatewayService,
+		iflowGatewayService:     iflowGatewayService,
+		billingCacheService:     billingCacheService,
+		errorPassthroughService: errorPassthroughService,
+		concurrencyHelper:       NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
+		maxAccountSwitches:      maxAccountSwitches,
+		payloadRulesEngine:      rulesEngine,
+		payloadRulesStats:       rulesStats,
 	}
 }
 
@@ -193,14 +196,14 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			ctx = context.WithValue(ctx, ctxkey.ClientRequestID, strings.TrimSpace(clientRequestID))
 		}
 		if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-			Result:       result,
-			APIKey:       apiKey,
-			User:         apiKey.User,
-			Account:      usedAccount,
-			Subscription: subscription,
-			UserAgent:    ua,
-			IPAddress:    ip,
-			ReservedUSD:  reservedUSD,
+			Result:             result,
+			APIKey:             apiKey,
+			User:               apiKey.User,
+			Account:            usedAccount,
+			Subscription:       subscription,
+			UserAgent:          ua,
+			IPAddress:          ip,
+			ReservedUSD:        reservedUSD,
 			ReservedUsageLogID: result.UsageLogID,
 		}); err != nil {
 			log.Printf("Record usage failed: %v", err)
@@ -362,7 +365,7 @@ func (h *OpenAIGatewayHandler) forwardWithFailover(
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
 	failedAccountIDs := make(map[int64]struct{})
-	lastFailoverStatus := 0
+	var lastFailoverErr *service.UpstreamFailoverError
 
 	for {
 		// Select account supporting the requested model
@@ -379,7 +382,11 @@ func (h *OpenAIGatewayHandler) forwardWithFailover(
 				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 				return nil, nil, 0
 			}
-			h.handleFailoverExhausted(c, lastFailoverStatus, streamStarted)
+			if lastFailoverErr != nil {
+				h.handleFailoverExhausted(c, lastFailoverErr, platform, streamStarted)
+			} else {
+				h.handleFailoverExhaustedSimple(c, 502, streamStarted)
+			}
 			return nil, nil, 0
 		}
 		account := selection.Account
@@ -448,12 +455,11 @@ func (h *OpenAIGatewayHandler) forwardWithFailover(
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				failedAccountIDs[account.ID] = struct{}{}
+				lastFailoverErr = failoverErr
 				if switchCount >= maxAccountSwitches {
-					lastFailoverStatus = failoverErr.StatusCode
-					h.handleFailoverExhausted(c, lastFailoverStatus, streamStarted)
+					h.handleFailoverExhausted(c, failoverErr, platform, streamStarted)
 					return nil, nil, 0
 				}
-				lastFailoverStatus = failoverErr.StatusCode
 				switchCount++
 				log.Printf("Account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
 				continue
@@ -477,7 +483,37 @@ func (h *OpenAIGatewayHandler) handleConcurrencyError(c *gin.Context, err error,
 		fmt.Sprintf("Concurrency limit exceeded for %s, please retry later", slotType), streamStarted)
 }
 
-func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, statusCode int, streamStarted bool) {
+func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, platform string, streamStarted bool) {
+	statusCode := failoverErr.StatusCode
+	responseBody := failoverErr.ResponseBody
+
+	matchPlatform := platform
+	if strings.TrimSpace(matchPlatform) == "" {
+		matchPlatform = service.PlatformOpenAI
+	}
+
+	if h.errorPassthroughService != nil && len(responseBody) > 0 {
+		if rule := h.errorPassthroughService.MatchRule(matchPlatform, statusCode, responseBody); rule != nil {
+			respCode := statusCode
+			if !rule.PassthroughCode && rule.ResponseCode != nil {
+				respCode = *rule.ResponseCode
+			}
+
+			message := service.ExtractUpstreamErrorMessage(responseBody)
+			if !rule.PassthroughBody && rule.CustomMessage != nil {
+				message = *rule.CustomMessage
+			}
+
+			h.handleStreamingAwareError(c, respCode, "upstream_error", message, streamStarted)
+			return
+		}
+	}
+
+	status, errType, errMsg := h.mapUpstreamError(statusCode)
+	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
+}
+
+func (h *OpenAIGatewayHandler) handleFailoverExhaustedSimple(c *gin.Context, statusCode int, streamStarted bool) {
 	status, errType, errMsg := h.mapUpstreamError(statusCode)
 	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
 }

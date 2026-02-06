@@ -224,7 +224,7 @@ func (h *GatewayHandler) GeminiV1Internal(c *gin.Context) {
 	maxAccountSwitches := h.maxAccountSwitchesGemini
 	switchCount := 0
 	excludedAccountIDs := make(map[int64]struct{})
-	lastFailoverStatus := 0
+	var lastFailoverErr *service.UpstreamFailoverError
 
 	for {
 		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, modelName, excludedAccountIDs, "")
@@ -233,7 +233,7 @@ func (h *GatewayHandler) GeminiV1Internal(c *gin.Context) {
 				googleError(c, http.StatusServiceUnavailable, "No available Gemini Code Assist accounts: "+err.Error())
 				return
 			}
-			handleGeminiFailoverExhausted(c, lastFailoverStatus)
+			h.handleGeminiFailoverExhausted(c, lastFailoverErr)
 			return
 		}
 		account := selection.Account
@@ -310,11 +310,11 @@ func (h *GatewayHandler) GeminiV1Internal(c *gin.Context) {
 			if errors.As(err, &failoverErr) {
 				excludedAccountIDs[account.ID] = struct{}{}
 				if switchCount >= maxAccountSwitches {
-					lastFailoverStatus = failoverErr.StatusCode
-					handleGeminiFailoverExhausted(c, lastFailoverStatus)
+					lastFailoverErr = failoverErr
+					h.handleGeminiFailoverExhausted(c, lastFailoverErr)
 					return
 				}
-				lastFailoverStatus = failoverErr.StatusCode
+				lastFailoverErr = failoverErr
 				switchCount++
 				log.Printf("Gemini v1internal account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
 				continue

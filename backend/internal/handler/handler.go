@@ -26,6 +26,7 @@ type AdminHandlers struct {
 	Subscription     *admin.SubscriptionHandler
 	Usage            *admin.UsageHandler
 	UserAttribute    *admin.UserAttributeHandler
+	ErrorPassthrough *admin.ErrorPassthroughHandler
 }
 
 // Handlers contains all HTTP handlers

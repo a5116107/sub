@@ -332,7 +332,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	maxAccountSwitches := h.maxAccountSwitchesGemini
 	switchCount := 0
 	failedAccountIDs := make(map[int64]struct{})
-	lastFailoverStatus := 0
+	var lastFailoverErr *service.UpstreamFailoverError
 
 	for {
 		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, modelName, failedAccountIDs, "") // Gemini 不使用会话限制
@@ -341,7 +341,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				googleError(c, http.StatusServiceUnavailable, "No available Gemini accounts: "+err.Error())
 				return
 			}
-			handleGeminiFailoverExhausted(c, lastFailoverStatus)
+			h.handleGeminiFailoverExhausted(c, lastFailoverErr)
 			return
 		}
 		account := selection.Account
@@ -428,11 +428,11 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			if errors.As(err, &failoverErr) {
 				failedAccountIDs[account.ID] = struct{}{}
 				if switchCount >= maxAccountSwitches {
-					lastFailoverStatus = failoverErr.StatusCode
-					handleGeminiFailoverExhausted(c, lastFailoverStatus)
+					lastFailoverErr = failoverErr
+					h.handleGeminiFailoverExhausted(c, lastFailoverErr)
 					return
 				}
-				lastFailoverStatus = failoverErr.StatusCode
+				lastFailoverErr = failoverErr
 				switchCount++
 				log.Printf("Gemini account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
 				continue
@@ -495,7 +495,31 @@ func parseGeminiModelAction(rest string) (model string, action string, err error
 	return "", "", &pathParseError{"invalid model action path"}
 }
 
-func handleGeminiFailoverExhausted(c *gin.Context, statusCode int) {
+func (h *GatewayHandler) handleGeminiFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError) {
+	if failoverErr == nil {
+		googleError(c, http.StatusBadGateway, "Upstream request failed")
+		return
+	}
+
+	statusCode := failoverErr.StatusCode
+	responseBody := failoverErr.ResponseBody
+
+	if h.errorPassthroughService != nil && len(responseBody) > 0 {
+		if rule := h.errorPassthroughService.MatchRule(service.PlatformGemini, statusCode, responseBody); rule != nil {
+			respCode := statusCode
+			if !rule.PassthroughCode && rule.ResponseCode != nil {
+				respCode = *rule.ResponseCode
+			}
+
+			message := service.ExtractUpstreamErrorMessage(responseBody)
+			if !rule.PassthroughBody && rule.CustomMessage != nil {
+				message = *rule.CustomMessage
+			}
+			googleError(c, respCode, message)
+			return
+		}
+	}
+
 	status, message := mapGeminiUpstreamError(statusCode)
 	googleError(c, status, message)
 }
