@@ -1321,6 +1321,17 @@ export default {
       syncCompletedWithErrors:
         'Sync completed with errors: failed {failed} (created {created}, updated {updated})',
       syncFailed: 'Sync failed',
+      exportData: 'Export Data',
+      importData: 'Import Data',
+      exporting: 'Exporting...',
+      importingData: 'Importing data...',
+      exportSuccess: 'Data exported successfully',
+      importSuccess:
+        'Import complete: proxies created {proxyCreated}, reused {proxyReused}, failed {proxyFailed}; accounts created {accountCreated}, failed {accountFailed}',
+      importEmptyFile: 'Please select a JSON file to import',
+      importInvalidFormat: 'Invalid import file format',
+      failedToExportData: 'Failed to export data',
+      failedToImportData: 'Failed to import data',
       editAccount: 'Edit Account',
       deleteAccount: 'Delete Account',
       searchAccounts: 'Search accounts...',

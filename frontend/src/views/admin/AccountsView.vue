@@ -70,6 +70,37 @@
                 <span class="hidden md:inline">{{ t('admin.errorPassthrough.title') }}</span>
               </button>
 
+              <button
+                @click="handleExportData"
+                :disabled="exportingData"
+                class="btn btn-secondary"
+                :title="t('admin.accounts.exportData')"
+              >
+                <Icon name="download" size="sm" class="md:mr-1.5" />
+                <span class="hidden md:inline">
+                  {{ exportingData ? t('admin.accounts.exporting') : t('admin.accounts.exportData') }}
+                </span>
+              </button>
+
+              <button
+                @click="openImportDataFilePicker"
+                :disabled="importingData"
+                class="btn btn-secondary"
+                :title="t('admin.accounts.importData')"
+              >
+                <Icon name="upload" size="sm" class="md:mr-1.5" />
+                <span class="hidden md:inline">
+                  {{ importingData ? t('admin.accounts.importingData') : t('admin.accounts.importData') }}
+                </span>
+              </button>
+              <input
+                ref="importDataInput"
+                type="file"
+                accept=".json,application/json"
+                class="hidden"
+                @change="handleImportDataFile"
+              />
+
               <!-- Column Settings Dropdown -->
               <div class="relative" ref="columnDropdownRef">
                 <button
@@ -332,7 +363,7 @@ import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ErrorPassthroughRulesModal from '@/components/admin/ErrorPassthroughRulesModal.vue'
 import { formatDateTime, formatRelativeTime } from '@/utils/format'
-import type { Account, Proxy, AdminGroup } from '@/types'
+import type { Account, Proxy, AdminGroup, AdminDataPayload } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -351,6 +382,9 @@ const showReAuth = ref(false)
 const showTest = ref(false)
 const showStats = ref(false)
 const showErrorPassthrough = ref(false)
+const exportingData = ref(false)
+const importingData = ref(false)
+const importDataInput = ref<HTMLInputElement | null>(null)
 const edAcc = ref<Account | null>(null)
 const tempUnschedAcc = ref<Account | null>(null)
 const deletingAcc = ref<Account | null>(null)
@@ -479,6 +513,97 @@ const { items: accounts, loading, params, pagination, load, reload, debouncedRel
   fetchFn: adminAPI.accounts.list,
   initialParams: { platform: '', type: '', status: '', search: '' }
 })
+
+const openImportDataFilePicker = () => {
+  if (importingData.value) return
+  importDataInput.value?.click()
+}
+
+const resetImportDataInput = () => {
+  if (importDataInput.value) {
+    importDataInput.value.value = ''
+  }
+}
+
+const handleExportData = async () => {
+  exportingData.value = true
+  try {
+    const ids = selIds.value.length > 0 ? [...selIds.value] : undefined
+    const payload = await adminAPI.accounts.exportData({
+      ids,
+      filters: ids
+        ? undefined
+        : {
+            platform: params.platform || undefined,
+            type: params.type || undefined,
+            status: params.status || undefined,
+            search: params.search?.trim() || undefined
+          },
+      includeProxies: true
+    })
+    const now = new Date().toISOString().replace(/[:.]/g, '-')
+    const filename = `accounts-data-${now}.json`
+    const content = JSON.stringify({ data: payload }, null, 2)
+    const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    appStore.showSuccess(t('admin.accounts.exportSuccess'))
+  } catch (error: any) {
+    appStore.showError(error.response?.data?.detail || t('admin.accounts.failedToExportData'))
+    console.error('Failed to export account data:', error)
+  } finally {
+    exportingData.value = false
+  }
+}
+
+const handleImportDataFile = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (file.size <= 0) {
+    appStore.showError(t('admin.accounts.importEmptyFile'))
+    resetImportDataInput()
+    return
+  }
+
+  importingData.value = true
+  try {
+    const text = await file.text()
+    const parsed = JSON.parse(text)
+    const payload = (parsed?.data ?? parsed) as AdminDataPayload
+    if (!payload || !Array.isArray(payload.proxies) || !Array.isArray(payload.accounts)) {
+      appStore.showError(t('admin.accounts.importInvalidFormat'))
+      return
+    }
+
+    const result = await adminAPI.accounts.importData({ data: payload })
+    appStore.showSuccess(
+      t('admin.accounts.importSuccess', {
+        proxyCreated: result.proxy_created || 0,
+        proxyReused: result.proxy_reused || 0,
+        proxyFailed: result.proxy_failed || 0,
+        accountCreated: result.account_created || 0,
+        accountFailed: result.account_failed || 0
+      })
+    )
+    await load()
+  } catch (error: any) {
+    const message = error instanceof SyntaxError
+      ? t('admin.accounts.importInvalidFormat')
+      : error.response?.data?.detail || error.message || t('admin.accounts.failedToImportData')
+    appStore.showError(message)
+    console.error('Failed to import account data:', error)
+  } finally {
+    importingData.value = false
+    resetImportDataInput()
+  }
+}
 
 type TierRefreshErrorRow = { account_id: number; error: string }
 type TierRefreshBatchResult = {
