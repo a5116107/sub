@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -23,13 +24,16 @@ import (
 )
 
 const (
-	antigravityStickySessionTTL = time.Hour
-	antigravityMaxRetries       = 3
-	antigravityRetryBaseDelay   = 1 * time.Second
-	antigravityRetryMaxDelay    = 16 * time.Second
+	antigravityStickySessionTTL  = time.Hour
+	antigravityDefaultMaxRetries = 5
+	antigravityRetryBaseDelay    = 1 * time.Second
+	antigravityRetryMaxDelay     = 16 * time.Second
 )
 
-const antigravityScopeRateLimitEnv = "GATEWAY_ANTIGRAVITY_429_SCOPE_LIMIT"
+const (
+	antigravityMaxRetriesEnv     = "GATEWAY_ANTIGRAVITY_MAX_RETRIES"
+	antigravityScopeRateLimitEnv = "GATEWAY_ANTIGRAVITY_429_SCOPE_LIMIT"
+)
 
 // antigravityRetryLoopParams 重试循环的参数
 type antigravityRetryLoopParams struct {
@@ -58,6 +62,7 @@ func antigravityRetryLoop(p antigravityRetryLoopParams) (*antigravityRetryLoopRe
 	if len(availableURLs) == 0 {
 		availableURLs = antigravity.BaseURLs
 	}
+	maxRetries := antigravityMaxRetries()
 
 	var resp *http.Response
 	var usedBaseURL string
@@ -76,7 +81,7 @@ func antigravityRetryLoop(p antigravityRetryLoopParams) (*antigravityRetryLoopRe
 urlFallbackLoop:
 	for urlIdx, baseURL := range availableURLs {
 		usedBaseURL = baseURL
-		for attempt := 1; attempt <= antigravityMaxRetries; attempt++ {
+		for attempt := 1; attempt <= maxRetries; attempt++ {
 			select {
 			case <-p.ctx.Done():
 				log.Printf("%s status=context_canceled error=%v", p.prefix, p.ctx.Err())
@@ -109,8 +114,8 @@ urlFallbackLoop:
 					log.Printf("%s URL fallback (connection error): %s -> %s", p.prefix, baseURL, availableURLs[urlIdx+1])
 					continue urlFallbackLoop
 				}
-				if attempt < antigravityMaxRetries {
-					log.Printf("%s status=request_failed retry=%d/%d error=%v", p.prefix, attempt, antigravityMaxRetries, err)
+				if attempt < maxRetries {
+					log.Printf("%s status=request_failed retry=%d/%d error=%v", p.prefix, attempt, maxRetries, err)
 					if !sleepAntigravityBackoffWithContext(p.ctx, attempt) {
 						log.Printf("%s status=context_canceled_during_backoff", p.prefix)
 						return nil, p.ctx.Err()
@@ -133,8 +138,8 @@ urlFallbackLoop:
 					continue urlFallbackLoop
 				}
 
-				// 账户/模型配额限流，重试 3 次（指数退避）
-				if attempt < antigravityMaxRetries {
+				// 账户/模型配额限流，按最大重试次数做指数退避
+				if attempt < maxRetries {
 					upstreamMsg := strings.TrimSpace(extractAntigravityErrorMessage(respBody))
 					upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 					appendOpsUpstreamError(p.c, OpsUpstreamErrorEvent{
@@ -147,7 +152,7 @@ urlFallbackLoop:
 						Message:            upstreamMsg,
 						Detail:             getUpstreamDetail(respBody),
 					})
-					log.Printf("%s status=429 retry=%d/%d body=%s", p.prefix, attempt, antigravityMaxRetries, truncateForLog(respBody, 200))
+					log.Printf("%s status=429 retry=%d/%d body=%s", p.prefix, attempt, maxRetries, truncateForLog(respBody, 200))
 					if !sleepAntigravityBackoffWithContext(p.ctx, attempt) {
 						log.Printf("%s status=context_canceled_during_backoff", p.prefix)
 						return nil, p.ctx.Err()
@@ -171,7 +176,7 @@ urlFallbackLoop:
 				respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 				_ = resp.Body.Close()
 
-				if attempt < antigravityMaxRetries {
+				if attempt < maxRetries {
 					upstreamMsg := strings.TrimSpace(extractAntigravityErrorMessage(respBody))
 					upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 					appendOpsUpstreamError(p.c, OpsUpstreamErrorEvent{
@@ -184,7 +189,7 @@ urlFallbackLoop:
 						Message:            upstreamMsg,
 						Detail:             getUpstreamDetail(respBody),
 					})
-					log.Printf("%s status=%d retry=%d/%d body=%s", p.prefix, resp.StatusCode, attempt, antigravityMaxRetries, truncateForLog(respBody, 500))
+					log.Printf("%s status=%d retry=%d/%d body=%s", p.prefix, resp.StatusCode, attempt, maxRetries, truncateForLog(respBody, 500))
 					if !sleepAntigravityBackoffWithContext(p.ctx, attempt) {
 						log.Printf("%s status=context_canceled_during_backoff", p.prefix)
 						return nil, p.ctx.Err()
@@ -1558,6 +1563,18 @@ func sleepAntigravityBackoffWithContext(ctx context.Context, attempt int) bool {
 func antigravityUseScopeRateLimit() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv(antigravityScopeRateLimitEnv)))
 	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+func antigravityMaxRetries() int {
+	raw := strings.TrimSpace(os.Getenv(antigravityMaxRetriesEnv))
+	if raw == "" {
+		return antigravityDefaultMaxRetries
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return antigravityDefaultMaxRetries
+	}
+	return value
 }
 
 func (s *AntigravityGatewayService) handleUpstreamError(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
