@@ -2945,6 +2945,20 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		} else {
 			fingerprint = fp
 
+			if metadataUserID == "" {
+				parsed := &ParsedRequest{
+					Model:          modelID,
+					Stream:         gjson.GetBytes(body, "stream").Bool(),
+					MetadataUserID: "",
+				}
+				if generatedUserID := s.buildOAuthMetadataUserID(parsed, account, fp); generatedUserID != "" {
+					if newBody, err := sjson.SetBytes(body, "metadata.user_id", generatedUserID); err == nil && len(newBody) > 0 {
+						body = newBody
+						metadataUserID = generatedUserID
+					}
+				}
+			}
+
 			// 2. 重写metadata.user_id（需要指纹中的ClientID和账号的account_uuid）
 			// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
 			accountUUID := account.GetExtraString("account_uuid")
@@ -2998,7 +3012,16 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 
 	// 处理anthropic-beta header（OAuth账号需要特殊处理）
 	if tokenType == "oauth" {
-		req.Header.Set("anthropic-beta", s.getBetaHeader(modelID, c.GetHeader("anthropic-beta")))
+		if applyClaudeCompat {
+			applyClaudeCodeMimicHeaders(req, gjson.GetBytes(body, "stream").Bool())
+
+			incomingBeta := req.Header.Get("anthropic-beta")
+			requiredBetas := []string{claude.BetaOAuth, claude.BetaInterleavedThinking}
+			drop := map[string]struct{}{claude.BetaClaudeCode: {}}
+			req.Header.Set("anthropic-beta", mergeAnthropicBetaDropping(requiredBetas, incomingBeta, drop))
+		} else {
+			req.Header.Set("anthropic-beta", s.getBetaHeader(modelID, c.GetHeader("anthropic-beta")))
+		}
 	} else if s.cfg != nil && s.cfg.Gateway.InjectBetaForAPIKey && req.Header.Get("anthropic-beta") == "" {
 		// API-key：仅在请求显式使用 beta 特性且客户端未提供时，按需补齐（默认关闭）
 		if requestNeedsBetaFeatures(body) {
@@ -3075,6 +3098,154 @@ func defaultAPIKeyBetaHeader(body []byte) string {
 		return claude.APIKeyHaikuBetaHeader
 	}
 	return claude.APIKeyBetaHeader
+}
+
+func mergeAnthropicBeta(required []string, incoming string) string {
+	seen := make(map[string]struct{}, len(required)+8)
+	out := make([]string, 0, len(required)+8)
+
+	add := func(v string) {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			return
+		}
+		if _, ok := seen[v]; ok {
+			return
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+
+	for _, r := range required {
+		add(r)
+	}
+	for _, p := range strings.Split(incoming, ",") {
+		add(p)
+	}
+	return strings.Join(out, ",")
+}
+
+func mergeAnthropicBetaDropping(required []string, incoming string, drop map[string]struct{}) string {
+	merged := mergeAnthropicBeta(required, incoming)
+	if merged == "" || len(drop) == 0 {
+		return merged
+	}
+
+	out := make([]string, 0, 8)
+	for _, p := range strings.Split(merged, ",") {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, ok := drop[p]; ok {
+			continue
+		}
+		out = append(out, p)
+	}
+	return strings.Join(out, ",")
+}
+
+func applyClaudeOAuthHeaderDefaults(req *http.Request, isStream bool) {
+	if req == nil {
+		return
+	}
+	for key, value := range claude.DefaultHeaders {
+		if value == "" {
+			continue
+		}
+		if req.Header.Get(key) == "" {
+			req.Header.Set(key, value)
+		}
+	}
+	if isStream && req.Header.Get("x-stainless-helper-method") == "" {
+		req.Header.Set("x-stainless-helper-method", "stream")
+	}
+}
+
+func applyClaudeCodeMimicHeaders(req *http.Request, isStream bool) {
+	if req == nil {
+		return
+	}
+
+	applyClaudeOAuthHeaderDefaults(req, isStream)
+	for key, value := range claude.DefaultHeaders {
+		if value == "" {
+			continue
+		}
+		req.Header.Set(key, value)
+	}
+	req.Header.Set("accept", "application/json")
+	if isStream {
+		req.Header.Set("x-stainless-helper-method", "stream")
+	}
+}
+
+func oauthClientUserID(account *Account, fp *Fingerprint) string {
+	if account == nil {
+		return ""
+	}
+
+	candidates := []string{
+		account.GetExtraString("claude_user_id"),
+		account.GetExtraString("anthropic_user_id"),
+		account.GetCredential("claude_user_id"),
+		account.GetCredential("anthropic_user_id"),
+	}
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate != "" {
+			return candidate
+		}
+	}
+
+	if fp != nil {
+		clientID := strings.TrimSpace(fp.ClientID)
+		if clientID != "" {
+			return clientID
+		}
+	}
+
+	return ""
+}
+
+func sessionUUIDFromSeed(seed string) string {
+	if strings.TrimSpace(seed) == "" {
+		return uuid.NewString()
+	}
+
+	sum := sha256.Sum256([]byte(seed))
+	u, err := uuid.FromBytes(sum[:16])
+	if err != nil {
+		return uuid.NewString()
+	}
+	return u.String()
+}
+
+func (s *GatewayService) buildOAuthMetadataUserID(parsed *ParsedRequest, account *Account, fp *Fingerprint) string {
+	if s == nil || parsed == nil || account == nil {
+		return ""
+	}
+	if parsed.MetadataUserID != "" {
+		return ""
+	}
+
+	userID := oauthClientUserID(account, fp)
+	if userID == "" {
+		userID = generateClientID()
+	}
+
+	sessionHash := s.GenerateSessionHash(parsed)
+	sessionID := uuid.NewString()
+	if sessionHash != "" {
+		seed := fmt.Sprintf("%d::%s", account.ID, sessionHash)
+		sessionID = sessionUUIDFromSeed(seed)
+	}
+
+	accountUUID := strings.TrimSpace(account.GetExtraString("account_uuid"))
+	if accountUUID != "" {
+		return fmt.Sprintf("user_%s_account_%s_session_%s", userID, accountUUID, sessionID)
+	}
+	return fmt.Sprintf("user_%s_account__session_%s", userID, sessionID)
 }
 
 func truncateForLog(b []byte, maxBytes int) string {
@@ -4350,6 +4521,20 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	if account.IsOAuth() && s.identityService != nil && applyClaudeCompat {
 		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 		if err == nil {
+			if metadataUserID == "" {
+				parsed := &ParsedRequest{
+					Model:          modelID,
+					Stream:         false,
+					MetadataUserID: "",
+				}
+				if generatedUserID := s.buildOAuthMetadataUserID(parsed, account, fp); generatedUserID != "" {
+					if newBody, err := sjson.SetBytes(body, "metadata.user_id", generatedUserID); err == nil && len(newBody) > 0 {
+						body = newBody
+						metadataUserID = generatedUserID
+					}
+				}
+			}
+
 			accountUUID := account.GetExtraString("account_uuid")
 			if accountUUID != "" && fp.ClientID != "" {
 				if newBody, err := s.identityService.RewriteUserIDWithMasking(ctx, body, account, accountUUID, fp.ClientID); err == nil && len(newBody) > 0 {
@@ -4404,7 +4589,22 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 
 	// OAuth 账号：处理 anthropic-beta header
 	if tokenType == "oauth" {
-		req.Header.Set("anthropic-beta", s.getBetaHeader(modelID, c.GetHeader("anthropic-beta")))
+		if applyClaudeCompat {
+			applyClaudeCodeMimicHeaders(req, false)
+
+			incomingBeta := req.Header.Get("anthropic-beta")
+			requiredBetas := []string{
+				claude.BetaClaudeCode,
+				claude.BetaOAuth,
+				claude.BetaInterleavedThinking,
+				claude.BetaTokenCounting,
+			}
+			req.Header.Set("anthropic-beta", mergeAnthropicBeta(requiredBetas, incomingBeta))
+		} else {
+			clientBetaHeader := req.Header.Get("anthropic-beta")
+			merged := mergeAnthropicBeta([]string{claude.BetaTokenCounting}, s.getBetaHeader(modelID, clientBetaHeader))
+			req.Header.Set("anthropic-beta", merged)
+		}
 	} else if s.cfg != nil && s.cfg.Gateway.InjectBetaForAPIKey && req.Header.Get("anthropic-beta") == "" {
 		// API-key：与 messages 同步的按需 beta 注入（默认关闭）
 		if requestNeedsBetaFeatures(body) {

@@ -9,10 +9,20 @@ const (
 	BetaClaudeCode               = "claude-code-20250219"
 	BetaInterleavedThinking      = "interleaved-thinking-2025-05-14"
 	BetaFineGrainedToolStreaming = "fine-grained-tool-streaming-2025-05-14"
+	BetaTokenCounting            = "token-counting-2024-11-01"
 )
 
 // DefaultBetaHeader Claude Code 客户端默认的 anthropic-beta header
 const DefaultBetaHeader = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking + "," + BetaFineGrainedToolStreaming
+
+// MessageBetaHeaderNoTools /v1/messages 在无工具时的 beta header
+const MessageBetaHeaderNoTools = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking
+
+// MessageBetaHeaderWithTools /v1/messages 在有工具时的 beta header
+const MessageBetaHeaderWithTools = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking
+
+// CountTokensBetaHeader count_tokens 请求使用的 anthropic-beta header
+const CountTokensBetaHeader = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking + "," + BetaTokenCounting
 
 // HaikuBetaHeader Haiku 模型使用的 anthropic-beta header（不需要 claude-code beta）
 const HaikuBetaHeader = BetaOAuth + "," + BetaInterleavedThinking
@@ -25,15 +35,15 @@ const APIKeyHaikuBetaHeader = BetaInterleavedThinking
 
 // DefaultHeaders 是 Claude Code 客户端默认请求头。
 var DefaultHeaders = map[string]string{
-	"User-Agent":                                "claude-cli/2.0.62 (external, cli)",
+	"User-Agent":                                "claude-cli/2.1.22 (external, cli)",
 	"X-Stainless-Lang":                          "js",
-	"X-Stainless-Package-Version":               "0.52.0",
+	"X-Stainless-Package-Version":               "0.70.0",
 	"X-Stainless-OS":                            "Linux",
-	"X-Stainless-Arch":                          "x64",
+	"X-Stainless-Arch":                          "arm64",
 	"X-Stainless-Runtime":                       "node",
-	"X-Stainless-Runtime-Version":               "v22.14.0",
+	"X-Stainless-Runtime-Version":               "v24.13.0",
 	"X-Stainless-Retry-Count":                   "0",
-	"X-Stainless-Timeout":                       "60",
+	"X-Stainless-Timeout":                       "600",
 	"X-App":                                     "cli",
 	"Anthropic-Dangerous-Direct-Browser-Access": "true",
 }
