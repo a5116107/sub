@@ -788,6 +788,7 @@ func (r *accountRepository) SetRateLimited(ctx context.Context, id int64, resetA
 		Where(dbaccount.IDEQ(id)).
 		SetRateLimitedAt(now).
 		SetRateLimitResetAt(resetAt).
+		SetLastUsedAt(now).
 		Save(ctx)
 	if err != nil {
 		return err
