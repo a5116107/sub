@@ -424,6 +424,15 @@ func isSensitiveKey(key string) bool {
 		return false
 	}
 
+	// Whitelist: non-sensitive API parameters and usage counters.
+	switch k {
+	case "max_tokens", "max_completion_tokens", "max_output_tokens",
+		"completion_tokens", "prompt_tokens", "total_tokens",
+		"input_tokens", "output_tokens",
+		"cache_creation_input_tokens", "cache_read_input_tokens":
+		return false
+	}
+
 	// Exact matches (common credential fields).
 	switch k {
 	case "authorization",
