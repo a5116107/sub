@@ -941,6 +941,32 @@ func (s *GeminiOAuthService) fetchProjectID(ctx context.Context, accessToken, pr
 		return strings.TrimSpace(loadResp.CloudAICompanionProject), tierID, nil
 	}
 
+	// Align with Gemini CLI behavior for already-registered users:
+	// if currentTier/paidTier exists but cloudaicompanionProject is missing,
+	// avoid calling onboardUser (may return INVALID_ARGUMENT), try
+	// Cloud Resource Manager fallback first, otherwise ask user to provide
+	// project_id manually.
+	if loadResp != nil {
+		registeredTierID := strings.TrimSpace(loadResp.GetTier())
+		if registeredTierID != "" {
+			log.Printf("[GeminiOAuth] User has tier (%s) but no cloudaicompanionProject, trying Cloud Resource Manager...", registeredTierID)
+
+			fallback, fbErr := fetchProjectIDFromResourceManager(ctx, accessToken, proxyURL)
+			if fbErr == nil && strings.TrimSpace(fallback) != "" {
+				log.Printf("[GeminiOAuth] Found project from Cloud Resource Manager: %s", fallback)
+				return strings.TrimSpace(fallback), tierID, nil
+			}
+
+			log.Printf("[GeminiOAuth] No project found from Cloud Resource Manager, user must provide project_id manually")
+			return "", tierID, fmt.Errorf(
+				"user is registered (tier: %s) but no project_id available. please provide Project ID manually in the authorization form, or create a project at https://console.cloud.google.com",
+				registeredTierID,
+			)
+		}
+	}
+
+	log.Printf("[GeminiOAuth] No currentTier/paidTier found, proceeding with onboardUser (tierID: %s)", tierID)
+
 	req := &geminicli.OnboardUserRequest{
 		TierID: tierID,
 		Metadata: geminicli.LoadCodeAssistMetadata{

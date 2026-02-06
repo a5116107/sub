@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/imroc/req/v3"
@@ -39,9 +40,19 @@ func (c *geminiCliCodeAssistClient) LoadCodeAssist(ctx context.Context, accessTo
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	if !resp.IsSuccessState() {
-		body := geminicli.SanitizeBodyForLogs(resp.String())
-		log.Printf("[CodeAssist] WARN: loadCodeAssist failed: status=%d, body=%s", resp.StatusCode, body)
-		return nil, fmt.Errorf("loadCodeAssist failed: status %d, body: %s", resp.StatusCode, body)
+		body := resp.String()
+		sanitizedBody := geminicli.SanitizeBodyForLogs(body)
+		log.Printf("[CodeAssist] WARN: loadCodeAssist failed: status=%d, body=%s", resp.StatusCode, sanitizedBody)
+
+		if googleapi.IsServiceDisabledError(body) {
+			activationURL := googleapi.ExtractActivationURL(body)
+			if activationURL != "" {
+				return nil, fmt.Errorf("Gemini for Google Cloud API is not enabled for this project. Please enable it by visiting: %s\n\nAfter enabling the API, wait a few minutes for the changes to propagate, then try again", activationURL)
+			}
+			return nil, fmt.Errorf("Gemini for Google Cloud API is not enabled for this project. Please enable it in the Google Cloud Console at: https://console.cloud.google.com/apis/library/cloudaicompanion.googleapis.com")
+		}
+
+		return nil, fmt.Errorf("loadCodeAssist failed: status %d, body: %s", resp.StatusCode, sanitizedBody)
 	}
 	log.Printf("[CodeAssist] INFO: loadCodeAssist success: status=%d", resp.StatusCode)
 	return &out, nil
@@ -66,9 +77,19 @@ func (c *geminiCliCodeAssistClient) OnboardUser(ctx context.Context, accessToken
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	if !resp.IsSuccessState() {
-		body := geminicli.SanitizeBodyForLogs(resp.String())
-		log.Printf("[CodeAssist] WARN: onboardUser failed: status=%d, body=%s", resp.StatusCode, body)
-		return nil, fmt.Errorf("onboardUser failed: status %d, body: %s", resp.StatusCode, body)
+		body := resp.String()
+		sanitizedBody := geminicli.SanitizeBodyForLogs(body)
+		log.Printf("[CodeAssist] WARN: onboardUser failed: status=%d, body=%s", resp.StatusCode, sanitizedBody)
+
+		if googleapi.IsServiceDisabledError(body) {
+			activationURL := googleapi.ExtractActivationURL(body)
+			if activationURL != "" {
+				return nil, fmt.Errorf("Gemini for Google Cloud API is not enabled for this project. Please enable it by visiting: %s\n\nAfter enabling the API, wait a few minutes for the changes to propagate, then try again", activationURL)
+			}
+			return nil, fmt.Errorf("Gemini for Google Cloud API is not enabled for this project. Please enable it in the Google Cloud Console at: https://console.cloud.google.com/apis/library/cloudaicompanion.googleapis.com")
+		}
+
+		return nil, fmt.Errorf("onboardUser failed: status %d, body: %s", resp.StatusCode, sanitizedBody)
 	}
 	log.Printf("[CodeAssist] INFO: onboardUser success: status=%d", resp.StatusCode)
 	return &out, nil
