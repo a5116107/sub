@@ -119,5 +119,4 @@ const doughnutOptions = computed(() => ({
     }
   }
 }))
-
 </script>
