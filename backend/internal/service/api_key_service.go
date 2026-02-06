@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,6 +25,10 @@ var (
 	ErrAPIKeyInvalidChars = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
 	ErrAPIKeyRateLimited  = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
 	ErrInvalidIPPattern   = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
+	ErrGroupIDRequired    = infraerrors.BadRequest("GROUP_ID_REQUIRED", "group_id is required")
+	ErrInvalidQuotaLimit  = infraerrors.BadRequest("INVALID_QUOTA_LIMIT", "quota_limit_usd must be >= 0")
+	ErrInvalidExpiresAt   = infraerrors.BadRequest("INVALID_EXPIRES_AT", "expires_at must be in the future")
+	ErrInvalidSubscriptionStrict = infraerrors.BadRequest("INVALID_SUBSCRIPTION_STRICT", "subscription_strict requires allow_subscription=true")
 )
 
 const (
@@ -47,8 +52,8 @@ type APIKeyRepository interface {
 	ExistsByKey(ctx context.Context, key string) (bool, error)
 	ListByGroupID(ctx context.Context, groupID int64, params pagination.PaginationParams) ([]APIKey, *pagination.PaginationResult, error)
 	SearchAPIKeys(ctx context.Context, userID int64, keyword string, limit int) ([]APIKey, error)
-	ClearGroupIDByGroupID(ctx context.Context, groupID int64) (int64, error)
 	CountByGroupID(ctx context.Context, groupID int64) (int64, error)
+	CountActiveByGroupID(ctx context.Context, groupID int64) (int64, error)
 	ListKeysByUserID(ctx context.Context, userID int64) ([]string, error)
 	ListKeysByGroupID(ctx context.Context, groupID int64) ([]string, error)
 }
@@ -80,20 +85,32 @@ type APIKeyAuthCacheInvalidator interface {
 
 // CreateAPIKeyRequest 创建API Key请求
 type CreateAPIKeyRequest struct {
-	Name        string   `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
+	Name             string     `json:"name"`
+	GroupID          *int64     `json:"group_id"`
+	CustomKey        *string    `json:"custom_key"`   // 可选的自定义key
+	IPWhitelist      []string   `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist      []string   `json:"ip_blacklist"` // IP 黑名单
+	AllowBalance     *bool      `json:"allow_balance"`
+	AllowSubscription *bool     `json:"allow_subscription"`
+	SubscriptionStrict *bool    `json:"subscription_strict"`
+	ExpiresAt        *time.Time `json:"expires_at"`
+	QuotaLimitUSD    *float64   `json:"quota_limit_usd"`
 }
 
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
-	Name        *string  `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	Status      *string  `json:"status"`
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	Name              *string    `json:"name"`
+	GroupID           *int64     `json:"group_id"`
+	Status            *string    `json:"status"`
+	IPWhitelist       []string   `json:"ip_whitelist"` // IP 白名单（空数组清空）
+	IPBlacklist       []string   `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	AllowBalance      *bool      `json:"allow_balance"`
+	AllowSubscription *bool      `json:"allow_subscription"`
+	SubscriptionStrict *bool     `json:"subscription_strict"`
+	ExpiresAt         *time.Time `json:"expires_at"`
+	ClearExpiresAt    bool       `json:"clear_expires_at"`
+	QuotaLimitUSD     *float64   `json:"quota_limit_usd"`
+	ClearQuotaLimitUSD bool      `json:"clear_quota_limit_usd"`
 }
 
 // APIKeyService API Key服务
@@ -218,6 +235,17 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		return nil, fmt.Errorf("get user: %w", err)
 	}
 
+	if req.GroupID == nil || *req.GroupID <= 0 {
+		return nil, ErrGroupIDRequired
+	}
+
+	if req.QuotaLimitUSD != nil && *req.QuotaLimitUSD < 0 {
+		return nil, ErrInvalidQuotaLimit
+	}
+	if req.ExpiresAt != nil && !req.ExpiresAt.After(time.Now()) {
+		return nil, ErrInvalidExpiresAt
+	}
+
 	// 验证 IP 白名单格式
 	if len(req.IPWhitelist) > 0 {
 		if invalid := ip.ValidateIPPatterns(req.IPWhitelist); len(invalid) > 0 {
@@ -232,17 +260,15 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		}
 	}
 
-	// 验证分组权限（如果指定了分组）
-	if req.GroupID != nil {
-		group, err := s.groupRepo.GetByID(ctx, *req.GroupID)
-		if err != nil {
-			return nil, fmt.Errorf("get group: %w", err)
-		}
+	// 验证分组权限
+	group, err := s.groupRepo.GetByID(ctx, *req.GroupID)
+	if err != nil {
+		return nil, fmt.Errorf("get group: %w", err)
+	}
 
-		// 检查用户是否可以绑定该分组
-		if !s.canUserBindGroup(ctx, user, group) {
-			return nil, ErrGroupNotAllowed
-		}
+	// 检查用户是否可以绑定该分组
+	if !s.canUserBindGroup(ctx, user, group) {
+		return nil, ErrGroupNotAllowed
 	}
 
 	var key string
@@ -281,6 +307,22 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	}
 
 	// 创建API Key记录
+	allowBalance := true
+	if req.AllowBalance != nil {
+		allowBalance = *req.AllowBalance
+	}
+	allowSubscription := true
+	if req.AllowSubscription != nil {
+		allowSubscription = *req.AllowSubscription
+	}
+	subscriptionStrict := false
+	if req.SubscriptionStrict != nil {
+		subscriptionStrict = *req.SubscriptionStrict
+	}
+	if subscriptionStrict && !allowSubscription {
+		return nil, ErrInvalidSubscriptionStrict
+	}
+
 	apiKey := &APIKey{
 		UserID:      userID,
 		Key:         key,
@@ -289,9 +331,20 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		Status:      StatusActive,
 		IPWhitelist: req.IPWhitelist,
 		IPBlacklist: req.IPBlacklist,
+		AllowBalance:      allowBalance,
+		AllowSubscription: allowSubscription,
+		SubscriptionStrict: subscriptionStrict,
+		ExpiresAt:         req.ExpiresAt,
+		QuotaLimitUSD:     req.QuotaLimitUSD,
 	}
 
 	if err := s.apiKeyRepo.Create(ctx, apiKey); err != nil {
+		// Ensure rate-limit/error accounting stays accurate even when conflicts are caused by soft-deleted records
+		// or by concurrent creates (race between ExistsByKey and Create).
+		if req.CustomKey != nil && *req.CustomKey != "" && errors.Is(err, ErrAPIKeyExists) {
+			s.incrementAPIKeyErrorCount(ctx, userID)
+			return nil, ErrAPIKeyExists
+		}
 		return nil, fmt.Errorf("create api key: %w", err)
 	}
 
@@ -407,6 +460,37 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 	// 更新字段
 	if req.Name != nil {
 		apiKey.Name = *req.Name
+	}
+
+	if req.AllowBalance != nil {
+		apiKey.AllowBalance = *req.AllowBalance
+	}
+	if req.AllowSubscription != nil {
+		apiKey.AllowSubscription = *req.AllowSubscription
+	}
+	if req.SubscriptionStrict != nil {
+		apiKey.SubscriptionStrict = *req.SubscriptionStrict
+	}
+	if apiKey.SubscriptionStrict && !apiKey.AllowSubscription {
+		return nil, ErrInvalidSubscriptionStrict
+	}
+
+	if req.ClearExpiresAt {
+		apiKey.ExpiresAt = nil
+	} else if req.ExpiresAt != nil {
+		if !req.ExpiresAt.After(time.Now()) {
+			return nil, ErrInvalidExpiresAt
+		}
+		apiKey.ExpiresAt = req.ExpiresAt
+	}
+
+	if req.ClearQuotaLimitUSD {
+		apiKey.QuotaLimitUSD = nil
+	} else if req.QuotaLimitUSD != nil {
+		if *req.QuotaLimitUSD < 0 {
+			return nil, ErrInvalidQuotaLimit
+		}
+		apiKey.QuotaLimitUSD = req.QuotaLimitUSD
 	}
 
 	if req.GroupID != nil {

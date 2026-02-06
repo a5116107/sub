@@ -3,59 +3,72 @@
  * Centralized exports for all admin API modules
  */
 
-import dashboardAPI from './dashboard'
-import usersAPI from './users'
-import groupsAPI from './groups'
 import accountsAPI from './accounts'
-import proxiesAPI from './proxies'
-import redeemAPI from './redeem'
-import promoAPI from './promo'
-import settingsAPI from './settings'
-import systemAPI from './system'
-import subscriptionsAPI from './subscriptions'
-import usageAPI from './usage'
-import geminiAPI from './gemini'
+import announcementsAPI from './announcements'
 import antigravityAPI from './antigravity'
-import userAttributesAPI from './userAttributes'
+import dashboardAPI from './dashboard'
+import docsAPI from './docs'
+import geminiAPI from './gemini'
+import groupsAPI from './groups'
+import openaiAPI from './openai'
 import opsAPI from './ops'
+import promoAPI from './promo'
+import proxiesAPI from './proxies'
+import qwenAPI from './qwen'
+import redeemAPI from './redeem'
+import settingsAPI from './settings'
+import subscriptionsAPI from './subscriptions'
+import systemAPI from './system'
+import usageAPI from './usage'
+import userAttributesAPI from './userAttributes'
+import usersAPI from './users'
 
 /**
  * Unified admin API object for convenient access
  */
 export const adminAPI = {
-  dashboard: dashboardAPI,
-  users: usersAPI,
-  groups: groupsAPI,
-  accounts: accountsAPI,
-  proxies: proxiesAPI,
-  redeem: redeemAPI,
-  promo: promoAPI,
-  settings: settingsAPI,
-  system: systemAPI,
-  subscriptions: subscriptionsAPI,
-  usage: usageAPI,
-  gemini: geminiAPI,
-  antigravity: antigravityAPI,
-  userAttributes: userAttributesAPI,
-  ops: opsAPI
+	dashboard: dashboardAPI,
+	users: usersAPI,
+	groups: groupsAPI,
+	accounts: accountsAPI,
+	proxies: proxiesAPI,
+	redeem: redeemAPI,
+	promo: promoAPI,
+	announcements: announcementsAPI,
+	settings: settingsAPI,
+	docs: docsAPI,
+	system: systemAPI,
+	subscriptions: subscriptionsAPI,
+	usage: usageAPI,
+	gemini: geminiAPI,
+	openai: openaiAPI,
+	qwen: qwenAPI,
+	antigravity: antigravityAPI,
+	userAttributes: userAttributesAPI,
+	ops: opsAPI
 }
 
 export {
-  dashboardAPI,
-  usersAPI,
-  groupsAPI,
-  accountsAPI,
-  proxiesAPI,
-  redeemAPI,
-  promoAPI,
-  settingsAPI,
-  systemAPI,
-  subscriptionsAPI,
-  usageAPI,
-  geminiAPI,
-  antigravityAPI,
-  userAttributesAPI,
-  opsAPI
+	dashboardAPI,
+	usersAPI,
+	groupsAPI,
+	accountsAPI,
+	proxiesAPI,
+	redeemAPI,
+	promoAPI,
+	announcementsAPI,
+	settingsAPI,
+	docsAPI,
+	systemAPI,
+	subscriptionsAPI,
+	usageAPI,
+	geminiAPI,
+	openaiAPI,
+	qwenAPI,
+	antigravityAPI,
+	userAttributesAPI,
+	opsAPI
 }
 
 export default adminAPI
+

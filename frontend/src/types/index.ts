@@ -32,6 +32,7 @@ export interface User {
   balance: number // User balance for API usage
   concurrency: number // Allowed concurrent requests
   status: 'active' | 'disabled' // Account status
+  invite_code?: string
   allowed_groups: number[] | null // Allowed group IDs (null = all non-exclusive groups)
   subscriptions?: UserSubscription[] // User's active subscriptions
   created_at: string
@@ -81,6 +82,10 @@ export interface PublicSettings {
   contact_info: string
   doc_url: string
   home_content: string
+  landing_pricing_enabled: boolean
+  landing_pricing_config: string
+  landing_pricing_groups: Group[]
+  subscriptions_enabled: boolean
   hide_ccs_import_button: boolean
   purchase_subscription_enabled: boolean
   purchase_subscription_url: string
@@ -127,6 +132,81 @@ export interface UpdateSubscriptionRequest {
   type?: Subscription['type']
   update_interval?: number
   is_active?: boolean
+}
+
+// ==================== Announcement Types ====================
+
+export type AnnouncementStatus = 'draft' | 'active' | 'archived'
+
+export type AnnouncementConditionType = 'subscription' | 'balance'
+
+export type AnnouncementOperator = 'in' | 'gt' | 'gte' | 'lt' | 'lte' | 'eq'
+
+export interface AnnouncementCondition {
+  type: AnnouncementConditionType
+  operator: AnnouncementOperator
+  group_ids?: number[]
+  value?: number
+}
+
+export interface AnnouncementConditionGroup {
+  all_of?: AnnouncementCondition[]
+}
+
+export interface AnnouncementTargeting {
+  any_of?: AnnouncementConditionGroup[]
+}
+
+export interface Announcement {
+  id: number
+  title: string
+  content: string
+  status: AnnouncementStatus
+  targeting: AnnouncementTargeting
+  starts_at?: string
+  ends_at?: string
+  created_by?: number
+  updated_by?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface UserAnnouncement {
+  id: number
+  title: string
+  content: string
+  starts_at?: string
+  ends_at?: string
+  read_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateAnnouncementRequest {
+  title: string
+  content: string
+  status?: AnnouncementStatus
+  targeting: AnnouncementTargeting
+  starts_at?: number
+  ends_at?: number
+}
+
+export interface UpdateAnnouncementRequest {
+  title?: string
+  content?: string
+  status?: AnnouncementStatus
+  targeting?: AnnouncementTargeting
+  starts_at?: number
+  ends_at?: number
+}
+
+export interface AnnouncementUserReadStatus {
+  user_id: number
+  email: string
+  username: string
+  balance: number
+  eligible: boolean
+  read_at?: string
 }
 
 // ==================== Proxy Node Types ====================
@@ -255,7 +335,7 @@ export interface PaginationConfig {
 
 // ==================== API Key & Group Types ====================
 
-export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity'
+export type GroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'qwen' | 'iflow' | 'antigravity'
 
 export type SubscriptionType = 'standard' | 'subscription'
 
@@ -271,6 +351,8 @@ export interface Group {
   daily_limit_usd: number | null
   weekly_limit_usd: number | null
   monthly_limit_usd: number | null
+  // Subscription package user concurrency (0 = no override)
+  user_concurrency: number
   // 图片生成计费配置（仅 antigravity 平台使用）
   image_price_1k: number | null
   image_price_2k: number | null
@@ -300,6 +382,12 @@ export interface ApiKey {
   status: 'active' | 'inactive'
   ip_whitelist: string[]
   ip_blacklist: string[]
+  allow_balance: boolean
+  allow_subscription: boolean
+  subscription_strict: boolean
+  expires_at?: string | null
+  quota_limit_usd?: number | null
+  quota_used_usd: number
   created_at: string
   updated_at: string
   group?: Group
@@ -307,10 +395,15 @@ export interface ApiKey {
 
 export interface CreateApiKeyRequest {
   name: string
-  group_id?: number | null
+  group_id: number
   custom_key?: string // Optional custom API Key
   ip_whitelist?: string[]
   ip_blacklist?: string[]
+  allow_balance?: boolean
+  allow_subscription?: boolean
+  subscription_strict?: boolean
+  expires_at?: string | null
+  quota_limit_usd?: number | null
 }
 
 export interface UpdateApiKeyRequest {
@@ -319,6 +412,13 @@ export interface UpdateApiKeyRequest {
   status?: 'active' | 'inactive'
   ip_whitelist?: string[]
   ip_blacklist?: string[]
+  allow_balance?: boolean
+  allow_subscription?: boolean
+  subscription_strict?: boolean
+  expires_at?: string | null
+  clear_expires_at?: boolean
+  quota_limit_usd?: number | null
+  clear_quota_limit_usd?: boolean
 }
 
 export interface CreateGroupRequest {
@@ -331,6 +431,7 @@ export interface CreateGroupRequest {
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
+  user_concurrency?: number
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
@@ -349,6 +450,7 @@ export interface UpdateGroupRequest {
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
   monthly_limit_usd?: number | null
+  user_concurrency?: number
   image_price_1k?: number | null
   image_price_2k?: number | null
   image_price_4k?: number | null
@@ -358,7 +460,7 @@ export interface UpdateGroupRequest {
 
 // ==================== Account & Proxy Types ====================
 
-export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity'
+export type AccountPlatform = 'anthropic' | 'openai' | 'gemini' | 'qwen' | 'iflow' | 'antigravity'
 export type AccountType = 'oauth' | 'setup-token' | 'apikey'
 export type OAuthAddMethod = 'oauth' | 'setup-token'
 export type ProxyProtocol = 'http' | 'https' | 'socks5' | 'socks5h'
@@ -813,6 +915,8 @@ export interface TrendDataPoint {
   requests: number
   input_tokens: number
   output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
   cache_tokens: number
   total_tokens: number
   cost: number // 标准计费
@@ -886,28 +990,29 @@ export interface UserSubscription {
   group?: Group
 }
 
+export interface UsageWindowProgress {
+  limit_usd: number
+  used_usd: number
+  remaining_usd: number
+  percentage: number
+  window_start: string
+  resets_at: string
+  resets_in_seconds: number
+}
+
 export interface SubscriptionProgress {
-  subscription_id: number
-  daily: {
-    used: number
-    limit: number | null
-    percentage: number
-    reset_in_seconds: number | null
-  } | null
-  weekly: {
-    used: number
-    limit: number | null
-    percentage: number
-    reset_in_seconds: number | null
-  } | null
-  monthly: {
-    used: number
-    limit: number | null
-    percentage: number
-    reset_in_seconds: number | null
-  } | null
-  expires_at: string | null
-  days_remaining: number | null
+  id: number
+  group_name: string
+  expires_at: string
+  expires_in_days: number
+  daily?: UsageWindowProgress
+  weekly?: UsageWindowProgress
+  monthly?: UsageWindowProgress
+}
+
+export interface UserSubscriptionProgressInfo {
+  subscription: UserSubscription
+  progress: SubscriptionProgress
 }
 
 export interface AssignSubscriptionRequest {

@@ -1,7 +1,12 @@
 package admin
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"log"
+	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,15 +22,34 @@ import (
 // SettingHandler 系统设置处理器
 type SettingHandler struct {
 	settingService   *service.SettingService
+	groupRepo        service.GroupRepository
 	emailService     *service.EmailService
 	turnstileService *service.TurnstileService
 	opsService       *service.OpsService
 }
 
+func requireAdminJWT(c *gin.Context, purpose string) bool {
+	if c == nil {
+		return false
+	}
+	method, ok := c.Get("auth_method")
+	if !ok {
+		response.Forbidden(c, purpose+" requires JWT admin authentication")
+		return false
+	}
+	m, _ := method.(string)
+	if m != "jwt" {
+		response.Forbidden(c, purpose+" requires JWT admin authentication")
+		return false
+	}
+	return true
+}
+
 // NewSettingHandler 创建系统设置处理器
-func NewSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, opsService *service.OpsService) *SettingHandler {
+func NewSettingHandler(settingService *service.SettingService, groupRepo service.GroupRepository, emailService *service.EmailService, turnstileService *service.TurnstileService, opsService *service.OpsService) *SettingHandler {
 	return &SettingHandler{
 		settingService:   settingService,
+		groupRepo:        groupRepo,
 		emailService:     emailService,
 		turnstileService: turnstileService,
 		opsService:       opsService,
@@ -51,6 +75,9 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PasswordResetEnabled:                 settings.PasswordResetEnabled,
 		TotpEnabled:                          settings.TotpEnabled,
 		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
+		ReferralInviterBonus:                 settings.ReferralInviterBonus,
+		ReferralInviteeBonus:                 settings.ReferralInviteeBonus,
+		ReferralCommissionRate:               settings.ReferralCommissionRate,
 		SMTPHost:                             settings.SMTPHost,
 		SMTPPort:                             settings.SMTPPort,
 		SMTPUsername:                         settings.SMTPUsername,
@@ -72,6 +99,9 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		ContactInfo:                          settings.ContactInfo,
 		DocURL:                               settings.DocURL,
 		HomeContent:                          settings.HomeContent,
+		LandingPricingEnabled:                settings.LandingPricingEnabled,
+		LandingPricingConfig:                 settings.LandingPricingConfig,
+		SubscriptionsEnabled:                 settings.SubscriptionsEnabled,
 		HideCcsImportButton:                  settings.HideCcsImportButton,
 		PurchaseSubscriptionEnabled:          settings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:              settings.PurchaseSubscriptionURL,
@@ -84,6 +114,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		FallbackModelAntigravity:             settings.FallbackModelAntigravity,
 		EnableIdentityPatch:                  settings.EnableIdentityPatch,
 		IdentityPatchPrompt:                  settings.IdentityPatchPrompt,
+		GatewayFixOrphanedToolResults:        settings.GatewayFixOrphanedToolResults,
 		OpsMonitoringEnabled:                 opsEnabled && settings.OpsMonitoringEnabled,
 		OpsRealtimeMonitoringEnabled:         settings.OpsRealtimeMonitoringEnabled,
 		OpsQueryModeDefault:                  settings.OpsQueryModeDefault,
@@ -99,6 +130,10 @@ type UpdateSettingsRequest struct {
 	PromoCodeEnabled     bool `json:"promo_code_enabled"`
 	PasswordResetEnabled bool `json:"password_reset_enabled"`
 	TotpEnabled          bool `json:"totp_enabled"` // TOTP 双因素认证
+
+	ReferralInviterBonus   float64 `json:"referral_inviter_bonus"`
+	ReferralInviteeBonus   float64 `json:"referral_invitee_bonus"`
+	ReferralCommissionRate float64 `json:"referral_commission_rate"`
 
 	// 邮件服务设置
 	SMTPHost     string `json:"smtp_host"`
@@ -128,6 +163,9 @@ type UpdateSettingsRequest struct {
 	ContactInfo                 string  `json:"contact_info"`
 	DocURL                      string  `json:"doc_url"`
 	HomeContent                 string  `json:"home_content"`
+	LandingPricingEnabled       bool    `json:"landing_pricing_enabled"`
+	LandingPricingConfig        string  `json:"landing_pricing_config"`
+	SubscriptionsEnabled        bool    `json:"subscriptions_enabled"`
 	HideCcsImportButton         bool    `json:"hide_ccs_import_button"`
 	PurchaseSubscriptionEnabled *bool   `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     *string `json:"purchase_subscription_url"`
@@ -146,6 +184,9 @@ type UpdateSettingsRequest struct {
 	// Identity patch configuration (Claude -> Gemini)
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`
 	IdentityPatchPrompt string `json:"identity_patch_prompt"`
+
+	// Gateway runtime toggles
+	GatewayFixOrphanedToolResults *bool `json:"gateway_fix_orphaned_tool_results"`
 
 	// Ops monitoring (vNext)
 	OpsMonitoringEnabled         *bool   `json:"ops_monitoring_enabled"`
@@ -178,6 +219,20 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 	if req.SMTPPort <= 0 {
 		req.SMTPPort = 587
+	}
+
+	// Referral 参数验证
+	if req.ReferralInviterBonus < 0 {
+		req.ReferralInviterBonus = 0
+	}
+	if req.ReferralInviteeBonus < 0 {
+		req.ReferralInviteeBonus = 0
+	}
+	if req.ReferralCommissionRate < 0 {
+		req.ReferralCommissionRate = 0
+	}
+	if req.ReferralCommissionRate > 1 {
+		req.ReferralCommissionRate = 1
 	}
 
 	// Turnstile 参数验证
@@ -215,6 +270,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			response.BadRequest(c, "Cannot enable TOTP: TOTP_ENCRYPTION_KEY environment variable must be configured first. Generate a key with 'openssl rand -hex 32' and set it in your environment.")
 			return
 		}
+	}
+
+	// Validate Landing / Pricing JSON config early to prevent saving invalid config
+	// (frontend also validates, but backend validation is the source of truth).
+	if err := validateLandingPricingConfig(c.Request.Context(), req.LandingPricingConfig, h.groupRepo); err != nil {
+		response.BadRequest(c, err.Error())
+		return
 	}
 
 	// LinuxDo Connect 参数验证
@@ -292,6 +354,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PromoCodeEnabled:            req.PromoCodeEnabled,
 		PasswordResetEnabled:        req.PasswordResetEnabled,
 		TotpEnabled:                 req.TotpEnabled,
+		ReferralInviterBonus:        req.ReferralInviterBonus,
+		ReferralInviteeBonus:        req.ReferralInviteeBonus,
+		ReferralCommissionRate:      req.ReferralCommissionRate,
 		SMTPHost:                    req.SMTPHost,
 		SMTPPort:                    req.SMTPPort,
 		SMTPUsername:                req.SMTPUsername,
@@ -313,6 +378,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		ContactInfo:                 req.ContactInfo,
 		DocURL:                      req.DocURL,
 		HomeContent:                 req.HomeContent,
+		LandingPricingEnabled:       req.LandingPricingEnabled,
+		LandingPricingConfig:        req.LandingPricingConfig,
+		SubscriptionsEnabled:        req.SubscriptionsEnabled,
 		HideCcsImportButton:         req.HideCcsImportButton,
 		PurchaseSubscriptionEnabled: purchaseEnabled,
 		PurchaseSubscriptionURL:     purchaseURL,
@@ -325,6 +393,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		FallbackModelAntigravity:    req.FallbackModelAntigravity,
 		EnableIdentityPatch:         req.EnableIdentityPatch,
 		IdentityPatchPrompt:         req.IdentityPatchPrompt,
+		GatewayFixOrphanedToolResults: func() bool {
+			if req.GatewayFixOrphanedToolResults != nil {
+				return *req.GatewayFixOrphanedToolResults
+			}
+			return previousSettings.GatewayFixOrphanedToolResults
+		}(),
 		OpsMonitoringEnabled: func() bool {
 			if req.OpsMonitoringEnabled != nil {
 				return *req.OpsMonitoringEnabled
@@ -372,6 +446,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PasswordResetEnabled:                 updatedSettings.PasswordResetEnabled,
 		TotpEnabled:                          updatedSettings.TotpEnabled,
 		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
+		ReferralInviterBonus:                 updatedSettings.ReferralInviterBonus,
+		ReferralInviteeBonus:                 updatedSettings.ReferralInviteeBonus,
+		ReferralCommissionRate:               updatedSettings.ReferralCommissionRate,
 		SMTPHost:                             updatedSettings.SMTPHost,
 		SMTPPort:                             updatedSettings.SMTPPort,
 		SMTPUsername:                         updatedSettings.SMTPUsername,
@@ -393,6 +470,9 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		ContactInfo:                          updatedSettings.ContactInfo,
 		DocURL:                               updatedSettings.DocURL,
 		HomeContent:                          updatedSettings.HomeContent,
+		LandingPricingEnabled:                updatedSettings.LandingPricingEnabled,
+		LandingPricingConfig:                 updatedSettings.LandingPricingConfig,
+		SubscriptionsEnabled:                 updatedSettings.SubscriptionsEnabled,
 		HideCcsImportButton:                  updatedSettings.HideCcsImportButton,
 		PurchaseSubscriptionEnabled:          updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:              updatedSettings.PurchaseSubscriptionURL,
@@ -405,6 +485,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		FallbackModelAntigravity:             updatedSettings.FallbackModelAntigravity,
 		EnableIdentityPatch:                  updatedSettings.EnableIdentityPatch,
 		IdentityPatchPrompt:                  updatedSettings.IdentityPatchPrompt,
+		GatewayFixOrphanedToolResults:        updatedSettings.GatewayFixOrphanedToolResults,
 		OpsMonitoringEnabled:                 updatedSettings.OpsMonitoringEnabled,
 		OpsRealtimeMonitoringEnabled:         updatedSettings.OpsRealtimeMonitoringEnabled,
 		OpsQueryModeDefault:                  updatedSettings.OpsQueryModeDefault,
@@ -509,6 +590,15 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.HomeContent != after.HomeContent {
 		changed = append(changed, "home_content")
 	}
+	if before.LandingPricingEnabled != after.LandingPricingEnabled {
+		changed = append(changed, "landing_pricing_enabled")
+	}
+	if before.LandingPricingConfig != after.LandingPricingConfig {
+		changed = append(changed, "landing_pricing_config")
+	}
+	if before.SubscriptionsEnabled != after.SubscriptionsEnabled {
+		changed = append(changed, "subscriptions_enabled")
+	}
 	if before.HideCcsImportButton != after.HideCcsImportButton {
 		changed = append(changed, "hide_ccs_import_button")
 	}
@@ -538,6 +628,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.IdentityPatchPrompt != after.IdentityPatchPrompt {
 		changed = append(changed, "identity_patch_prompt")
+	}
+	if before.GatewayFixOrphanedToolResults != after.GatewayFixOrphanedToolResults {
+		changed = append(changed, "gateway_fix_orphaned_tool_results")
 	}
 	if before.OpsMonitoringEnabled != after.OpsMonitoringEnabled {
 		changed = append(changed, "ops_monitoring_enabled")
@@ -691,6 +784,10 @@ func (h *SettingHandler) SendTestEmail(c *gin.Context) {
 // GetAdminAPIKey 获取管理员 API Key 状态
 // GET /api/v1/admin/settings/admin-api-key
 func (h *SettingHandler) GetAdminAPIKey(c *gin.Context) {
+	if !requireAdminJWT(c, "Admin API key management") {
+		return
+	}
+
 	maskedKey, exists, err := h.settingService.GetAdminAPIKeyStatus(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -706,6 +803,10 @@ func (h *SettingHandler) GetAdminAPIKey(c *gin.Context) {
 // RegenerateAdminAPIKey 生成/重新生成管理员 API Key
 // POST /api/v1/admin/settings/admin-api-key/regenerate
 func (h *SettingHandler) RegenerateAdminAPIKey(c *gin.Context) {
+	if !requireAdminJWT(c, "Admin API key management") {
+		return
+	}
+
 	key, err := h.settingService.GenerateAdminAPIKey(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -720,6 +821,10 @@ func (h *SettingHandler) RegenerateAdminAPIKey(c *gin.Context) {
 // DeleteAdminAPIKey 删除管理员 API Key
 // DELETE /api/v1/admin/settings/admin-api-key
 func (h *SettingHandler) DeleteAdminAPIKey(c *gin.Context) {
+	if !requireAdminJWT(c, "Admin API key management") {
+		return
+	}
+
 	if err := h.settingService.DeleteAdminAPIKey(c.Request.Context()); err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -791,4 +896,547 @@ func (h *SettingHandler) UpdateStreamTimeoutSettings(c *gin.Context) {
 		ThresholdCount:         updatedSettings.ThresholdCount,
 		ThresholdWindowMinutes: updatedSettings.ThresholdWindowMinutes,
 	})
+}
+
+func validateLandingPricingConfig(ctx context.Context, raw string, groupRepo service.GroupRepository) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	dec := json.NewDecoder(strings.NewReader(raw))
+	dec.UseNumber()
+
+	var doc any
+	if err := dec.Decode(&doc); err != nil {
+		return fmt.Errorf("landing_pricing_config: invalid JSON: %w", err)
+	}
+
+	root, ok := doc.(map[string]any)
+	if !ok {
+		return fmt.Errorf("landing_pricing_config: must be a JSON object")
+	}
+
+	version, ok := jsonInt64(root["version"])
+	if !ok || version != 1 {
+		return fmt.Errorf("landing_pricing_config: unsupported version")
+	}
+
+	currency, _ := root["currency"].(string)
+	if currency != "CNY" {
+		return fmt.Errorf("landing_pricing_config: unsupported currency")
+	}
+
+	defaultTab, _ := root["default_tab"].(string)
+	if defaultTab != "subscription" && defaultTab != "payg" {
+		return fmt.Errorf("landing_pricing_config: invalid default_tab")
+	}
+
+	subscription, ok := root["subscription"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("landing_pricing_config: missing subscription section")
+	}
+
+	defaultPeriod, _ := subscription["default_period"].(string)
+	if !isPricingPeriod(defaultPeriod) {
+		return fmt.Errorf("landing_pricing_config: invalid subscription.default_period")
+	}
+
+	periods, ok := subscription["periods"].([]any)
+	if !ok || len(periods) == 0 {
+		return fmt.Errorf("landing_pricing_config: invalid subscription.periods")
+	}
+	for idx, item := range periods {
+		period, ok := item.(map[string]any)
+		if !ok {
+			return fmt.Errorf("landing_pricing_config: subscription.periods[%d] must be object", idx)
+		}
+		key, _ := period["key"].(string)
+		label, _ := period["label"].(string)
+		if !isPricingPeriod(key) || strings.TrimSpace(label) == "" {
+			return fmt.Errorf("landing_pricing_config: subscription.periods[%d] invalid", idx)
+		}
+	}
+
+	plans, ok := subscription["plans"].([]any)
+	if !ok || len(plans) == 0 {
+		return fmt.Errorf("landing_pricing_config: subscription.plans must be a non-empty array")
+	}
+	for idx, item := range plans {
+		plan, ok := item.(map[string]any)
+		if !ok {
+			return fmt.Errorf("landing_pricing_config: subscription.plans[%d] must be object", idx)
+		}
+
+		planID, _ := plan["id"].(string)
+		planRef := fmt.Sprintf("subscription.plans[%d]", idx)
+		if strings.TrimSpace(planID) != "" {
+			planRef = fmt.Sprintf("subscription.plans[%s]", planID)
+		}
+
+		// Optional: bind plan to a backend subscription group
+		rawGroupID, hasGroupID := plan["group_id"]
+		if hasGroupID {
+			groupID, ok := jsonInt64(rawGroupID)
+			if !ok || groupID <= 0 {
+				return fmt.Errorf("landing_pricing_config: %s.group_id must be a positive integer", planRef)
+			}
+			if groupRepo != nil {
+				group, err := groupRepo.GetByIDLite(ctx, groupID)
+				if err != nil || group == nil {
+					return fmt.Errorf("landing_pricing_config: %s.group_id=%d not found", planRef, groupID)
+				}
+				if !group.IsActive() {
+					return fmt.Errorf("landing_pricing_config: %s.group_id=%d is not active", planRef, groupID)
+				}
+				if !group.IsSubscriptionType() {
+					return fmt.Errorf("landing_pricing_config: %s.group_id=%d is not a subscription group", planRef, groupID)
+				}
+			}
+		}
+
+		// Optional: show selected backend group fields
+		if rawGroupFields, exists := plan["group_fields"]; exists {
+			groupFields, ok := rawGroupFields.([]any)
+			if !ok {
+				return fmt.Errorf("landing_pricing_config: %s.group_fields must be an array", planRef)
+			}
+			if !hasGroupID {
+				return fmt.Errorf("landing_pricing_config: %s.group_fields requires group_id", planRef)
+			}
+			for i, v := range groupFields {
+				key, ok := v.(string)
+				if !ok || !isPricingGroupFieldKey(key) {
+					return fmt.Errorf("landing_pricing_config: %s.group_fields[%d] is invalid", planRef, i)
+				}
+			}
+		}
+
+		// Optional: subscription validity (days) per period
+		if rawValidity, exists := plan["validity_days"]; exists {
+			validity, ok := rawValidity.(map[string]any)
+			if !ok {
+				return fmt.Errorf("landing_pricing_config: %s.validity_days must be a JSON object", planRef)
+			}
+			for key, rawDays := range validity {
+				if !isPricingPeriod(key) {
+					return fmt.Errorf("landing_pricing_config: %s.validity_days.%s has invalid key", planRef, key)
+				}
+				days, ok := jsonInt64(rawDays)
+				if !ok || days <= 0 {
+					return fmt.Errorf("landing_pricing_config: %s.validity_days.%s must be a positive integer", planRef, key)
+				}
+			}
+		}
+
+		// Optional: plan meta widgets (typed fields, free组合)
+		if rawMeta, exists := plan["meta"]; exists {
+			meta, ok := rawMeta.(map[string]any)
+			if !ok {
+				return fmt.Errorf("landing_pricing_config: %s.meta must be a JSON object", planRef)
+			}
+			if rawWidgets, exists := meta["widgets"]; exists {
+				widgets, ok := rawWidgets.([]any)
+				if !ok {
+					return fmt.Errorf("landing_pricing_config: %s.meta.widgets must be an array", planRef)
+				}
+				for i, rawWidget := range widgets {
+					widget, ok := rawWidget.(map[string]any)
+					if !ok {
+						return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d] must be object", planRef, i)
+					}
+
+					typ, _ := widget["type"].(string)
+					typ = strings.TrimSpace(typ)
+					if typ == "" {
+						return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].type is required", planRef, i)
+					}
+
+					// Optional widget conditions
+					if rawWhen, ok := widget["when"]; ok && rawWhen != nil {
+						when, ok := rawWhen.(map[string]any)
+						if !ok {
+							return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].when must be object", planRef, i)
+						}
+						if rawPeriods, ok := when["periods"]; ok && rawPeriods != nil {
+							periods, ok := rawPeriods.([]any)
+							if !ok || len(periods) == 0 {
+								return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].when.periods must be a non-empty array", planRef, i)
+							}
+							for j, rawPeriod := range periods {
+								p, ok := rawPeriod.(string)
+								if !ok || !isPricingPeriod(p) {
+									return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].when.periods[%d] is invalid", planRef, i, j)
+								}
+							}
+						}
+					}
+
+					switch typ {
+					case "text":
+						text, _ := widget["text"].(string)
+						if strings.TrimSpace(text) == "" {
+							return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].text is required", planRef, i)
+						}
+					case "kv":
+						label, _ := widget["label"].(string)
+						value, _ := widget["value"].(string)
+						if strings.TrimSpace(label) == "" || strings.TrimSpace(value) == "" {
+							return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d] requires label and value", planRef, i)
+						}
+					case "group_field":
+						if !hasGroupID {
+							return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d] requires group_id", planRef, i)
+						}
+						key, _ := widget["key"].(string)
+						if !isPricingGroupFieldKey(key) {
+							return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].key is invalid", planRef, i)
+						}
+						if rawLabel, ok := widget["label"]; ok && rawLabel != nil {
+							if _, ok := rawLabel.(string); !ok {
+								return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].label must be string", planRef, i)
+							}
+						}
+					case "list":
+						rawItems, ok := widget["items"].([]any)
+						if !ok || len(rawItems) == 0 {
+							return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].items must be a non-empty array", planRef, i)
+						}
+						for j, rawItem := range rawItems {
+							s, ok := rawItem.(string)
+							if !ok || strings.TrimSpace(s) == "" {
+								return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].items[%d] must be a non-empty string", planRef, i, j)
+							}
+						}
+						if rawTitle, ok := widget["title"]; ok && rawTitle != nil {
+							if _, ok := rawTitle.(string); !ok {
+								return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].title must be string", planRef, i)
+							}
+						}
+					case "tags":
+						rawTags, ok := widget["tags"].([]any)
+						if !ok || len(rawTags) == 0 {
+							return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].tags must be a non-empty array", planRef, i)
+						}
+						for j, rawTag := range rawTags {
+							s, ok := rawTag.(string)
+							if !ok || strings.TrimSpace(s) == "" {
+								return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].tags[%d] must be a non-empty string", planRef, i, j)
+							}
+						}
+						if rawTone, ok := widget["tone"]; ok && rawTone != nil {
+							tone, ok := rawTone.(string)
+							if !ok || !isPricingWidgetTone(tone) {
+								return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].tone is invalid", planRef, i)
+							}
+						}
+					case "divider":
+						if rawLabel, ok := widget["label"]; ok && rawLabel != nil {
+							if _, ok := rawLabel.(string); !ok {
+								return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].label must be string", planRef, i)
+							}
+						}
+					case "metric":
+						label, _ := widget["label"].(string)
+						value, _ := widget["value"].(string)
+						if strings.TrimSpace(label) == "" || strings.TrimSpace(value) == "" {
+							return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d] requires label and value", planRef, i)
+						}
+						if rawHint, ok := widget["hint"]; ok && rawHint != nil {
+							if _, ok := rawHint.(string); !ok {
+								return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].hint must be string", planRef, i)
+							}
+						}
+					default:
+						return fmt.Errorf("landing_pricing_config: %s.meta.widgets[%d].type is invalid", planRef, i)
+					}
+				}
+			}
+		}
+	}
+
+	payg, ok := root["payg"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("landing_pricing_config: missing payg section")
+	}
+	if title, _ := payg["title"].(string); strings.TrimSpace(title) == "" {
+		return fmt.Errorf("landing_pricing_config: payg.title is required")
+	}
+	rawFeatures, ok := payg["features"].([]any)
+	if !ok {
+		return fmt.Errorf("landing_pricing_config: payg.features must be an array")
+	}
+	for idx, f := range rawFeatures {
+		if _, ok := f.(string); !ok {
+			return fmt.Errorf("landing_pricing_config: payg.features[%d] must be a string", idx)
+		}
+	}
+
+	return nil
+}
+
+func isPricingPeriod(v string) bool {
+	return v == "week" || v == "month" || v == "custom"
+}
+
+func isPricingGroupFieldKey(v string) bool {
+	switch v {
+	case "daily_limit_usd", "weekly_limit_usd", "monthly_limit_usd", "user_concurrency", "rate_multiplier":
+		return true
+	default:
+		return false
+	}
+}
+
+func isPricingWidgetTone(v string) bool {
+	switch strings.TrimSpace(v) {
+	case "primary", "gray", "gold":
+		return true
+	default:
+		return false
+	}
+}
+
+func jsonInt64(v any) (int64, bool) {
+	switch x := v.(type) {
+	case json.Number:
+		i, err := x.Int64()
+		return i, err == nil
+	case float64:
+		if math.Trunc(x) != x {
+			return 0, false
+		}
+		const maxInt64Float = float64(^uint64(0) >> 1)
+		const minInt64Float = -maxInt64Float - 1
+		if x > maxInt64Float || x < minInt64Float {
+			return 0, false
+		}
+		return int64(x), true
+	case int64:
+		return x, true
+	case int:
+		return int64(x), true
+	case string:
+		s := strings.TrimSpace(x)
+		if s == "" {
+			return 0, false
+		}
+		i, err := strconv.ParseInt(s, 10, 64)
+		return i, err == nil
+	default:
+		return 0, false
+	}
+}
+
+type UpdateDocsPageRequest struct {
+	Lang     string `json:"lang"`
+	Markdown string `json:"markdown"`
+}
+
+type UpsertDocsPageMetaRequest struct {
+	Key     string `json:"key"`
+	TitleZh string `json:"title_zh,omitempty"`
+	TitleEn string `json:"title_en,omitempty"`
+	Group   string `json:"group,omitempty"`
+	Order   int    `json:"order,omitempty"`
+	Format  string `json:"format,omitempty"`
+	Public  bool   `json:"public"`
+}
+
+// GetDocsPage returns a docs page markdown for admin editing.
+// GET /api/v1/admin/docs/:key?lang=zh|en
+func (h *SettingHandler) GetDocsPage(c *gin.Context) {
+	docKey := c.Param("key")
+	lang := pickDocsLang(c.Query("lang"), c.GetHeader("Accept-Language"))
+
+	page, err := h.settingService.GetDocsPageForAdmin(c.Request.Context(), docKey, lang)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.DocsPage{
+		Key:       page.Key,
+		Lang:      page.Lang,
+		Title:     page.Title,
+		Format:    page.Format,
+		Markdown:  page.Markdown,
+		UpdatedAt: page.UpdatedAt,
+	})
+}
+
+// ListDocsPages lists docs page metadata for admin.
+// GET /api/v1/admin/docs/pages
+func (h *SettingHandler) ListDocsPages(c *gin.Context) {
+	pages, err := h.settingService.ListDocsPages(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	out := make([]dto.DocsPageMeta, 0, len(pages))
+	for _, p := range pages {
+		out = append(out, dto.DocsPageMeta{
+			Key:     p.Key,
+			TitleZh: p.TitleZh,
+			TitleEn: p.TitleEn,
+			Group:   p.Group,
+			Order:   p.Order,
+			Format:  p.Format,
+			Public:  p.Public,
+		})
+	}
+	response.Success(c, out)
+}
+
+// CreateDocsPage creates or updates a docs page metadata entry (idempotent by key).
+// POST /api/v1/admin/docs/pages
+func (h *SettingHandler) CreateDocsPage(c *gin.Context) {
+	var req UpsertDocsPageMetaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(req.Key) == "" {
+		response.BadRequest(c, "key is required")
+		return
+	}
+	meta, err := h.settingService.UpsertDocsPageMeta(c.Request.Context(), service.DocsPageMeta{
+		Key:     req.Key,
+		TitleZh: req.TitleZh,
+		TitleEn: req.TitleEn,
+		Group:   req.Group,
+		Order:   req.Order,
+		Format:  req.Format,
+		Public:  req.Public,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.DocsPageMeta{
+		Key:     meta.Key,
+		TitleZh: meta.TitleZh,
+		TitleEn: meta.TitleEn,
+		Group:   meta.Group,
+		Order:   meta.Order,
+		Format:  meta.Format,
+		Public:  meta.Public,
+	})
+}
+
+// UpdateDocsPageMeta updates an existing docs page meta (upsert by key).
+// PUT /api/v1/admin/docs/pages/:key
+func (h *SettingHandler) UpdateDocsPageMeta(c *gin.Context) {
+	key := c.Param("key")
+	var req UpsertDocsPageMetaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if strings.TrimSpace(key) == "" {
+		response.BadRequest(c, "key is required")
+		return
+	}
+	if strings.TrimSpace(req.Key) == "" {
+		req.Key = key
+	}
+	if req.Key != key {
+		response.BadRequest(c, "key in body must match path")
+		return
+	}
+	meta, err := h.settingService.UpsertDocsPageMeta(c.Request.Context(), service.DocsPageMeta{
+		Key:     req.Key,
+		TitleZh: req.TitleZh,
+		TitleEn: req.TitleEn,
+		Group:   req.Group,
+		Order:   req.Order,
+		Format:  req.Format,
+		Public:  req.Public,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.DocsPageMeta{
+		Key:     meta.Key,
+		TitleZh: meta.TitleZh,
+		TitleEn: meta.TitleEn,
+		Group:   meta.Group,
+		Order:   meta.Order,
+		Format:  meta.Format,
+		Public:  meta.Public,
+	})
+}
+
+// DeleteDocsPage deletes a docs page (meta + content).
+// DELETE /api/v1/admin/docs/pages/:key
+func (h *SettingHandler) DeleteDocsPage(c *gin.Context) {
+	key := c.Param("key")
+	if strings.TrimSpace(key) == "" {
+		response.BadRequest(c, "key is required")
+		return
+	}
+	if err := h.settingService.DeleteDocsPage(c.Request.Context(), key); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"deleted": true})
+}
+
+// UpdateDocsPage upserts a docs page markdown.
+// PUT /api/v1/admin/docs/:key
+func (h *SettingHandler) UpdateDocsPage(c *gin.Context) {
+	const maxDocsMarkdownBytes = 200_000
+
+	var req UpdateDocsPageRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if len(req.Markdown) > maxDocsMarkdownBytes {
+		response.BadRequest(c, "Docs markdown is too large")
+		return
+	}
+
+	docKey := c.Param("key")
+	lang := pickDocsLang(req.Lang, c.GetHeader("Accept-Language"))
+
+	if err := h.settingService.UpdateDocsPage(c.Request.Context(), docKey, lang, req.Markdown); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	page, err := h.settingService.GetDocsPageForAdmin(c.Request.Context(), docKey, lang)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.DocsPage{
+		Key:       page.Key,
+		Lang:      page.Lang,
+		Title:     page.Title,
+		Format:    page.Format,
+		Markdown:  page.Markdown,
+		UpdatedAt: page.UpdatedAt,
+	})
+}
+
+func pickDocsLang(raw string, acceptLanguage string) string {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	if raw == "" {
+		al := strings.ToLower(acceptLanguage)
+		if strings.HasPrefix(al, "zh") || strings.Contains(al, "zh") {
+			return "zh"
+		}
+		return "en"
+	}
+	if strings.HasPrefix(raw, "zh") {
+		return "zh"
+	}
+	if strings.HasPrefix(raw, "en") {
+		return "en"
+	}
+	// Fallback: English.
+	return "en"
 }

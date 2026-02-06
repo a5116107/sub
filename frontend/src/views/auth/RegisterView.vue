@@ -48,7 +48,7 @@
               autofocus
               autocomplete="email"
               :disabled="isLoading"
-              class="input pl-11"
+              class="input-enhanced pl-11"
               :class="{ 'input-error': errors.email }"
               :placeholder="t('auth.emailPlaceholder')"
             />
@@ -74,14 +74,16 @@
               required
               autocomplete="new-password"
               :disabled="isLoading"
-              class="input pl-11 pr-11"
+              class="input-enhanced pl-11 pr-11"
               :class="{ 'input-error': errors.password }"
               :placeholder="t('auth.createPasswordPlaceholder')"
             />
             <button
               type="button"
               @click="showPassword = !showPassword"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
+              :aria-pressed="showPassword"
+              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300 focus:outline-none focus:ring-2 focus:ring-primary-500/50 rounded-lg"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />
@@ -110,7 +112,7 @@
               v-model="formData.promo_code"
               type="text"
               :disabled="isLoading"
-              class="input pl-11 pr-10"
+              class="input-enhanced pl-11 pr-10"
               :class="{
                 'border-green-500 focus:border-green-500 focus:ring-green-500': promoValidation.valid,
                 'border-red-500 focus:border-red-500 focus:ring-red-500': promoValidation.invalid
@@ -162,48 +164,18 @@
 
         <!-- Error Message -->
         <transition name="fade">
-          <div
-            v-if="errorMessage"
-            class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20"
-          >
-            <div class="flex items-start gap-3">
-              <div class="flex-shrink-0">
-                <Icon name="exclamationCircle" size="md" class="text-red-500" />
-              </div>
-              <p class="text-sm text-red-700 dark:text-red-400">
-                {{ errorMessage }}
-              </p>
-            </div>
-          </div>
+          <Alert v-if="errorMessage" variant="error" :message="errorMessage" />
         </transition>
 
         <!-- Submit Button -->
-        <button
+        <Button
           type="submit"
-          :disabled="isLoading || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full"
+          variant="primary"
+          :loading="isLoading"
+          :disabled="turnstileEnabled && !turnstileToken"
+          icon="userPlus"
+          block
         >
-          <svg
-            v-if="isLoading"
-            class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            ></circle>
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          <Icon v-else name="userPlus" size="md" class="mr-2" />
           {{
             isLoading
               ? t('auth.processing')
@@ -211,7 +183,7 @@
                 ? t('auth.continue')
                 : t('auth.createAccount')
           }}
-        </button>
+        </Button>
       </form>
     </div>
 
@@ -220,7 +192,7 @@
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.alreadyHaveAccount') }}
         <router-link
-          to="/login"
+          :to="loginLinkTo"
           class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signIn') }}
@@ -231,15 +203,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
 import Icon from '@/components/icons/Icon.vue'
+import Button from '@/components/common/Button.vue'
+import Alert from '@/components/common/Alert.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import { getPublicSettings, validatePromoCode } from '@/api/auth'
+import { sanitizeUrl } from '@/utils/url'
 
 const { t } = useI18n()
 
@@ -249,6 +224,16 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const appStore = useAppStore()
+
+const safeRedirect = computed(() => {
+  const raw = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  return sanitizeUrl(raw, { allowRelative: true })
+})
+
+const loginLinkTo = computed(() => {
+  if (!safeRedirect.value) return '/login'
+  return { path: '/login', query: { redirect: safeRedirect.value } }
+})
 
 // ==================== State ====================
 
@@ -496,12 +481,17 @@ async function handleRegister(): Promise<void> {
           email: formData.email,
           password: formData.password,
           turnstile_token: turnstileToken.value,
-          promo_code: formData.promo_code || undefined
+          promo_code: formData.promo_code || undefined,
+          redirect: safeRedirect.value || undefined
         })
       )
 
       // Navigate to email verification page
-      await router.push('/email-verify')
+      if (safeRedirect.value) {
+        await router.push({ path: '/email-verify', query: { redirect: safeRedirect.value } })
+      } else {
+        await router.push('/email-verify')
+      }
       return
     }
 
@@ -517,7 +507,7 @@ async function handleRegister(): Promise<void> {
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))
 
     // Redirect to dashboard
-    await router.push('/dashboard')
+    await router.push(safeRedirect.value || '/dashboard')
   } catch (error: unknown) {
     // Reset Turnstile on error
     if (turnstileRef.value) {

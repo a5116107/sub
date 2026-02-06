@@ -35,6 +35,18 @@ const (
 	FieldIPWhitelist = "ip_whitelist"
 	// FieldIPBlacklist holds the string denoting the ip_blacklist field in the database.
 	FieldIPBlacklist = "ip_blacklist"
+	// FieldAllowBalance holds the string denoting the allow_balance field in the database.
+	FieldAllowBalance = "allow_balance"
+	// FieldAllowSubscription holds the string denoting the allow_subscription field in the database.
+	FieldAllowSubscription = "allow_subscription"
+	// FieldSubscriptionStrict holds the string denoting the subscription_strict field in the database.
+	FieldSubscriptionStrict = "subscription_strict"
+	// FieldExpiresAt holds the string denoting the expires_at field in the database.
+	FieldExpiresAt = "expires_at"
+	// FieldQuotaLimitUsd holds the string denoting the quota_limit_usd field in the database.
+	FieldQuotaLimitUsd = "quota_limit_usd"
+	// FieldQuotaUsedUsd holds the string denoting the quota_used_usd field in the database.
+	FieldQuotaUsedUsd = "quota_used_usd"
 	// EdgeUser holds the string denoting the user edge name in mutations.
 	EdgeUser = "user"
 	// EdgeGroup holds the string denoting the group edge name in mutations.
@@ -79,6 +91,12 @@ var Columns = []string{
 	FieldStatus,
 	FieldIPWhitelist,
 	FieldIPBlacklist,
+	FieldAllowBalance,
+	FieldAllowSubscription,
+	FieldSubscriptionStrict,
+	FieldExpiresAt,
+	FieldQuotaLimitUsd,
+	FieldQuotaUsedUsd,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -113,6 +131,14 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
+	// DefaultAllowBalance holds the default value on creation for the "allow_balance" field.
+	DefaultAllowBalance bool
+	// DefaultAllowSubscription holds the default value on creation for the "allow_subscription" field.
+	DefaultAllowSubscription bool
+	// DefaultSubscriptionStrict holds the default value on creation for the "subscription_strict" field.
+	DefaultSubscriptionStrict bool
+	// DefaultQuotaUsedUsd holds the default value on creation for the "quota_used_usd" field.
+	DefaultQuotaUsedUsd float64
 )
 
 // OrderOption defines the ordering options for the APIKey queries.
@@ -161,6 +187,36 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByAllowBalance orders the results by the allow_balance field.
+func ByAllowBalance(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAllowBalance, opts...).ToFunc()
+}
+
+// ByAllowSubscription orders the results by the allow_subscription field.
+func ByAllowSubscription(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAllowSubscription, opts...).ToFunc()
+}
+
+// BySubscriptionStrict orders the results by the subscription_strict field.
+func BySubscriptionStrict(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionStrict, opts...).ToFunc()
+}
+
+// ByExpiresAt orders the results by the expires_at field.
+func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpiresAt, opts...).ToFunc()
+}
+
+// ByQuotaLimitUsd orders the results by the quota_limit_usd field.
+func ByQuotaLimitUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaLimitUsd, opts...).ToFunc()
+}
+
+// ByQuotaUsedUsd orders the results by the quota_used_usd field.
+func ByQuotaUsedUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldQuotaUsedUsd, opts...).ToFunc()
 }
 
 // ByUserField orders the results by user field.

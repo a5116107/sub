@@ -13,8 +13,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+export type IconName = keyof typeof icons
+
 const props = withDefaults(defineProps<{
-  name: keyof typeof icons
+  name: IconName
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   strokeWidth?: number
 }>(), {
@@ -106,6 +108,9 @@ const icons = {
   trendingUp: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
   database: 'M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125',
   cube: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
+
+  // Notification
+  bell: 'M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9a6 6 0 10-12 0v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0',
 
   // Misc
   bolt: 'M13 10V3L4 14h7v7l9-11h-7z',

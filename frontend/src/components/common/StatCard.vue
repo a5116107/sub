@@ -1,12 +1,15 @@
 <template>
-  <div class="stat-card">
+  <div :class="cardClasses">
+    <!-- Glow decoration for primary variant -->
+    <div v-if="variant === 'primary'" class="stat-card-glow"></div>
+
     <div :class="['stat-icon', iconClass]">
       <component v-if="icon" :is="icon" class="h-6 w-6" aria-hidden="true" />
     </div>
     <div class="min-w-0 flex-1">
       <p class="stat-label truncate">{{ title }}</p>
       <div class="mt-1 flex items-baseline gap-2">
-        <p class="stat-value">{{ formattedValue }}</p>
+        <p :class="valueClasses">{{ formattedValue }}</p>
         <span v-if="change !== undefined" :class="['stat-trend', trendClass]">
           <Icon
             v-if="changeType !== 'neutral'"
@@ -28,12 +31,14 @@ import Icon from '@/components/icons/Icon.vue'
 
 type ChangeType = 'up' | 'down' | 'neutral'
 type IconVariant = 'primary' | 'success' | 'warning' | 'danger'
+type CardVariant = 'default' | 'primary' | 'secondary'
 
 interface Props {
   title: string
   value: number | string
   icon?: Component
   iconVariant?: IconVariant
+  variant?: CardVariant
   change?: number
   changeType?: ChangeType
   formatValue?: (value: number | string) => string
@@ -41,7 +46,24 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   changeType: 'neutral',
-  iconVariant: 'primary'
+  iconVariant: 'primary',
+  variant: 'default'
+})
+
+const cardClasses = computed(() => {
+  const base = 'stat-card'
+  if (props.variant === 'primary') {
+    return `${base} stat-card-primary`
+  }
+  return base
+})
+
+const valueClasses = computed(() => {
+  const base = 'stat-value'
+  if (props.variant === 'primary') {
+    return `${base} stat-value-primary`
+  }
+  return base
 })
 
 const formattedValue = computed(() => {

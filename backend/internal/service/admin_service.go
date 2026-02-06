@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 )
 
 // AdminService interface defines admin management operations
@@ -32,6 +34,7 @@ type AdminService interface {
 	UpdateGroup(ctx context.Context, id int64, input *UpdateGroupInput) (*Group, error)
 	DeleteGroup(ctx context.Context, id int64) error
 	GetGroupAPIKeys(ctx context.Context, groupID int64, page, pageSize int) ([]APIKey, int64, error)
+	GetGroupStats(ctx context.Context, groupID int64) (map[string]any, error)
 
 	// Account management
 	ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string) ([]Account, int64, error)
@@ -67,6 +70,7 @@ type AdminService interface {
 	DeleteRedeemCode(ctx context.Context, id int64) error
 	BatchDeleteRedeemCodes(ctx context.Context, ids []int64) (int64, error)
 	ExpireRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
+	GetRedeemCodeStats(ctx context.Context) (map[string]any, error)
 }
 
 // CreateUserInput represents input for creating a new user via admin operations.
@@ -101,6 +105,8 @@ type CreateGroupInput struct {
 	DailyLimitUSD    *float64 // 日限额 (USD)
 	WeeklyLimitUSD   *float64 // 周限额 (USD)
 	MonthlyLimitUSD  *float64 // 月限额 (USD)
+	// UserConcurrency: 分组维度并发（0 表示不覆盖用户默认并发）
+	UserConcurrency int
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	ImagePrice1K    *float64
 	ImagePrice2K    *float64
@@ -123,6 +129,8 @@ type UpdateGroupInput struct {
 	DailyLimitUSD    *float64 // 日限额 (USD)
 	WeeklyLimitUSD   *float64 // 周限额 (USD)
 	MonthlyLimitUSD  *float64 // 月限额 (USD)
+	// UserConcurrency: 分组维度并发（0 表示不覆盖用户默认并发）
+	UserConcurrency *int
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	ImagePrice1K    *float64
 	ImagePrice2K    *float64
@@ -269,16 +277,22 @@ type ProxyExitInfoProber interface {
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
-	userRepo             UserRepository
-	groupRepo            GroupRepository
-	accountRepo          AccountRepository
-	proxyRepo            ProxyRepository
-	apiKeyRepo           APIKeyRepository
-	redeemCodeRepo       RedeemCodeRepository
-	billingCacheService  *BillingCacheService
-	proxyProber          ProxyExitInfoProber
-	proxyLatencyCache    ProxyLatencyCache
-	authCacheInvalidator APIKeyAuthCacheInvalidator
+	userRepo              UserRepository
+	groupRepo             GroupRepository
+	accountRepo           AccountRepository
+	proxyRepo             ProxyRepository
+	apiKeyRepo            APIKeyRepository
+	redeemCodeRepo        RedeemCodeRepository
+	usageRepo             UsageLogRepository
+	billingCacheService   *BillingCacheService
+	oauthService          *OAuthService
+	openAIOAuthService    *OpenAIOAuthService
+	geminiOAuthService    *GeminiOAuthService
+	antigravityOAuthSvc   *AntigravityOAuthService
+	tokenCacheInvalidator TokenCacheInvalidator
+	proxyProber           ProxyExitInfoProber
+	proxyLatencyCache     ProxyLatencyCache
+	authCacheInvalidator  APIKeyAuthCacheInvalidator
 }
 
 // NewAdminService creates a new AdminService
@@ -289,22 +303,34 @@ func NewAdminService(
 	proxyRepo ProxyRepository,
 	apiKeyRepo APIKeyRepository,
 	redeemCodeRepo RedeemCodeRepository,
+	usageRepo UsageLogRepository,
 	billingCacheService *BillingCacheService,
+	oauthService *OAuthService,
+	openAIOAuthService *OpenAIOAuthService,
+	geminiOAuthService *GeminiOAuthService,
+	antigravityOAuthService *AntigravityOAuthService,
+	tokenCacheInvalidator TokenCacheInvalidator,
 	proxyProber ProxyExitInfoProber,
 	proxyLatencyCache ProxyLatencyCache,
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
 ) AdminService {
 	return &adminServiceImpl{
-		userRepo:             userRepo,
-		groupRepo:            groupRepo,
-		accountRepo:          accountRepo,
-		proxyRepo:            proxyRepo,
-		apiKeyRepo:           apiKeyRepo,
-		redeemCodeRepo:       redeemCodeRepo,
-		billingCacheService:  billingCacheService,
-		proxyProber:          proxyProber,
-		proxyLatencyCache:    proxyLatencyCache,
-		authCacheInvalidator: authCacheInvalidator,
+		userRepo:              userRepo,
+		groupRepo:             groupRepo,
+		accountRepo:           accountRepo,
+		proxyRepo:             proxyRepo,
+		apiKeyRepo:            apiKeyRepo,
+		redeemCodeRepo:        redeemCodeRepo,
+		usageRepo:             usageRepo,
+		billingCacheService:   billingCacheService,
+		oauthService:          oauthService,
+		openAIOAuthService:    openAIOAuthService,
+		geminiOAuthService:    geminiOAuthService,
+		antigravityOAuthSvc:   antigravityOAuthService,
+		tokenCacheInvalidator: tokenCacheInvalidator,
+		proxyProber:           proxyProber,
+		proxyLatencyCache:     proxyLatencyCache,
+		authCacheInvalidator:  authCacheInvalidator,
 	}
 }
 
@@ -338,6 +364,9 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 	}
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, err
+	}
+	if _, err := EnsureUserInviteCode(ctx, s.userRepo, user); err != nil {
+		log.Printf("[Admin] Failed to ensure invite code for user %d: %v", user.ID, err)
 	}
 	return user, nil
 }
@@ -389,7 +418,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		return nil, err
 	}
 	if s.authCacheInvalidator != nil {
-		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole {
+		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || input.AllowedGroups != nil {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
 		}
 	}
@@ -583,6 +612,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		DailyLimitUSD:    dailyLimit,
 		WeeklyLimitUSD:   weeklyLimit,
 		MonthlyLimitUSD:  monthlyLimit,
+		UserConcurrency:  normalizeGroupUserConcurrency(input.UserConcurrency),
 		ImagePrice1K:     imagePrice1K,
 		ImagePrice2K:     imagePrice2K,
 		ImagePrice4K:     imagePrice4K,
@@ -610,6 +640,13 @@ func normalizePrice(price *float64) *float64 {
 		return nil
 	}
 	return price
+}
+
+func normalizeGroupUserConcurrency(concurrency int) int {
+	if concurrency < 0 {
+		return 0
+	}
+	return concurrency
 }
 
 // validateFallbackGroup 校验降级分组的有效性
@@ -678,6 +715,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	// 订阅相关字段
 	if input.SubscriptionType != "" {
 		group.SubscriptionType = input.SubscriptionType
+	}
+	if input.UserConcurrency != nil {
+		group.UserConcurrency = normalizeGroupUserConcurrency(*input.UserConcurrency)
 	}
 	// 限额字段：0 和 nil 都表示"无限制"，正数表示具体限额
 	if input.DailyLimitUSD != nil {
@@ -777,6 +817,38 @@ func (s *adminServiceImpl) GetGroupAPIKeys(ctx context.Context, groupID int64, p
 		return nil, 0, err
 	}
 	return keys, result.Total, nil
+}
+
+func (s *adminServiceImpl) GetGroupStats(ctx context.Context, groupID int64) (map[string]any, error) {
+	// Ensure group exists
+	if _, err := s.groupRepo.GetByID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	if s.usageRepo == nil {
+		return nil, fmt.Errorf("usage repository not configured")
+	}
+
+	totalAPIKeys, err := s.apiKeyRepo.CountByGroupID(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+	activeAPIKeys, err := s.apiKeyRepo.CountActiveByGroupID(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	usageStats, err := s.usageRepo.GetStatsWithFilters(ctx, usagestats.UsageLogFilters{GroupID: groupID})
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
+		"total_api_keys":  totalAPIKeys,
+		"active_api_keys": activeAPIKeys,
+		"total_requests":  usageStats.TotalRequests,
+		"total_cost":      usageStats.TotalCost,
+	}, nil
 }
 
 // Account management implementations
@@ -1085,7 +1157,120 @@ func (s *adminServiceImpl) RefreshAccountCredentials(ctx context.Context, id int
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Implement refresh logic
+
+	if !account.IsOAuth() {
+		return nil, errors.New("cannot refresh non-OAuth account credentials")
+	}
+
+	var newCredentials map[string]any
+	var antigravityProjectIDMissing bool
+
+	switch {
+	case account.IsOpenAI():
+		if s.openAIOAuthService == nil {
+			return nil, errors.New("openai oauth service not configured")
+		}
+		tokenInfo, err := s.openAIOAuthService.RefreshAccountToken(ctx, account)
+		if err != nil {
+			return nil, err
+		}
+		newCredentials = s.openAIOAuthService.BuildAccountCredentials(tokenInfo)
+		for k, v := range account.Credentials {
+			if _, exists := newCredentials[k]; !exists {
+				newCredentials[k] = v
+			}
+		}
+	case account.Platform == PlatformGemini:
+		if s.geminiOAuthService == nil {
+			return nil, errors.New("gemini oauth service not configured")
+		}
+		tokenInfo, err := s.geminiOAuthService.RefreshAccountToken(ctx, account)
+		if err != nil {
+			return nil, err
+		}
+		newCredentials = s.geminiOAuthService.BuildAccountCredentials(tokenInfo)
+		for k, v := range account.Credentials {
+			if _, exists := newCredentials[k]; !exists {
+				newCredentials[k] = v
+			}
+		}
+	case account.Platform == PlatformAntigravity:
+		if s.antigravityOAuthSvc == nil {
+			return nil, errors.New("antigravity oauth service not configured")
+		}
+		tokenInfo, err := s.antigravityOAuthSvc.RefreshAccountToken(ctx, account)
+		if err != nil {
+			return nil, err
+		}
+		antigravityProjectIDMissing = tokenInfo.ProjectIDMissing
+		newCredentials = s.antigravityOAuthSvc.BuildAccountCredentials(tokenInfo)
+		for k, v := range account.Credentials {
+			if _, exists := newCredentials[k]; !exists {
+				newCredentials[k] = v
+			}
+		}
+	default:
+		if s.oauthService == nil {
+			return nil, errors.New("oauth service not configured")
+		}
+		tokenInfo, err := s.oauthService.RefreshAccountToken(ctx, account)
+		if err != nil {
+			return nil, err
+		}
+
+		newCredentials = make(map[string]any)
+		for k, v := range account.Credentials {
+			newCredentials[k] = v
+		}
+
+		newCredentials["access_token"] = tokenInfo.AccessToken
+		newCredentials["token_type"] = tokenInfo.TokenType
+		newCredentials["expires_in"] = strconv.FormatInt(tokenInfo.ExpiresIn, 10)
+		newCredentials["expires_at"] = strconv.FormatInt(tokenInfo.ExpiresAt, 10)
+		if strings.TrimSpace(tokenInfo.RefreshToken) != "" {
+			newCredentials["refresh_token"] = tokenInfo.RefreshToken
+		}
+		if strings.TrimSpace(tokenInfo.Scope) != "" {
+			newCredentials["scope"] = tokenInfo.Scope
+		}
+	}
+
+	if newCredentials == nil {
+		return nil, errors.New("failed to refresh credentials")
+	}
+
+	newCredentials["_token_version"] = time.Now().UnixMilli()
+	account.Credentials = newCredentials
+	if err := s.accountRepo.Update(ctx, account); err != nil {
+		return nil, err
+	}
+
+	// Antigravity: mark account as error if refreshed but missing project_id;
+	// clear existing missing_project_id error if project_id is now present.
+	if account.Platform == PlatformAntigravity {
+		if antigravityProjectIDMissing {
+			errorMsg := "missing_project_id: account missing project id, may not work for antigravity"
+			if err := s.accountRepo.SetError(ctx, account.ID, errorMsg); err != nil {
+				return nil, err
+			}
+			account.Status = StatusError
+			account.ErrorMessage = errorMsg
+		} else if account.Status == StatusError && strings.Contains(account.ErrorMessage, "missing_project_id:") {
+			if err := s.accountRepo.ClearError(ctx, account.ID); err != nil {
+				return nil, err
+			}
+			account.Status = StatusActive
+			account.ErrorMessage = ""
+		}
+	}
+
+	// Invalidate cached token so next request uses refreshed credentials.
+	if s.tokenCacheInvalidator != nil {
+		if invalidateErr := s.tokenCacheInvalidator.InvalidateToken(ctx, account); invalidateErr != nil {
+			log.Printf("[Admin] Failed to invalidate token cache for account %d: %v", account.ID, invalidateErr)
+		}
+	}
+
 	return account, nil
 }
 
@@ -1338,6 +1523,31 @@ func (s *adminServiceImpl) ExpireRedeemCode(ctx context.Context, id int64) (*Red
 		return nil, err
 	}
 	return code, nil
+}
+
+func (s *adminServiceImpl) GetRedeemCodeStats(ctx context.Context) (map[string]any, error) {
+	stats, err := s.redeemCodeRepo.GetStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	byType := map[string]int64{
+		RedeemTypeBalance:      0,
+		RedeemTypeConcurrency:  0,
+		RedeemTypeSubscription: 0,
+	}
+	for k, v := range stats.ByType {
+		byType[k] = v
+	}
+
+	return map[string]any{
+		"total_codes":             stats.TotalCodes,
+		"active_codes":            stats.ActiveCodes,
+		"used_codes":              stats.UsedCodes,
+		"expired_codes":           stats.ExpiredCodes,
+		"total_value_distributed": stats.TotalValueDistributed,
+		"by_type":                 byType,
+	}, nil
 }
 
 func (s *adminServiceImpl) TestProxy(ctx context.Context, id int64) (*ProxyTestResult, error) {

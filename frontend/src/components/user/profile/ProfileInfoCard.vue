@@ -40,19 +40,64 @@
           <Icon name="user" size="sm" class="text-gray-400 dark:text-gray-500" />
           <span class="truncate">{{ user.username }}</span>
         </div>
+        <div
+          v-if="inviteCode"
+          class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400"
+        >
+          <Icon name="link" size="sm" class="text-gray-400 dark:text-gray-500" />
+          <span class="truncate font-mono">{{ inviteCode }}</span>
+          <div class="ml-auto flex items-center gap-2">
+            <button type="button" class="btn btn-secondary btn-sm" @click="copyInviteCode">
+              {{ t('profile.copyInviteCode') }}
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" @click="copyInviteLink">
+              {{ t('profile.copyInviteLink') }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAppStore } from '@/stores/app'
 import Icon from '@/components/icons/Icon.vue'
 import type { User } from '@/types'
 
-defineProps<{
+const props = defineProps<{
   user: User | null
 }>()
 
 const { t } = useI18n()
+const appStore = useAppStore()
+
+const inviteCode = computed(() => props.user?.invite_code?.trim() || '')
+const inviteLink = computed(() =>
+  inviteCode.value
+    ? `${window.location.origin}/register?promo=${encodeURIComponent(inviteCode.value)}`
+    : ''
+)
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    appStore.showSuccess(t('common.copiedToClipboard'))
+  } catch (error) {
+    console.error('Failed to copy:', error)
+    appStore.showError(t('common.copyFailed'))
+  }
+}
+
+function copyInviteCode() {
+  if (!inviteCode.value) return
+  void copyText(inviteCode.value)
+}
+
+function copyInviteLink() {
+  if (!inviteLink.value) return
+  void copyText(inviteLink.value)
+}
 </script>

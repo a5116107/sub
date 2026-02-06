@@ -9,6 +9,8 @@
 ARG NODE_IMAGE=node:24-alpine
 ARG GOLANG_IMAGE=golang:1.25.6-alpine
 ARG ALPINE_IMAGE=alpine:3.20
+ARG PNPM_VERSION=10.10.0
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
 
@@ -20,7 +22,8 @@ FROM ${NODE_IMAGE} AS frontend-builder
 WORKDIR /app/frontend
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm config set registry ${NPM_REGISTRY} \
+    && npm install -g pnpm@${PNPM_VERSION}
 
 # Install dependencies first (better caching)
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
@@ -28,6 +31,9 @@ RUN pnpm install --frozen-lockfile
 
 # Copy frontend source and build
 COPY frontend/ ./
+# Vite outputs to ../backend/internal/web/dist (see frontend/vite.config.ts).
+# Create that path inside the builder image so the build succeeds.
+RUN mkdir -p /app/backend/internal/web/dist
 RUN pnpm run build
 
 # -----------------------------------------------------------------------------

@@ -61,6 +61,26 @@ func (s *UsageLogRepoSuite) createUsageLog(user *service.User, apiKey *service.A
 	return log
 }
 
+func (s *UsageLogRepoSuite) createUsageLogWithCache(user *service.User, apiKey *service.APIKey, account *service.Account, inputTokens, outputTokens, cacheCreationTokens, cacheReadTokens int, cost float64, createdAt time.Time) *service.UsageLog {
+	log := &service.UsageLog{
+		UserID:              user.ID,
+		APIKeyID:            apiKey.ID,
+		AccountID:           account.ID,
+		RequestID:           uuid.New().String(), // Generate unique RequestID for each log
+		Model:               "claude-3",
+		InputTokens:         inputTokens,
+		OutputTokens:        outputTokens,
+		CacheCreationTokens: cacheCreationTokens,
+		CacheReadTokens:     cacheReadTokens,
+		TotalCost:           cost,
+		ActualCost:          cost,
+		CreatedAt:           createdAt,
+	}
+	_, err := s.repo.Create(s.ctx, log)
+	s.Require().NoError(err)
+	return log
+}
+
 // --- Create / GetByID ---
 
 func (s *UsageLogRepoSuite) TestCreate() {
@@ -691,14 +711,80 @@ func (s *UsageLogRepoSuite) TestGetGlobalStats() {
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-global"})
 
 	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
-	s.createUsageLog(user, apiKey, account, 10, 20, 0.5, base)
-	s.createUsageLog(user, apiKey, account, 15, 25, 0.6, base.Add(1*time.Hour))
+	s.createUsageLogWithCache(user, apiKey, account, 10, 20, 3, 4, 0.5, base)
+	s.createUsageLogWithCache(user, apiKey, account, 15, 25, 1, 0, 0.6, base.Add(1*time.Hour))
 
 	stats, err := s.repo.GetGlobalStats(s.ctx, base.Add(-1*time.Hour), base.Add(2*time.Hour))
 	s.Require().NoError(err, "GetGlobalStats")
 	s.Require().Equal(int64(2), stats.TotalRequests)
 	s.Require().Equal(int64(25), stats.TotalInputTokens)
 	s.Require().Equal(int64(45), stats.TotalOutputTokens)
+	s.Require().Equal(int64(4), stats.TotalCacheCreationTokens)
+	s.Require().Equal(int64(4), stats.TotalCacheReadTokens)
+	s.Require().Equal(int64(8), stats.TotalCacheTokens)
+	s.Require().Equal(int64(78), stats.TotalTokens)
+}
+
+func (s *UsageLogRepoSuite) TestGetStatsWithFilters_IncludesCacheTokens() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "statsfilters@test.com"})
+	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-statsfilters", Name: "k"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-statsfilters"})
+
+	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
+	m := 0.5
+	log1 := &service.UsageLog{
+		UserID:                user.ID,
+		APIKeyID:              apiKey.ID,
+		AccountID:             account.ID,
+		RequestID:             uuid.New().String(),
+		Model:                 "claude-3",
+		InputTokens:           10,
+		OutputTokens:          20,
+		CacheCreationTokens:   3,
+		CacheReadTokens:       4,
+		TotalCost:             1.0,
+		ActualCost:            0.9,
+		AccountRateMultiplier: &m,
+		CreatedAt:             base,
+	}
+	_, err := s.repo.Create(s.ctx, log1)
+	s.Require().NoError(err)
+
+	log2 := &service.UsageLog{
+		UserID:                user.ID,
+		APIKeyID:              apiKey.ID,
+		AccountID:             account.ID,
+		RequestID:             uuid.New().String(),
+		Model:                 "claude-3",
+		InputTokens:           15,
+		OutputTokens:          25,
+		CacheCreationTokens:   1,
+		CacheReadTokens:       0,
+		TotalCost:             2.0,
+		ActualCost:            1.8,
+		AccountRateMultiplier: &m,
+		CreatedAt:             base.Add(1 * time.Hour),
+	}
+	_, err = s.repo.Create(s.ctx, log2)
+	s.Require().NoError(err)
+
+	startTime := base.Add(-1 * time.Hour)
+	endTime := base.Add(2 * time.Hour)
+	stats, err := s.repo.GetStatsWithFilters(s.ctx, usagestats.UsageLogFilters{
+		AccountID: account.ID,
+		StartTime: &startTime,
+		EndTime:   &endTime,
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(int64(2), stats.TotalRequests)
+	s.Require().Equal(int64(25), stats.TotalInputTokens)
+	s.Require().Equal(int64(45), stats.TotalOutputTokens)
+	s.Require().Equal(int64(4), stats.TotalCacheCreationTokens)
+	s.Require().Equal(int64(4), stats.TotalCacheReadTokens)
+	s.Require().Equal(int64(8), stats.TotalCacheTokens)
+	s.Require().Equal(int64(78), stats.TotalTokens)
+	s.Require().NotNil(stats.TotalAccountCost)
+	s.Require().InEpsilon(1.5, *stats.TotalAccountCost, 0.000001)
 }
 
 func testMaxTime(a, b time.Time) time.Time {
@@ -852,15 +938,23 @@ func (s *UsageLogRepoSuite) TestGetUserUsageTrendByUserID() {
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-usertrend"})
 
 	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
-	s.createUsageLog(user, apiKey, account, 10, 20, 0.5, base)
-	s.createUsageLog(user, apiKey, account, 15, 25, 0.6, base.Add(1*time.Hour))
-	s.createUsageLog(user, apiKey, account, 20, 30, 0.7, base.Add(24*time.Hour)) // next day
+	s.createUsageLogWithCache(user, apiKey, account, 10, 20, 1, 2, 0.5, base)
+	s.createUsageLogWithCache(user, apiKey, account, 15, 25, 0, 3, 0.6, base.Add(1*time.Hour))
+	s.createUsageLogWithCache(user, apiKey, account, 20, 30, 4, 0, 0.7, base.Add(24*time.Hour)) // next day
 
 	startTime := base.Add(-1 * time.Hour)
 	endTime := base.Add(48 * time.Hour)
 	trend, err := s.repo.GetUserUsageTrendByUserID(s.ctx, user.ID, startTime, endTime, "day")
 	s.Require().NoError(err, "GetUserUsageTrendByUserID")
 	s.Require().Len(trend, 2) // 2 different days
+	s.Require().Equal("2025-01-15", trend[0].Date)
+	s.Require().Equal(int64(2), trend[0].Requests)
+	s.Require().Equal(int64(25), trend[0].InputTokens)
+	s.Require().Equal(int64(45), trend[0].OutputTokens)
+	s.Require().Equal(int64(1), trend[0].CacheCreationTokens)
+	s.Require().Equal(int64(5), trend[0].CacheReadTokens)
+	s.Require().Equal(int64(6), trend[0].CacheTokens)
+	s.Require().Equal(int64(76), trend[0].TotalTokens)
 }
 
 func (s *UsageLogRepoSuite) TestGetUserUsageTrendByUserID_HourlyGranularity() {
@@ -869,15 +963,18 @@ func (s *UsageLogRepoSuite) TestGetUserUsageTrendByUserID_HourlyGranularity() {
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-usertrendhourly"})
 
 	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
-	s.createUsageLog(user, apiKey, account, 10, 20, 0.5, base)
-	s.createUsageLog(user, apiKey, account, 15, 25, 0.6, base.Add(1*time.Hour))
-	s.createUsageLog(user, apiKey, account, 20, 30, 0.7, base.Add(2*time.Hour))
+	s.createUsageLogWithCache(user, apiKey, account, 10, 20, 1, 2, 0.5, base)
+	s.createUsageLogWithCache(user, apiKey, account, 15, 25, 2, 0, 0.6, base.Add(1*time.Hour))
+	s.createUsageLogWithCache(user, apiKey, account, 20, 30, 0, 4, 0.7, base.Add(2*time.Hour))
 
 	startTime := base.Add(-1 * time.Hour)
 	endTime := base.Add(3 * time.Hour)
 	trend, err := s.repo.GetUserUsageTrendByUserID(s.ctx, user.ID, startTime, endTime, "hour")
 	s.Require().NoError(err, "GetUserUsageTrendByUserID hourly")
 	s.Require().Len(trend, 3) // 3 different hours
+	s.Require().Equal("2025-01-15 12:00", trend[0].Date)
+	s.Require().Equal(int64(1), trend[0].CacheCreationTokens)
+	s.Require().Equal(int64(2), trend[0].CacheReadTokens)
 }
 
 // --- GetUserModelStats ---
@@ -937,8 +1034,8 @@ func (s *UsageLogRepoSuite) TestGetUsageTrendWithFilters() {
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-trendfilters"})
 
 	base := time.Date(2025, 1, 15, 12, 0, 0, 0, time.UTC)
-	s.createUsageLog(user, apiKey, account, 10, 20, 0.5, base)
-	s.createUsageLog(user, apiKey, account, 15, 25, 0.6, base.Add(24*time.Hour))
+	s.createUsageLogWithCache(user, apiKey, account, 10, 20, 3, 4, 0.5, base)
+	s.createUsageLogWithCache(user, apiKey, account, 15, 25, 1, 0, 0.6, base.Add(24*time.Hour))
 
 	startTime := base.Add(-1 * time.Hour)
 	endTime := base.Add(48 * time.Hour)
@@ -947,6 +1044,9 @@ func (s *UsageLogRepoSuite) TestGetUsageTrendWithFilters() {
 	trend, err := s.repo.GetUsageTrendWithFilters(s.ctx, startTime, endTime, "day", user.ID, 0, 0, 0, "", nil, nil)
 	s.Require().NoError(err, "GetUsageTrendWithFilters user filter")
 	s.Require().Len(trend, 2)
+	s.Require().Equal("2025-01-15", trend[0].Date)
+	s.Require().Equal(int64(3), trend[0].CacheCreationTokens)
+	s.Require().Equal(int64(4), trend[0].CacheReadTokens)
 
 	// Test with apiKey filter
 	trend, err = s.repo.GetUsageTrendWithFilters(s.ctx, startTime, endTime, "day", 0, apiKey.ID, 0, 0, "", nil, nil)

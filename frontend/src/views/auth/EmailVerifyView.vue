@@ -170,19 +170,21 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import { getPublicSettings, sendVerifyCode } from '@/api/auth'
+import { sanitizeUrl } from '@/utils/url'
 
 const { t } = useI18n()
 
 // ==================== Router & Stores ====================
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
@@ -202,6 +204,7 @@ const password = ref<string>('')
 const initialTurnstileToken = ref<string>('')
 const promoCode = ref<string>('')
 const hasRegisterData = ref<boolean>(false)
+const redirectAfterVerify = ref<string>('')
 
 // Public settings
 const turnstileEnabled = ref<boolean>(false)
@@ -230,6 +233,10 @@ onMounted(async () => {
       password.value = registerData.password || ''
       initialTurnstileToken.value = registerData.turnstile_token || ''
       promoCode.value = registerData.promo_code || ''
+      const rawRedirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+      redirectAfterVerify.value = sanitizeUrl(rawRedirect || registerData.redirect || '', {
+        allowRelative: true
+      })
       hasRegisterData.value = !!(email.value && password.value)
     } catch {
       hasRegisterData.value = false
@@ -394,7 +401,7 @@ async function handleVerify(): Promise<void> {
     appStore.showSuccess('Account created successfully! Welcome to ' + siteName.value + '.')
 
     // Redirect to dashboard
-    await router.push('/dashboard')
+    await router.push(redirectAfterVerify.value || '/dashboard')
   } catch (error: unknown) {
     const err = error as { message?: string; response?: { data?: { detail?: string } } }
 
@@ -417,7 +424,11 @@ function handleBack(): void {
   sessionStorage.removeItem('register_data')
 
   // Go back to registration
-  router.push('/register')
+  if (redirectAfterVerify.value) {
+    router.push({ path: '/register', query: { redirect: redirectAfterVerify.value } })
+  } else {
+    router.push('/register')
+  }
 }
 </script>
 

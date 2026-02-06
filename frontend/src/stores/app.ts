@@ -29,7 +29,7 @@ export const useAppStore = defineStore('app', () => {
   const siteVersion = ref<string>('')
   const contactInfo = ref<string>('')
   const apiBaseUrl = ref<string>('')
-  const docUrl = ref<string>('')
+  const docUrl = ref<string>('/docs')
   const cachedPublicSettings = ref<PublicSettings | null>(null)
 
   // Version cache state
@@ -289,7 +289,8 @@ export const useAppStore = defineStore('app', () => {
     siteVersion.value = config.version || ''
     contactInfo.value = config.contact_info || ''
     apiBaseUrl.value = config.api_base_url || ''
-    docUrl.value = config.doc_url || ''
+    const rawDocUrl = String(config.doc_url || '').trim()
+    docUrl.value = rawDocUrl !== '' ? rawDocUrl : '/docs'
     publicSettingsLoaded.value = true
   }
 
@@ -323,6 +324,10 @@ export const useAppStore = defineStore('app', () => {
         contact_info: contactInfo.value,
         doc_url: docUrl.value,
         home_content: '',
+        landing_pricing_enabled: true,
+        landing_pricing_config: '',
+        landing_pricing_groups: [],
+        subscriptions_enabled: true,
         hide_ccs_import_button: false,
         purchase_subscription_enabled: false,
         purchase_subscription_url: '',

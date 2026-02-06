@@ -4,6 +4,47 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="description"
+      content="Sub2API 是一个自托管的 AI API Gateway，用于订阅额度分发、API Key 管理、精确计费、限流与监控，并兼容多种主流 AI API。"
+    />
+    <link rel="canonical" href="/" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta property="og:title" content="Sub2API - AI API Gateway" />
+    <meta
+      property="og:description"
+      content="自托管的 AI API Gateway：订阅额度分发、API Key 管理、计费、限流与监控。"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/logo.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Sub2API - AI API Gateway" />
+    <meta
+      name="twitter:description"
+      content="自托管的 AI API Gateway：订阅额度分发、API Key 管理、计费、限流与监控。"
+    />
+    <meta name="twitter:image" content="/logo.png" />
+    <script nonce="__CSP_NONCE_VALUE__">
+      ;(() => {
+        try {
+          const saved = localStorage.getItem('theme')
+          const prefersDark =
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          const isDark = saved === 'dark' || (!saved && prefersDark)
+          document.documentElement.classList.toggle('dark', isDark)
+        } catch {}
+      })()
+    </script>
+    <script nonce="__CSP_NONCE_VALUE__" type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Sub2API",
+        "applicationCategory": "DeveloperApplication",
+        "description": "Self-hosted AI API Gateway for subscription quota distribution, API key management, billing, rate limiting, and monitoring."
+      }
+    </script>
     <title>Sub2API - AI API Gateway</title>
   </head>
   <body>

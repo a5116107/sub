@@ -28,6 +28,7 @@ func NewTokenRefreshService(
 	accountRepo AccountRepository,
 	oauthService *OAuthService,
 	openaiOAuthService *OpenAIOAuthService,
+	qwenOAuthService *QwenOAuthService,
 	geminiOAuthService *GeminiOAuthService,
 	antigravityOAuthService *AntigravityOAuthService,
 	cacheInvalidator TokenCacheInvalidator,
@@ -44,6 +45,7 @@ func NewTokenRefreshService(
 	s.refreshers = []TokenRefresher{
 		NewClaudeTokenRefresher(oauthService),
 		NewOpenAITokenRefresher(openaiOAuthService),
+		NewQwenTokenRefresher(qwenOAuthService),
 		NewGeminiTokenRefresher(geminiOAuthService),
 		NewAntigravityTokenRefresher(antigravityOAuthService),
 	}

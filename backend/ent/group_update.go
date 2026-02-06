@@ -273,6 +273,27 @@ func (_u *GroupUpdate) AddDefaultValidityDays(v int) *GroupUpdate {
 	return _u
 }
 
+// SetUserConcurrency sets the "user_concurrency" field.
+func (_u *GroupUpdate) SetUserConcurrency(v int) *GroupUpdate {
+	_u.mutation.ResetUserConcurrency()
+	_u.mutation.SetUserConcurrency(v)
+	return _u
+}
+
+// SetNillableUserConcurrency sets the "user_concurrency" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableUserConcurrency(v *int) *GroupUpdate {
+	if v != nil {
+		_u.SetUserConcurrency(*v)
+	}
+	return _u
+}
+
+// AddUserConcurrency adds value to the "user_concurrency" field.
+func (_u *GroupUpdate) AddUserConcurrency(v int) *GroupUpdate {
+	_u.mutation.AddUserConcurrency(v)
+	return _u
+}
+
 // SetImagePrice1k sets the "image_price_1k" field.
 func (_u *GroupUpdate) SetImagePrice1k(v float64) *GroupUpdate {
 	_u.mutation.ResetImagePrice1k()
@@ -789,6 +810,12 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedDefaultValidityDays(); ok {
 		_spec.AddField(group.FieldDefaultValidityDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UserConcurrency(); ok {
+		_spec.SetField(group.FieldUserConcurrency, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUserConcurrency(); ok {
+		_spec.AddField(group.FieldUserConcurrency, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.ImagePrice1k(); ok {
 		_spec.SetField(group.FieldImagePrice1k, field.TypeFloat64, value)
@@ -1391,6 +1418,27 @@ func (_u *GroupUpdateOne) AddDefaultValidityDays(v int) *GroupUpdateOne {
 	return _u
 }
 
+// SetUserConcurrency sets the "user_concurrency" field.
+func (_u *GroupUpdateOne) SetUserConcurrency(v int) *GroupUpdateOne {
+	_u.mutation.ResetUserConcurrency()
+	_u.mutation.SetUserConcurrency(v)
+	return _u
+}
+
+// SetNillableUserConcurrency sets the "user_concurrency" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableUserConcurrency(v *int) *GroupUpdateOne {
+	if v != nil {
+		_u.SetUserConcurrency(*v)
+	}
+	return _u
+}
+
+// AddUserConcurrency adds value to the "user_concurrency" field.
+func (_u *GroupUpdateOne) AddUserConcurrency(v int) *GroupUpdateOne {
+	_u.mutation.AddUserConcurrency(v)
+	return _u
+}
+
 // SetImagePrice1k sets the "image_price_1k" field.
 func (_u *GroupUpdateOne) SetImagePrice1k(v float64) *GroupUpdateOne {
 	_u.mutation.ResetImagePrice1k()
@@ -1937,6 +1985,12 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedDefaultValidityDays(); ok {
 		_spec.AddField(group.FieldDefaultValidityDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.UserConcurrency(); ok {
+		_spec.SetField(group.FieldUserConcurrency, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedUserConcurrency(); ok {
+		_spec.AddField(group.FieldUserConcurrency, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.ImagePrice1k(); ok {
 		_spec.SetField(group.FieldImagePrice1k, field.TypeFloat64, value)

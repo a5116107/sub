@@ -216,6 +216,20 @@ func (_c *GroupCreate) SetNillableDefaultValidityDays(v *int) *GroupCreate {
 	return _c
 }
 
+// SetUserConcurrency sets the "user_concurrency" field.
+func (_c *GroupCreate) SetUserConcurrency(v int) *GroupCreate {
+	_c.mutation.SetUserConcurrency(v)
+	return _c
+}
+
+// SetNillableUserConcurrency sets the "user_concurrency" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableUserConcurrency(v *int) *GroupCreate {
+	if v != nil {
+		_c.SetUserConcurrency(*v)
+	}
+	return _c
+}
+
 // SetImagePrice1k sets the "image_price_1k" field.
 func (_c *GroupCreate) SetImagePrice1k(v float64) *GroupCreate {
 	_c.mutation.SetImagePrice1k(v)
@@ -471,6 +485,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultDefaultValidityDays
 		_c.mutation.SetDefaultValidityDays(v)
 	}
+	if _, ok := _c.mutation.UserConcurrency(); !ok {
+		v := group.DefaultUserConcurrency
+		_c.mutation.SetUserConcurrency(v)
+	}
 	if _, ok := _c.mutation.ClaudeCodeOnly(); !ok {
 		v := group.DefaultClaudeCodeOnly
 		_c.mutation.SetClaudeCodeOnly(v)
@@ -530,6 +548,9 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.DefaultValidityDays(); !ok {
 		return &ValidationError{Name: "default_validity_days", err: errors.New(`ent: missing required field "Group.default_validity_days"`)}
+	}
+	if _, ok := _c.mutation.UserConcurrency(); !ok {
+		return &ValidationError{Name: "user_concurrency", err: errors.New(`ent: missing required field "Group.user_concurrency"`)}
 	}
 	if _, ok := _c.mutation.ClaudeCodeOnly(); !ok {
 		return &ValidationError{Name: "claude_code_only", err: errors.New(`ent: missing required field "Group.claude_code_only"`)}
@@ -619,6 +640,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DefaultValidityDays(); ok {
 		_spec.SetField(group.FieldDefaultValidityDays, field.TypeInt, value)
 		_node.DefaultValidityDays = value
+	}
+	if value, ok := _c.mutation.UserConcurrency(); ok {
+		_spec.SetField(group.FieldUserConcurrency, field.TypeInt, value)
+		_node.UserConcurrency = value
 	}
 	if value, ok := _c.mutation.ImagePrice1k(); ok {
 		_spec.SetField(group.FieldImagePrice1k, field.TypeFloat64, value)
@@ -1017,6 +1042,24 @@ func (u *GroupUpsert) UpdateDefaultValidityDays() *GroupUpsert {
 // AddDefaultValidityDays adds v to the "default_validity_days" field.
 func (u *GroupUpsert) AddDefaultValidityDays(v int) *GroupUpsert {
 	u.Add(group.FieldDefaultValidityDays, v)
+	return u
+}
+
+// SetUserConcurrency sets the "user_concurrency" field.
+func (u *GroupUpsert) SetUserConcurrency(v int) *GroupUpsert {
+	u.Set(group.FieldUserConcurrency, v)
+	return u
+}
+
+// UpdateUserConcurrency sets the "user_concurrency" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateUserConcurrency() *GroupUpsert {
+	u.SetExcluded(group.FieldUserConcurrency)
+	return u
+}
+
+// AddUserConcurrency adds v to the "user_concurrency" field.
+func (u *GroupUpsert) AddUserConcurrency(v int) *GroupUpsert {
+	u.Add(group.FieldUserConcurrency, v)
 	return u
 }
 
@@ -1452,6 +1495,27 @@ func (u *GroupUpsertOne) AddDefaultValidityDays(v int) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateDefaultValidityDays() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateDefaultValidityDays()
+	})
+}
+
+// SetUserConcurrency sets the "user_concurrency" field.
+func (u *GroupUpsertOne) SetUserConcurrency(v int) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetUserConcurrency(v)
+	})
+}
+
+// AddUserConcurrency adds v to the "user_concurrency" field.
+func (u *GroupUpsertOne) AddUserConcurrency(v int) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddUserConcurrency(v)
+	})
+}
+
+// UpdateUserConcurrency sets the "user_concurrency" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateUserConcurrency() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateUserConcurrency()
 	})
 }
 
@@ -2076,6 +2140,27 @@ func (u *GroupUpsertBulk) AddDefaultValidityDays(v int) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateDefaultValidityDays() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateDefaultValidityDays()
+	})
+}
+
+// SetUserConcurrency sets the "user_concurrency" field.
+func (u *GroupUpsertBulk) SetUserConcurrency(v int) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetUserConcurrency(v)
+	})
+}
+
+// AddUserConcurrency adds v to the "user_concurrency" field.
+func (u *GroupUpsertBulk) AddUserConcurrency(v int) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddUserConcurrency(v)
+	})
+}
+
+// UpdateUserConcurrency sets the "user_concurrency" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateUserConcurrency() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateUserConcurrency()
 	})
 }
 

@@ -63,17 +63,25 @@ const chartColors = computed(() => ({
   grid: isDarkMode.value ? '#374151' : '#e5e7eb',
   input: '#3b82f6',
   output: '#10b981',
-  cache: '#f59e0b'
+  cacheRead: '#f59e0b',
+  cacheCreate: '#f97316',
+  hitRate: '#8b5cf6'
 }))
 
 const chartData = computed(() => {
   if (!props.trendData?.length) return null
 
+  const cacheHitRate = (d: TrendDataPoint): number => {
+    const denom = (d.cache_read_tokens || 0) + (d.input_tokens || 0)
+    if (denom <= 0) return 0
+    return (d.cache_read_tokens || 0) / denom
+  }
+
   return {
     labels: props.trendData.map((d) => d.date),
     datasets: [
       {
-        label: 'Input',
+        label: t('admin.usage.inputTokens'),
         data: props.trendData.map((d) => d.input_tokens),
         borderColor: chartColors.value.input,
         backgroundColor: `${chartColors.value.input}20`,
@@ -81,7 +89,7 @@ const chartData = computed(() => {
         tension: 0.3
       },
       {
-        label: 'Output',
+        label: t('admin.usage.outputTokens'),
         data: props.trendData.map((d) => d.output_tokens),
         borderColor: chartColors.value.output,
         backgroundColor: `${chartColors.value.output}20`,
@@ -89,12 +97,30 @@ const chartData = computed(() => {
         tension: 0.3
       },
       {
-        label: 'Cache',
-        data: props.trendData.map((d) => d.cache_tokens),
-        borderColor: chartColors.value.cache,
-        backgroundColor: `${chartColors.value.cache}20`,
-        fill: true,
+        label: t('admin.usage.cacheReadTokens'),
+        data: props.trendData.map((d) => d.cache_read_tokens),
+        borderColor: chartColors.value.cacheRead,
+        backgroundColor: `${chartColors.value.cacheRead}20`,
+        fill: false,
         tension: 0.3
+      },
+      {
+        label: t('admin.usage.cacheCreationTokens'),
+        data: props.trendData.map((d) => d.cache_creation_tokens),
+        borderColor: chartColors.value.cacheCreate,
+        backgroundColor: `${chartColors.value.cacheCreate}20`,
+        fill: false,
+        tension: 0.3
+      },
+      {
+        label: t('admin.usage.cacheHitRate'),
+        data: props.trendData.map(cacheHitRate),
+        borderColor: chartColors.value.hitRate,
+        backgroundColor: `${chartColors.value.hitRate}20`,
+        fill: false,
+        tension: 0.3,
+        borderDash: [6, 4],
+        yAxisID: 'y1'
       }
     ]
   }
@@ -123,7 +149,11 @@ const lineOptions = computed(() => ({
     tooltip: {
       callbacks: {
         label: (context: any) => {
-          return `${context.dataset.label}: ${formatTokens(context.raw)}`
+          if (context?.dataset?.yAxisID === 'y1') {
+            const value = Number(context.raw) || 0
+            return `${context.dataset.label}: ${(value * 100).toFixed(2)}%`
+          }
+          return `${context.dataset.label}: ${formatTokens(Number(context.raw) || 0)}`
         },
         footer: (tooltipItems: any) => {
           const dataIndex = tooltipItems[0]?.dataIndex
@@ -158,6 +188,22 @@ const lineOptions = computed(() => ({
           size: 10
         },
         callback: (value: string | number) => formatTokens(Number(value))
+      }
+    },
+    y1: {
+      type: 'linear' as const,
+      position: 'right' as const,
+      min: 0,
+      max: 1,
+      grid: {
+        drawOnChartArea: false
+      },
+      ticks: {
+        color: chartColors.value.text,
+        font: {
+          size: 10
+        },
+        callback: (value: string | number) => `${(Number(value) * 100).toFixed(0)}%`
       }
     }
   }

@@ -38,27 +38,25 @@
                 </button>
                 <div
                   v-if="showAutoRefreshDropdown"
-                  class="absolute right-0 z-50 mt-2 w-56 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                  class="dropdown right-0 mt-2 w-56"
                 >
-                  <div class="p-2">
-                    <button
-                      @click="setAutoRefreshEnabled(!autoRefreshEnabled)"
-                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                    >
-                      <span>{{ t('admin.accounts.enableAutoRefresh') }}</span>
-                      <Icon v-if="autoRefreshEnabled" name="check" size="sm" class="text-primary-500" />
-                    </button>
-                    <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
-                    <button
-                      v-for="sec in autoRefreshIntervals"
-                      :key="sec"
-                      @click="setAutoRefreshInterval(sec)"
-                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
-                    >
-                      <span>{{ autoRefreshIntervalLabel(sec) }}</span>
-                      <Icon v-if="autoRefreshIntervalSeconds === sec" name="check" size="sm" class="text-primary-500" />
-                    </button>
-                  </div>
+                  <button
+                    @click="setAutoRefreshEnabled(!autoRefreshEnabled)"
+                    class="dropdown-item w-full justify-between"
+                  >
+                    <span>{{ t('admin.accounts.enableAutoRefresh') }}</span>
+                    <Icon v-if="autoRefreshEnabled" name="check" size="sm" class="text-primary-500" />
+                  </button>
+                  <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
+                  <button
+                    v-for="sec in autoRefreshIntervals"
+                    :key="sec"
+                    @click="setAutoRefreshInterval(sec)"
+                    class="dropdown-item w-full justify-between"
+                  >
+                    <span>{{ autoRefreshIntervalLabel(sec) }}</span>
+                    <Icon v-if="autoRefreshIntervalSeconds === sec" name="check" size="sm" class="text-primary-500" />
+                  </button>
                 </div>
               </div>
 
@@ -80,14 +78,14 @@
                 <!-- Dropdown menu -->
                 <div
                   v-if="showColumnDropdown"
-                  class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+                  class="dropdown right-0 mt-2 w-48"
                 >
-                  <div class="max-h-80 overflow-y-auto p-2">
+                  <div class="max-h-80 overflow-y-auto">
                     <button
                       v-for="col in toggleableColumns"
                       :key="col.key"
                       @click="toggleColumn(col.key)"
-                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                      class="dropdown-item w-full justify-between"
                     >
                       <span>{{ col.label }}</span>
                       <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
@@ -100,7 +98,17 @@
         </div>
       </template>
       <template #table>
-        <AccountBulkActionsBar :selected-ids="selIds" @delete="handleBulkDelete" @edit="showBulkEdit = true" @clear="selIds = []" @select-page="selectPage" @toggle-schedulable="handleBulkToggleSchedulable" />
+        <AccountBulkActionsBar
+          :selected-ids="selIds"
+          :show-refresh-tier="hasEligibleTierSelection"
+          :refresh-tier-loading="refreshTierBatchLoading"
+          @delete="handleBulkDelete"
+          @edit="showBulkEdit = true"
+          @clear="selIds = []"
+          @select-page="selectPage"
+          @toggle-schedulable="handleBulkToggleSchedulable"
+          @refresh-tier="handleBulkRefreshTier"
+        />
         <DataTable
           :columns="cols"
           :data="accounts"
@@ -109,6 +117,7 @@
           default-sort-key="name"
           default-sort-order="asc"
           :sort-storage-key="ACCOUNT_SORT_STORAGE_KEY"
+          density="compact"
         >
           <template #cell-select="{ row }">
             <input type="checkbox" :checked="selIds.includes(row.id)" @change="toggleSel(row.id)" class="rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
@@ -216,11 +225,68 @@
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="load" />
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @reauth="handleReAuth" @refresh-token="handleRefresh" @reset-status="handleResetStatus" @clear-rate-limit="handleClearRateLimit" />
+    <AccountActionMenu
+      :show="menu.show"
+      :account="menu.acc"
+      :position="menu.pos"
+      @close="menu.show = false"
+      @test="handleTest"
+      @stats="handleViewStats"
+      @reauth="handleReAuth"
+      @refresh-token="handleRefresh"
+      @refresh-tier="handleRefreshTier"
+      @reset-status="handleResetStatus"
+      @clear-rate-limit="handleClearRateLimit"
+    />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <BulkEditAccountModal :show="showBulkEdit" :account-ids="selIds" :proxies="proxies" :groups="groups" @close="showBulkEdit = false" @updated="handleBulkUpdated" />
     <TempUnschedStatusModal :show="showTempUnsched" :account="tempUnschedAcc" @close="showTempUnsched = false" @reset="handleTempUnschedReset" />
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.accounts.deleteAccount')" :message="t('admin.accounts.deleteConfirm', { name: deletingAcc?.name })" :confirm-text="t('common.delete')" :cancel-text="t('common.cancel')" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
+
+    <BaseDialog
+      :show="showTierBatchResult"
+      :title="t('admin.accounts.batchTierRefreshTitle')"
+      width="wide"
+      closeOnClickOutside
+      @close="showTierBatchResult = false"
+    >
+      <p class="text-sm text-gray-600 dark:text-dark-300">
+        {{ t('admin.accounts.batchTierRefreshSummary', { success: tierBatchResult?.success ?? 0, failed: tierBatchResult?.failed ?? 0 }) }}
+      </p>
+
+      <div v-if="tierBatchResult?.errors?.length" class="mt-4 max-h-72 overflow-auto rounded-lg border border-gray-200 dark:border-dark-700">
+        <table class="min-w-full text-sm">
+          <thead class="bg-gray-50 dark:bg-dark-700/30">
+            <tr>
+              <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-dark-200">
+                {{ t('admin.accounts.batchTierRefreshAccountId') }}
+              </th>
+              <th class="px-3 py-2 text-left font-semibold text-gray-700 dark:text-dark-200">
+                {{ t('admin.accounts.batchTierRefreshError') }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(e, idx) in tierBatchResult.errors" :key="idx" class="border-t border-gray-100 dark:border-dark-700/50">
+              <td class="px-3 py-2 font-mono text-gray-700 dark:text-dark-200">
+                {{ e.account_id }}
+              </td>
+              <td class="px-3 py-2 text-gray-700 dark:text-dark-200">
+                {{ e.error }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <template #footer>
+        <div class="flex items-center justify-end">
+          <button class="btn btn-secondary" @click="showTierBatchResult = false">
+            {{ t('common.close') }}
+          </button>
+        </div>
+      </template>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -237,6 +303,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import { CreateAccountModal, EditAccountModal, BulkEditAccountModal, SyncFromCrsModal, TempUnschedStatusModal } from '@/components/account'
 import AccountTableActions from '@/components/admin/account/AccountTableActions.vue'
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
@@ -399,6 +466,31 @@ const { items: accounts, loading, params, pagination, load, reload, debouncedRel
   fetchFn: adminAPI.accounts.list,
   initialParams: { platform: '', type: '', status: '', search: '' }
 })
+
+type TierRefreshErrorRow = { account_id: number; error: string }
+type TierRefreshBatchResult = {
+  total: number
+  success: number
+  failed: number
+  errors: TierRefreshErrorRow[]
+}
+
+const refreshTierBatchLoading = ref(false)
+const showTierBatchResult = ref(false)
+const tierBatchResult = ref<TierRefreshBatchResult | null>(null)
+
+const isGoogleOneGeminiOAuthAccount = (account: Account): boolean => {
+  if (account.platform !== 'gemini' || account.type !== 'oauth') return false
+  const oauthType = account.credentials?.['oauth_type']
+  return oauthType === 'google_one'
+}
+
+const selectedTierEligibleIds = computed(() => {
+  const idSet = new Set(selIds.value)
+  return accounts.value.filter((a) => idSet.has(a.id) && isGoogleOneGeminiOAuthAccount(a)).map((a) => a.id)
+})
+
+const hasEligibleTierSelection = computed(() => selectedTierEligibleIds.value.length > 0)
 
 const isAnyModalOpen = computed(() => {
   return (
@@ -639,7 +731,64 @@ const closeReAuthModal = () => { showReAuth.value = false; reAuthAcc.value = nul
 const handleTest = (a: Account) => { testingAcc.value = a; showTest.value = true }
 const handleViewStats = (a: Account) => { statsAcc.value = a; showStats.value = true }
 const handleReAuth = (a: Account) => { reAuthAcc.value = a; showReAuth.value = true }
-const handleRefresh = async (a: Account) => { try { await adminAPI.accounts.refreshCredentials(a.id); load() } catch (error) { console.error('Failed to refresh credentials:', error) } }
+const handleRefresh = async (a: Account) => {
+  try {
+    if (a.platform === 'qwen') {
+      await adminAPI.qwen.refreshAccountToken(a.id)
+    } else if (a.platform === 'openai') {
+      await adminAPI.openai.refreshAccountToken(a.id)
+    } else {
+      await adminAPI.accounts.refreshCredentials(a.id)
+    }
+    appStore.showSuccess(t('admin.accounts.tokenRefreshed'))
+    load()
+  } catch (error: any) {
+    console.error('Failed to refresh credentials:', error)
+    appStore.showError(error?.message || t('admin.accounts.failedToRefresh'))
+  }
+}
+
+const handleRefreshTier = async (a: Account) => {
+  try {
+    await adminAPI.accounts.refreshTier(a.id)
+    appStore.showSuccess(t('admin.accounts.tierRefreshed'))
+    load()
+  } catch (error: any) {
+    console.error('Failed to refresh tier:', error)
+    appStore.showError(error?.message || t('admin.accounts.failedToRefreshTier'))
+  }
+}
+
+const handleBulkRefreshTier = async () => {
+  if (selectedTierEligibleIds.value.length === 0) {
+    return
+  }
+
+  refreshTierBatchLoading.value = true
+  try {
+    const res = (await adminAPI.accounts.batchRefreshTier(selectedTierEligibleIds.value)) as TierRefreshBatchResult
+    tierBatchResult.value = res
+
+    const summary = t('admin.accounts.batchTierRefreshSummary', {
+      success: res.success,
+      failed: res.failed
+    })
+
+    if (res.failed > 0) {
+      appStore.showError(summary)
+      showTierBatchResult.value = true
+    } else {
+      appStore.showSuccess(summary)
+    }
+
+    load()
+  } catch (error: any) {
+    console.error('Failed to batch refresh tier:', error)
+    appStore.showError(error?.message || t('admin.accounts.batchTierRefreshFailed'))
+  } finally {
+    refreshTierBatchLoading.value = false
+  }
+}
 const handleResetStatus = async (a: Account) => { try { await adminAPI.accounts.clearError(a.id); appStore.showSuccess(t('common.success')); load() } catch (error) { console.error('Failed to reset status:', error) } }
 const handleClearRateLimit = async (a: Account) => { try { await adminAPI.accounts.clearRateLimit(a.id); appStore.showSuccess(t('common.success')); load() } catch (error) { console.error('Failed to clear rate limit:', error) } }
 const handleDelete = (a: Account) => { deletingAcc.value = a; showDeleteDialog.value = true }

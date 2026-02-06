@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 )
 
 var (
@@ -330,24 +332,139 @@ func (s *AccountService) GetCredential(ctx context.Context, id int64, key string
 	return account.GetCredential(key), nil
 }
 
-// TestCredentials 测试账号凭证是否有效（需要实现具体平台的测试逻辑）
+func validateOptionalPublicHTTPSBaseURL(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	_, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
+		AllowPrivate:     false,
+		RequireAllowlist: false,
+	})
+	return err
+}
+
+// TestCredentials validates credential fields for supported platforms.
 func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 	account, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("get account: %w", err)
 	}
 
-	// 根据平台执行不同的测试逻辑
+	now := time.Now()
+
 	switch account.Platform {
 	case PlatformAnthropic:
-		// TODO: 测试Anthropic API凭证
-		return nil
+		if account.IsOAuth() {
+			accessToken := strings.TrimSpace(account.GetCredential("access_token"))
+			if accessToken == "" {
+				return fmt.Errorf("missing access_token")
+			}
+			expiresAt := account.GetCredentialAsTime("expires_at")
+			if expiresAt != nil && !now.Before(*expiresAt) && strings.TrimSpace(account.GetCredential("refresh_token")) == "" {
+				return fmt.Errorf("token expired and refresh_token is missing")
+			}
+			return nil
+		}
+		if account.Type == AccountTypeAPIKey {
+			apiKey := strings.TrimSpace(account.GetCredential("api_key"))
+			if apiKey == "" {
+				return fmt.Errorf("missing api_key")
+			}
+			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+				return fmt.Errorf("invalid base_url: %w", err)
+			}
+			return nil
+		}
+		return fmt.Errorf("unsupported anthropic account type: %s", account.Type)
 	case PlatformOpenAI:
-		// TODO: 测试OpenAI API凭证
-		return nil
+		if account.IsOpenAIOAuth() {
+			accessToken := strings.TrimSpace(account.GetOpenAIAccessToken())
+			if accessToken == "" {
+				return fmt.Errorf("missing access_token")
+			}
+			expiresAt := account.GetOpenAITokenExpiresAt()
+			if expiresAt != nil && !now.Before(*expiresAt) && strings.TrimSpace(account.GetOpenAIRefreshToken()) == "" {
+				return fmt.Errorf("token expired and refresh_token is missing")
+			}
+			return nil
+		}
+		if account.IsOpenAIApiKey() {
+			apiKey := strings.TrimSpace(account.GetOpenAIApiKey())
+			if apiKey == "" {
+				return fmt.Errorf("missing api_key")
+			}
+			if err := validateOptionalPublicHTTPSBaseURL(account.GetOpenAIBaseURL()); err != nil {
+				return fmt.Errorf("invalid base_url: %w", err)
+			}
+			return nil
+		}
+		return fmt.Errorf("unsupported openai account type: %s", account.Type)
 	case PlatformGemini:
-		// TODO: 测试Gemini API凭证
-		return nil
+		if account.Type == AccountTypeOAuth {
+			accessToken := strings.TrimSpace(account.GetCredential("access_token"))
+			refreshToken := strings.TrimSpace(account.GetCredential("refresh_token"))
+			if accessToken == "" && refreshToken == "" {
+				return fmt.Errorf("missing access_token and refresh_token")
+			}
+			expiresAt := account.GetCredentialAsTime("expires_at")
+			if expiresAt != nil && !now.Before(*expiresAt) && refreshToken == "" {
+				return fmt.Errorf("token expired and refresh_token is missing")
+			}
+			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+				return fmt.Errorf("invalid base_url: %w", err)
+			}
+			return nil
+		}
+		if account.Type == AccountTypeAPIKey {
+			apiKey := strings.TrimSpace(account.GetCredential("api_key"))
+			if apiKey == "" {
+				return fmt.Errorf("missing api_key")
+			}
+			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+				return fmt.Errorf("invalid base_url: %w", err)
+			}
+			return nil
+		}
+		return fmt.Errorf("unsupported gemini account type: %s", account.Type)
+	case PlatformQwen:
+		if account.Type == AccountTypeOAuth {
+			accessToken := strings.TrimSpace(account.GetCredential("access_token"))
+			refreshToken := strings.TrimSpace(account.GetCredential("refresh_token"))
+			if accessToken == "" && refreshToken == "" {
+				return fmt.Errorf("missing access_token and refresh_token")
+			}
+			expiresAt := account.GetCredentialAsTime("expires_at")
+			if expiresAt != nil && !now.Before(*expiresAt) && refreshToken == "" {
+				return fmt.Errorf("token expired and refresh_token is missing")
+			}
+			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+				return fmt.Errorf("invalid base_url: %w", err)
+			}
+			return nil
+		}
+		if account.Type == AccountTypeAPIKey {
+			apiKey := strings.TrimSpace(account.GetCredential("api_key"))
+			if apiKey == "" {
+				return fmt.Errorf("missing api_key")
+			}
+			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+				return fmt.Errorf("invalid base_url: %w", err)
+			}
+			return nil
+		}
+		return fmt.Errorf("unsupported qwen account type: %s", account.Type)
+	case PlatformIFlow:
+		if account.Type == AccountTypeAPIKey {
+			apiKey := strings.TrimSpace(account.GetCredential("api_key"))
+			if apiKey == "" {
+				return fmt.Errorf("missing api_key")
+			}
+			if err := validateOptionalPublicHTTPSBaseURL(account.GetCredential("base_url")); err != nil {
+				return fmt.Errorf("invalid base_url: %w", err)
+			}
+			return nil
+		}
+		return fmt.Errorf("unsupported iflow account type: %s", account.Type)
 	default:
 		return fmt.Errorf("unsupported platform: %s", account.Platform)
 	}

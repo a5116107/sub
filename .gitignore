@@ -33,6 +33,8 @@ backend/.gocache/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+package-lock.json
+login.json
 *.local
 *.tsbuildinfo
 vite.config.d.ts
@@ -85,6 +87,7 @@ temp/
 .cache/
 .dev/
 .serena/
+.context-snapshots/
 
 # ===================
 # 构建产物
@@ -123,10 +126,15 @@ scripts
 openspec/
 docs/
 code-reviews/
-AGENTS.md
 backend/cmd/server/server
 deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
-docs/*
-.serena/
+
+# ===================
+# SSOT / Project Docs (tracked)
+# ===================
+!docs/
+!docs/project/
+!docs/project/**
+!docs/dependency-security.md

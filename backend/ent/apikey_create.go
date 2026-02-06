@@ -91,14 +91,6 @@ func (_c *APIKeyCreate) SetGroupID(v int64) *APIKeyCreate {
 	return _c
 }
 
-// SetNillableGroupID sets the "group_id" field if the given value is not nil.
-func (_c *APIKeyCreate) SetNillableGroupID(v *int64) *APIKeyCreate {
-	if v != nil {
-		_c.SetGroupID(*v)
-	}
-	return _c
-}
-
 // SetStatus sets the "status" field.
 func (_c *APIKeyCreate) SetStatus(v string) *APIKeyCreate {
 	_c.mutation.SetStatus(v)
@@ -122,6 +114,90 @@ func (_c *APIKeyCreate) SetIPWhitelist(v []string) *APIKeyCreate {
 // SetIPBlacklist sets the "ip_blacklist" field.
 func (_c *APIKeyCreate) SetIPBlacklist(v []string) *APIKeyCreate {
 	_c.mutation.SetIPBlacklist(v)
+	return _c
+}
+
+// SetAllowBalance sets the "allow_balance" field.
+func (_c *APIKeyCreate) SetAllowBalance(v bool) *APIKeyCreate {
+	_c.mutation.SetAllowBalance(v)
+	return _c
+}
+
+// SetNillableAllowBalance sets the "allow_balance" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableAllowBalance(v *bool) *APIKeyCreate {
+	if v != nil {
+		_c.SetAllowBalance(*v)
+	}
+	return _c
+}
+
+// SetAllowSubscription sets the "allow_subscription" field.
+func (_c *APIKeyCreate) SetAllowSubscription(v bool) *APIKeyCreate {
+	_c.mutation.SetAllowSubscription(v)
+	return _c
+}
+
+// SetNillableAllowSubscription sets the "allow_subscription" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableAllowSubscription(v *bool) *APIKeyCreate {
+	if v != nil {
+		_c.SetAllowSubscription(*v)
+	}
+	return _c
+}
+
+// SetSubscriptionStrict sets the "subscription_strict" field.
+func (_c *APIKeyCreate) SetSubscriptionStrict(v bool) *APIKeyCreate {
+	_c.mutation.SetSubscriptionStrict(v)
+	return _c
+}
+
+// SetNillableSubscriptionStrict sets the "subscription_strict" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableSubscriptionStrict(v *bool) *APIKeyCreate {
+	if v != nil {
+		_c.SetSubscriptionStrict(*v)
+	}
+	return _c
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (_c *APIKeyCreate) SetExpiresAt(v time.Time) *APIKeyCreate {
+	_c.mutation.SetExpiresAt(v)
+	return _c
+}
+
+// SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableExpiresAt(v *time.Time) *APIKeyCreate {
+	if v != nil {
+		_c.SetExpiresAt(*v)
+	}
+	return _c
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (_c *APIKeyCreate) SetQuotaLimitUsd(v float64) *APIKeyCreate {
+	_c.mutation.SetQuotaLimitUsd(v)
+	return _c
+}
+
+// SetNillableQuotaLimitUsd sets the "quota_limit_usd" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableQuotaLimitUsd(v *float64) *APIKeyCreate {
+	if v != nil {
+		_c.SetQuotaLimitUsd(*v)
+	}
+	return _c
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (_c *APIKeyCreate) SetQuotaUsedUsd(v float64) *APIKeyCreate {
+	_c.mutation.SetQuotaUsedUsd(v)
+	return _c
+}
+
+// SetNillableQuotaUsedUsd sets the "quota_used_usd" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableQuotaUsedUsd(v *float64) *APIKeyCreate {
+	if v != nil {
+		_c.SetQuotaUsedUsd(*v)
+	}
 	return _c
 }
 
@@ -205,6 +281,22 @@ func (_c *APIKeyCreate) defaults() error {
 		v := apikey.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.AllowBalance(); !ok {
+		v := apikey.DefaultAllowBalance
+		_c.mutation.SetAllowBalance(v)
+	}
+	if _, ok := _c.mutation.AllowSubscription(); !ok {
+		v := apikey.DefaultAllowSubscription
+		_c.mutation.SetAllowSubscription(v)
+	}
+	if _, ok := _c.mutation.SubscriptionStrict(); !ok {
+		v := apikey.DefaultSubscriptionStrict
+		_c.mutation.SetSubscriptionStrict(v)
+	}
+	if _, ok := _c.mutation.QuotaUsedUsd(); !ok {
+		v := apikey.DefaultQuotaUsedUsd
+		_c.mutation.SetQuotaUsedUsd(v)
+	}
 	return nil
 }
 
@@ -235,6 +327,9 @@ func (_c *APIKeyCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "APIKey.name": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.GroupID(); !ok {
+		return &ValidationError{Name: "group_id", err: errors.New(`ent: missing required field "APIKey.group_id"`)}
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "APIKey.status"`)}
 	}
@@ -243,8 +338,23 @@ func (_c *APIKeyCreate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "APIKey.status": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.AllowBalance(); !ok {
+		return &ValidationError{Name: "allow_balance", err: errors.New(`ent: missing required field "APIKey.allow_balance"`)}
+	}
+	if _, ok := _c.mutation.AllowSubscription(); !ok {
+		return &ValidationError{Name: "allow_subscription", err: errors.New(`ent: missing required field "APIKey.allow_subscription"`)}
+	}
+	if _, ok := _c.mutation.SubscriptionStrict(); !ok {
+		return &ValidationError{Name: "subscription_strict", err: errors.New(`ent: missing required field "APIKey.subscription_strict"`)}
+	}
+	if _, ok := _c.mutation.QuotaUsedUsd(); !ok {
+		return &ValidationError{Name: "quota_used_usd", err: errors.New(`ent: missing required field "APIKey.quota_used_usd"`)}
+	}
 	if len(_c.mutation.UserIDs()) == 0 {
 		return &ValidationError{Name: "user", err: errors.New(`ent: missing required edge "APIKey.user"`)}
+	}
+	if len(_c.mutation.GroupIDs()) == 0 {
+		return &ValidationError{Name: "group", err: errors.New(`ent: missing required edge "APIKey.group"`)}
 	}
 	return nil
 }
@@ -305,6 +415,30 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 		_spec.SetField(apikey.FieldIPBlacklist, field.TypeJSON, value)
 		_node.IPBlacklist = value
 	}
+	if value, ok := _c.mutation.AllowBalance(); ok {
+		_spec.SetField(apikey.FieldAllowBalance, field.TypeBool, value)
+		_node.AllowBalance = value
+	}
+	if value, ok := _c.mutation.AllowSubscription(); ok {
+		_spec.SetField(apikey.FieldAllowSubscription, field.TypeBool, value)
+		_node.AllowSubscription = value
+	}
+	if value, ok := _c.mutation.SubscriptionStrict(); ok {
+		_spec.SetField(apikey.FieldSubscriptionStrict, field.TypeBool, value)
+		_node.SubscriptionStrict = value
+	}
+	if value, ok := _c.mutation.ExpiresAt(); ok {
+		_spec.SetField(apikey.FieldExpiresAt, field.TypeTime, value)
+		_node.ExpiresAt = &value
+	}
+	if value, ok := _c.mutation.QuotaLimitUsd(); ok {
+		_spec.SetField(apikey.FieldQuotaLimitUsd, field.TypeFloat64, value)
+		_node.QuotaLimitUsd = &value
+	}
+	if value, ok := _c.mutation.QuotaUsedUsd(); ok {
+		_spec.SetField(apikey.FieldQuotaUsedUsd, field.TypeFloat64, value)
+		_node.QuotaUsedUsd = value
+	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -336,7 +470,7 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.GroupID = &nodes[0]
+		_node.GroupID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.UsageLogsIDs(); len(nodes) > 0 {
@@ -485,12 +619,6 @@ func (u *APIKeyUpsert) UpdateGroupID() *APIKeyUpsert {
 	return u
 }
 
-// ClearGroupID clears the value of the "group_id" field.
-func (u *APIKeyUpsert) ClearGroupID() *APIKeyUpsert {
-	u.SetNull(apikey.FieldGroupID)
-	return u
-}
-
 // SetStatus sets the "status" field.
 func (u *APIKeyUpsert) SetStatus(v string) *APIKeyUpsert {
 	u.Set(apikey.FieldStatus, v)
@@ -536,6 +664,102 @@ func (u *APIKeyUpsert) UpdateIPBlacklist() *APIKeyUpsert {
 // ClearIPBlacklist clears the value of the "ip_blacklist" field.
 func (u *APIKeyUpsert) ClearIPBlacklist() *APIKeyUpsert {
 	u.SetNull(apikey.FieldIPBlacklist)
+	return u
+}
+
+// SetAllowBalance sets the "allow_balance" field.
+func (u *APIKeyUpsert) SetAllowBalance(v bool) *APIKeyUpsert {
+	u.Set(apikey.FieldAllowBalance, v)
+	return u
+}
+
+// UpdateAllowBalance sets the "allow_balance" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateAllowBalance() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldAllowBalance)
+	return u
+}
+
+// SetAllowSubscription sets the "allow_subscription" field.
+func (u *APIKeyUpsert) SetAllowSubscription(v bool) *APIKeyUpsert {
+	u.Set(apikey.FieldAllowSubscription, v)
+	return u
+}
+
+// UpdateAllowSubscription sets the "allow_subscription" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateAllowSubscription() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldAllowSubscription)
+	return u
+}
+
+// SetSubscriptionStrict sets the "subscription_strict" field.
+func (u *APIKeyUpsert) SetSubscriptionStrict(v bool) *APIKeyUpsert {
+	u.Set(apikey.FieldSubscriptionStrict, v)
+	return u
+}
+
+// UpdateSubscriptionStrict sets the "subscription_strict" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateSubscriptionStrict() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldSubscriptionStrict)
+	return u
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (u *APIKeyUpsert) SetExpiresAt(v time.Time) *APIKeyUpsert {
+	u.Set(apikey.FieldExpiresAt, v)
+	return u
+}
+
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateExpiresAt() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldExpiresAt)
+	return u
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (u *APIKeyUpsert) ClearExpiresAt() *APIKeyUpsert {
+	u.SetNull(apikey.FieldExpiresAt)
+	return u
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (u *APIKeyUpsert) SetQuotaLimitUsd(v float64) *APIKeyUpsert {
+	u.Set(apikey.FieldQuotaLimitUsd, v)
+	return u
+}
+
+// UpdateQuotaLimitUsd sets the "quota_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateQuotaLimitUsd() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldQuotaLimitUsd)
+	return u
+}
+
+// AddQuotaLimitUsd adds v to the "quota_limit_usd" field.
+func (u *APIKeyUpsert) AddQuotaLimitUsd(v float64) *APIKeyUpsert {
+	u.Add(apikey.FieldQuotaLimitUsd, v)
+	return u
+}
+
+// ClearQuotaLimitUsd clears the value of the "quota_limit_usd" field.
+func (u *APIKeyUpsert) ClearQuotaLimitUsd() *APIKeyUpsert {
+	u.SetNull(apikey.FieldQuotaLimitUsd)
+	return u
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (u *APIKeyUpsert) SetQuotaUsedUsd(v float64) *APIKeyUpsert {
+	u.Set(apikey.FieldQuotaUsedUsd, v)
+	return u
+}
+
+// UpdateQuotaUsedUsd sets the "quota_used_usd" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateQuotaUsedUsd() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldQuotaUsedUsd)
+	return u
+}
+
+// AddQuotaUsedUsd adds v to the "quota_used_usd" field.
+func (u *APIKeyUpsert) AddQuotaUsedUsd(v float64) *APIKeyUpsert {
+	u.Add(apikey.FieldQuotaUsedUsd, v)
 	return u
 }
 
@@ -675,13 +899,6 @@ func (u *APIKeyUpsertOne) UpdateGroupID() *APIKeyUpsertOne {
 	})
 }
 
-// ClearGroupID clears the value of the "group_id" field.
-func (u *APIKeyUpsertOne) ClearGroupID() *APIKeyUpsertOne {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.ClearGroupID()
-	})
-}
-
 // SetStatus sets the "status" field.
 func (u *APIKeyUpsertOne) SetStatus(v string) *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
@@ -735,6 +952,118 @@ func (u *APIKeyUpsertOne) UpdateIPBlacklist() *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) ClearIPBlacklist() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearIPBlacklist()
+	})
+}
+
+// SetAllowBalance sets the "allow_balance" field.
+func (u *APIKeyUpsertOne) SetAllowBalance(v bool) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetAllowBalance(v)
+	})
+}
+
+// UpdateAllowBalance sets the "allow_balance" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateAllowBalance() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateAllowBalance()
+	})
+}
+
+// SetAllowSubscription sets the "allow_subscription" field.
+func (u *APIKeyUpsertOne) SetAllowSubscription(v bool) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetAllowSubscription(v)
+	})
+}
+
+// UpdateAllowSubscription sets the "allow_subscription" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateAllowSubscription() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateAllowSubscription()
+	})
+}
+
+// SetSubscriptionStrict sets the "subscription_strict" field.
+func (u *APIKeyUpsertOne) SetSubscriptionStrict(v bool) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetSubscriptionStrict(v)
+	})
+}
+
+// UpdateSubscriptionStrict sets the "subscription_strict" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateSubscriptionStrict() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateSubscriptionStrict()
+	})
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (u *APIKeyUpsertOne) SetExpiresAt(v time.Time) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetExpiresAt(v)
+	})
+}
+
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateExpiresAt() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateExpiresAt()
+	})
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (u *APIKeyUpsertOne) ClearExpiresAt() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearExpiresAt()
+	})
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (u *APIKeyUpsertOne) SetQuotaLimitUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetQuotaLimitUsd(v)
+	})
+}
+
+// AddQuotaLimitUsd adds v to the "quota_limit_usd" field.
+func (u *APIKeyUpsertOne) AddQuotaLimitUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddQuotaLimitUsd(v)
+	})
+}
+
+// UpdateQuotaLimitUsd sets the "quota_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateQuotaLimitUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateQuotaLimitUsd()
+	})
+}
+
+// ClearQuotaLimitUsd clears the value of the "quota_limit_usd" field.
+func (u *APIKeyUpsertOne) ClearQuotaLimitUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearQuotaLimitUsd()
+	})
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (u *APIKeyUpsertOne) SetQuotaUsedUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetQuotaUsedUsd(v)
+	})
+}
+
+// AddQuotaUsedUsd adds v to the "quota_used_usd" field.
+func (u *APIKeyUpsertOne) AddQuotaUsedUsd(v float64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddQuotaUsedUsd(v)
+	})
+}
+
+// UpdateQuotaUsedUsd sets the "quota_used_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateQuotaUsedUsd() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateQuotaUsedUsd()
 	})
 }
 
@@ -1040,13 +1369,6 @@ func (u *APIKeyUpsertBulk) UpdateGroupID() *APIKeyUpsertBulk {
 	})
 }
 
-// ClearGroupID clears the value of the "group_id" field.
-func (u *APIKeyUpsertBulk) ClearGroupID() *APIKeyUpsertBulk {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.ClearGroupID()
-	})
-}
-
 // SetStatus sets the "status" field.
 func (u *APIKeyUpsertBulk) SetStatus(v string) *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
@@ -1100,6 +1422,118 @@ func (u *APIKeyUpsertBulk) UpdateIPBlacklist() *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) ClearIPBlacklist() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearIPBlacklist()
+	})
+}
+
+// SetAllowBalance sets the "allow_balance" field.
+func (u *APIKeyUpsertBulk) SetAllowBalance(v bool) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetAllowBalance(v)
+	})
+}
+
+// UpdateAllowBalance sets the "allow_balance" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateAllowBalance() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateAllowBalance()
+	})
+}
+
+// SetAllowSubscription sets the "allow_subscription" field.
+func (u *APIKeyUpsertBulk) SetAllowSubscription(v bool) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetAllowSubscription(v)
+	})
+}
+
+// UpdateAllowSubscription sets the "allow_subscription" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateAllowSubscription() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateAllowSubscription()
+	})
+}
+
+// SetSubscriptionStrict sets the "subscription_strict" field.
+func (u *APIKeyUpsertBulk) SetSubscriptionStrict(v bool) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetSubscriptionStrict(v)
+	})
+}
+
+// UpdateSubscriptionStrict sets the "subscription_strict" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateSubscriptionStrict() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateSubscriptionStrict()
+	})
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (u *APIKeyUpsertBulk) SetExpiresAt(v time.Time) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetExpiresAt(v)
+	})
+}
+
+// UpdateExpiresAt sets the "expires_at" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateExpiresAt() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateExpiresAt()
+	})
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (u *APIKeyUpsertBulk) ClearExpiresAt() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearExpiresAt()
+	})
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (u *APIKeyUpsertBulk) SetQuotaLimitUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetQuotaLimitUsd(v)
+	})
+}
+
+// AddQuotaLimitUsd adds v to the "quota_limit_usd" field.
+func (u *APIKeyUpsertBulk) AddQuotaLimitUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddQuotaLimitUsd(v)
+	})
+}
+
+// UpdateQuotaLimitUsd sets the "quota_limit_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateQuotaLimitUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateQuotaLimitUsd()
+	})
+}
+
+// ClearQuotaLimitUsd clears the value of the "quota_limit_usd" field.
+func (u *APIKeyUpsertBulk) ClearQuotaLimitUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearQuotaLimitUsd()
+	})
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (u *APIKeyUpsertBulk) SetQuotaUsedUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetQuotaUsedUsd(v)
+	})
+}
+
+// AddQuotaUsedUsd adds v to the "quota_used_usd" field.
+func (u *APIKeyUpsertBulk) AddQuotaUsedUsd(v float64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddQuotaUsedUsd(v)
+	})
+}
+
+// UpdateQuotaUsedUsd sets the "quota_used_usd" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateQuotaUsedUsd() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateQuotaUsedUsd()
 	})
 }
 

@@ -1,15 +1,103 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-4xl space-y-6">
+    <div class="mx-auto max-w-7xl space-y-6">
       <!-- Loading State -->
       <div v-if="loading" class="flex items-center justify-center py-12">
         <div class="h-8 w-8 animate-spin rounded-full border-b-2 border-primary-600"></div>
       </div>
 
-      <!-- Settings Form -->
-      <form v-else @submit.prevent="saveSettings" class="space-y-6">
-        <!-- Admin API Key Settings -->
-        <div class="card">
+      <div v-else class="grid gap-6 lg:grid-cols-[280px,1fr]">
+        <!-- Desktop Sidebar -->
+        <aside class="hidden lg:block">
+          <div class="sticky top-24 space-y-4">
+            <div class="card p-4">
+              <div class="flex items-center gap-2">
+                <Icon name="search" size="sm" class="text-gray-400 dark:text-dark-400" />
+                <input
+                  v-model="sectionQuery"
+                  type="text"
+                  class="input h-9 flex-1"
+                  :placeholder="t('common.search')"
+                />
+              </div>
+            </div>
+
+            <div class="card p-2">
+              <nav class="space-y-1">
+                <button
+                  v-for="item in filteredNavItems"
+                  :key="item.id"
+                  type="button"
+                  class="w-full rounded-lg px-3 py-2 text-left text-sm transition-colors"
+                  :class="
+                    activeSectionId === item.id
+                      ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/20 dark:text-primary-200'
+                      : 'text-gray-700 hover:bg-gray-50 dark:text-dark-200 dark:hover:bg-dark-900/40'
+                  "
+                  @click="scrollToSection(item.id)"
+                >
+                  {{ item.label }}
+                </button>
+              </nav>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Settings Form -->
+        <form @submit.prevent="saveSettings" class="space-y-6">
+          <!-- Sticky Header -->
+          <div
+            class="sticky top-20 z-20 rounded-2xl border border-gray-200 bg-white/80 p-4 backdrop-blur dark:border-dark-700 dark:bg-dark-950/50 md:top-24 md:p-6"
+          >
+            <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <Icon name="cog" size="md" class="text-primary-600 dark:text-primary-400" />
+                  <h1 class="text-xl font-semibold text-gray-900 dark:text-white">
+                    {{ t('admin.settings.title') }}
+                  </h1>
+                </div>
+                <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+                  {{ t('admin.settings.description') }}
+                </p>
+              </div>
+
+              <button type="submit" :disabled="savingAny || !hasUnsavedChanges" class="btn btn-primary">
+                <svg v-if="savingAny" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                {{ savingAny ? t('admin.settings.saving') : t('admin.settings.saveSettings') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Mobile Jump -->
+          <div class="card p-4 lg:hidden">
+            <label class="input-label">{{ t('admin.settings.jumpToSection') }}</label>
+            <select v-model="mobileSectionJump" class="input" @change="scrollToSection(mobileSectionJump)">
+              <option v-for="item in navItems" :key="item.id" :value="item.id">{{ item.label }}</option>
+            </select>
+          </div>
+
+          <!-- Admin API Key Settings -->
+          <section
+            :id="SECTION_IDS.adminApiKey"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.adminApiKey)"
+          >
+            <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.adminApiKey.title') }}
@@ -146,9 +234,15 @@
             </div>
           </div>
         </div>
+          </section>
 
-        <!-- Stream Timeout Settings -->
-        <div class="card">
+          <!-- Stream Timeout Settings -->
+          <section
+            :id="SECTION_IDS.streamTimeout"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.streamTimeout)"
+          >
+            <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.streamTimeout.title') }}
@@ -250,43 +344,49 @@
                 </div>
               </div>
 
-              <!-- Save Button -->
-              <div class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700">
-                <button
-                  type="button"
-                  @click="saveStreamTimeoutSettings"
-                  :disabled="streamTimeoutSaving"
-                  class="btn btn-primary btn-sm"
-                >
-                  <svg
-                    v-if="streamTimeoutSaving"
-                    class="mr-1 h-4 w-4 animate-spin"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      class="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      stroke-width="4"
-                    ></circle>
-                    <path
-                      class="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  {{ streamTimeoutSaving ? t('common.saving') : t('common.save') }}
-                </button>
-              </div>
             </template>
           </div>
         </div>
+          </section>
 
-        <!-- Registration Settings -->
-        <div class="card">
+          <!-- Gateway Settings -->
+          <section
+            :id="SECTION_IDS.gateway"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.gateway)"
+          >
+            <div class="card">
+              <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.settings.gateway.title') }}
+                </h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.gateway.description') }}
+                </p>
+              </div>
+              <div class="space-y-5 p-6">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <label class="font-medium text-gray-900 dark:text-white">{{
+                      t('admin.settings.gateway.fixOrphanedToolResults')
+                    }}</label>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.gateway.fixOrphanedToolResultsHint') }}
+                    </p>
+                  </div>
+                  <Toggle v-model="form.gateway_fix_orphaned_tool_results" />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Registration Settings -->
+          <section
+            :id="SECTION_IDS.registration"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.registration)"
+          >
+            <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.registration.title') }}
@@ -381,9 +481,86 @@
             </div>
           </div>
         </div>
+          </section>
 
-        <!-- Cloudflare Turnstile Settings -->
-        <div class="card">
+          <!-- Referral Settings -->
+          <section
+            :id="SECTION_IDS.referral"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.referral)"
+          >
+            <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.referral.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.referral.description') }}
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-3">
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.referral.inviterBonus') }}
+                </label>
+                <input
+                  v-model.number="form.referral_inviter_bonus"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="input font-mono text-sm"
+                  placeholder="0"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.referral.inviterBonusHint') }}
+                </p>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.referral.inviteeBonus') }}
+                </label>
+                <input
+                  v-model.number="form.referral_invitee_bonus"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="input font-mono text-sm"
+                  placeholder="0"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.referral.inviteeBonusHint') }}
+                </p>
+              </div>
+              <div>
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.referral.commissionRate') }}
+                </label>
+                <input
+                  v-model.number="form.referral_commission_rate"
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  class="input font-mono text-sm"
+                  placeholder="0"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.referral.commissionRateHint') }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+          </section>
+
+          <!-- Cloudflare Turnstile Settings -->
+          <section
+            :id="SECTION_IDS.turnstile"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.turnstile)"
+          >
+            <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.turnstile.title') }}
@@ -456,11 +633,19 @@
         </div>
 
         <!-- LinuxDo Connect OAuth 登录 -->
-        <div class="card">
-          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.settings.linuxdo.title') }}
-            </h2>
+          </section>
+
+          <!-- LinuxDo Connect OAuth -->
+          <section
+            :id="SECTION_IDS.linuxdo"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.linuxdo)"
+          >
+            <div class="card">
+              <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.settings.linuxdo.title') }}
+                </h2>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {{ t('admin.settings.linuxdo.description') }}
             </p>
@@ -554,9 +739,15 @@
             </div>
           </div>
         </div>
+          </section>
 
-        <!-- Default Settings -->
-        <div class="card">
+          <!-- Default Settings -->
+          <section
+            :id="SECTION_IDS.defaults"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.defaults)"
+          >
+            <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.defaults.title') }}
@@ -601,9 +792,15 @@
             </div>
           </div>
         </div>
+          </section>
 
-        <!-- Site Settings -->
-        <div class="card">
+          <!-- Site Settings -->
+          <section
+            :id="SECTION_IDS.site"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.site)"
+          >
+            <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.site.title') }}
@@ -612,8 +809,36 @@
               {{ t('admin.settings.site.description') }}
             </p>
           </div>
-          <div class="space-y-6 p-6">
-            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div class="p-6">
+            <div class="tabs">
+              <button
+                type="button"
+                class="tab"
+                :class="{ 'tab-active': siteSettingsTab === 'general' }"
+                @click="siteSettingsTab = 'general'"
+              >
+                {{ t('admin.settings.site.tabs.general') }}
+              </button>
+              <button
+                type="button"
+                class="tab"
+                :class="{ 'tab-active': siteSettingsTab === 'home' }"
+                @click="siteSettingsTab = 'home'"
+              >
+                {{ t('admin.settings.site.tabs.home') }}
+              </button>
+              <button
+                type="button"
+                class="tab"
+                :class="{ 'tab-active': siteSettingsTab === 'subscriptions' }"
+                @click="siteSettingsTab = 'subscriptions'"
+              >
+                {{ t('admin.settings.site.tabs.subscriptions') }}
+              </button>
+            </div>
+
+            <div v-show="siteSettingsTab === 'general'" class="mt-6 space-y-6">
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('admin.settings.site.siteName') }}
@@ -757,45 +982,667 @@
               </div>
             </div>
 
-            <!-- Home Content -->
-            <div>
-              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                {{ t('admin.settings.site.homeContent') }}
-              </label>
-              <textarea
-                v-model="form.home_content"
-                rows="6"
-                class="input font-mono text-sm"
-                :placeholder="t('admin.settings.site.homeContentPlaceholder')"
-              ></textarea>
-              <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.settings.site.homeContentHint') }}
-              </p>
-              <!-- iframe CSP Warning -->
-              <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                {{ t('admin.settings.site.homeContentIframeWarning') }}
-              </p>
             </div>
 
-            <!-- Hide CCS Import Button -->
-            <div
-              class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
-            >
+            <div v-show="siteSettingsTab === 'home'" class="mt-6 space-y-6">
+              <!-- Home Content -->
               <div>
-                <label class="font-medium text-gray-900 dark:text-white">{{
-                  t('admin.settings.site.hideCcsImportButton')
-                }}</label>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('admin.settings.site.hideCcsImportButtonHint') }}
+                <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.site.homeContent') }}
+                </label>
+                <textarea
+                  v-model="form.home_content"
+                  rows="6"
+                  class="input font-mono text-sm"
+                  :placeholder="t('admin.settings.site.homeContentPlaceholder')"
+                ></textarea>
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.site.homeContentHint') }}
+                </p>
+                <!-- iframe CSP Warning -->
+                <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                  {{ t('admin.settings.site.homeContentIframeWarning') }}
                 </p>
               </div>
-              <Toggle v-model="form.hide_ccs_import_button" />
+            </div>
+
+            <div v-show="siteSettingsTab === 'subscriptions'" class="mt-6 space-y-6">
+              <div class="rounded-xl border border-gray-200/70 bg-white/50 dark:border-dark-700/60 dark:bg-dark-900/20">
+                <!-- Subscriptions Feature Toggle -->
+                <div class="flex items-center justify-between p-4">
+                  <div>
+                    <label class="font-medium text-gray-900 dark:text-white">{{
+                      t('admin.settings.site.subscriptionsEnabled')
+                    }}</label>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.site.subscriptionsEnabledHint') }}
+                    </p>
+                  </div>
+                  <Toggle v-model="form.subscriptions_enabled" />
+                </div>
+
+                <!-- Landing Pricing Toggle -->
+                <div class="flex items-center justify-between border-t border-gray-200/70 p-4 dark:border-dark-700/60">
+                  <div>
+                    <label class="font-medium text-gray-900 dark:text-white">{{
+                      t('admin.settings.site.landingPricingEnabled')
+                    }}</label>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.site.landingPricingEnabledHint') }}
+                    </p>
+                  </div>
+                  <Toggle v-model="form.landing_pricing_enabled" />
+                </div>
+              </div>
+
+              <div
+                v-if="!form.landing_pricing_enabled"
+                class="rounded-xl border border-gray-200/70 bg-gray-50 p-4 text-sm text-gray-700 dark:border-dark-700/60 dark:bg-dark-900/20 dark:text-dark-200"
+              >
+                {{ t('admin.settings.site.landingPricingDisabledHint') }}
+              </div>
+
+              <!-- Landing Pricing Config -->
+              <div
+                v-show="form.landing_pricing_enabled"
+                class="rounded-xl border border-gray-200/70 bg-white/50 p-4 dark:border-dark-700/60 dark:bg-dark-900/20"
+              >
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ t('admin.settings.site.landingPricingConfig') }}
+                  </label>
+                <div class="flex flex-wrap items-center gap-2">
+                  <div class="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5 dark:border-dark-600 dark:bg-dark-900/30">
+                    <button
+                      type="button"
+                      class="btn btn-sm"
+                      :class="landingPricingEditorMode === 'ui' ? 'btn-primary' : 'btn-secondary'"
+                      @click="landingPricingEditorMode = 'ui'"
+                    >
+                      {{ t('admin.settings.site.landingPricingEditor.ui') }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-sm"
+                      :class="landingPricingEditorMode === 'json' ? 'btn-primary' : 'btn-secondary'"
+                      @click="landingPricingEditorMode = 'json'"
+                    >
+                      JSON
+                    </button>
+                  </div>
+
+                  <button
+                    v-if="landingPricingEditorMode === 'json'"
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="formatLandingPricingConfig"
+                  >
+                    <Icon name="sparkles" size="sm" class="mr-1.5" :stroke-width="2" />
+                    {{ t('common.format') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="resetLandingPricingConfig"
+                  >
+                    <Icon name="refresh" size="sm" class="mr-1.5" :stroke-width="2" />
+                    {{ t('common.reset') }}
+                  </button>
+                  <router-link to="/home#pricing" class="btn btn-secondary btn-sm">
+                    <Icon name="eye" size="sm" class="mr-1.5" :stroke-width="2" />
+                    {{ t('common.preview') }}
+                  </router-link>
+                </div>
+              </div>
+
+              <!-- UI editor -->
+              <div v-if="landingPricingEditorMode === 'ui'" class="mt-3 space-y-6">
+                <!-- Basic -->
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.defaultTab') }}</label>
+                    <select v-model="landingPricingDraft.default_tab" class="input">
+                      <option value="subscription">{{ t('admin.settings.site.landingPricingEditor.tab.subscription') }}</option>
+                      <option value="payg">{{ t('admin.settings.site.landingPricingEditor.tab.payg') }}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.currency') }}</label>
+                    <input class="input" value="CNY" disabled />
+                  </div>
+                </div>
+
+                <!-- Subscription header -->
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.subscriptionTitle') }}</label>
+                    <input v-model="landingPricingDraft.subscription.title" type="text" class="input" />
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.subscriptionSubtitle') }}</label>
+                    <input v-model="landingPricingDraft.subscription.subtitle" type="text" class="input" />
+                  </div>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.defaultPeriod') }}</label>
+                    <select v-model="landingPricingDraft.subscription.default_period" class="input">
+                      <option value="week">{{ t('admin.settings.site.landingPricingEditor.period.week') }}</option>
+                      <option value="month">{{ t('admin.settings.site.landingPricingEditor.period.month') }}</option>
+                      <option value="custom">{{ t('admin.settings.site.landingPricingEditor.period.custom') }}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Period options -->
+                <div>
+                  <div class="flex items-center justify-between gap-3">
+                    <label class="input-label mb-0">{{ t('admin.settings.site.landingPricingEditor.periodOptions') }}</label>
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      @click="landingPricingDraft.subscription.periods.push({ key: 'month', label: '' })"
+                    >
+                      <Icon name="plus" size="sm" class="mr-1.5" :stroke-width="2" />
+                      {{ t('admin.settings.site.landingPricingEditor.add') }}
+                    </button>
+                  </div>
+                  <div class="mt-2 space-y-2">
+                    <div
+                      v-for="(p, idx) in landingPricingDraft.subscription.periods"
+                      :key="idx"
+                      class="flex flex-col gap-2 rounded-lg border border-gray-200 p-3 dark:border-dark-600 md:flex-row md:items-center"
+                    >
+                      <select v-model="p.key" class="input md:w-40">
+                        <option value="week">{{ t('admin.settings.site.landingPricingEditor.period.week') }}</option>
+                        <option value="month">{{ t('admin.settings.site.landingPricingEditor.period.month') }}</option>
+                        <option value="custom">{{ t('admin.settings.site.landingPricingEditor.period.custom') }}</option>
+                      </select>
+                      <input
+                        v-model="p.label"
+                        type="text"
+                        class="input flex-1"
+                        :placeholder="t('admin.settings.site.landingPricingEditor.periodLabelPlaceholder')"
+                      />
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-sm text-red-500"
+                        @click="landingPricingDraft.subscription.periods.splice(idx, 1)"
+                      >
+                        <Icon name="trash" size="sm" :stroke-width="2" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Plans -->
+                <div>
+                  <div class="flex items-center justify-between gap-3">
+                    <label class="input-label mb-0">{{ t('admin.settings.site.landingPricingEditor.plans') }}</label>
+                    <button type="button" class="btn btn-secondary btn-sm" @click="addLandingPricingPlan">
+                      <Icon name="plus" size="sm" class="mr-1.5" :stroke-width="2" />
+                      {{ t('admin.settings.site.landingPricingEditor.addPlan') }}
+                    </button>
+                  </div>
+
+                  <div v-if="!landingPricingDraft.subscription.plans.length" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.site.landingPricingEditor.noPlans') }}
+                  </div>
+
+                  <div v-else class="mt-2 space-y-3">
+                    <div
+                      v-for="(plan, idx) in landingPricingDraft.subscription.plans"
+                      :key="idx"
+                      class="rounded-xl border border-gray-200 p-4 dark:border-dark-600"
+                    >
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="text-sm font-medium text-gray-900 dark:text-white">
+                          {{ plan.name || t('admin.settings.site.landingPricingEditor.unnamedPlan') }}
+                        </div>
+                        <button type="button" class="btn btn-ghost btn-sm text-red-500" @click="removeLandingPricingPlan(idx)">
+                          <Icon name="trash" size="sm" :stroke-width="2" />
+                        </button>
+                      </div>
+
+                      <div class="mt-3 grid gap-4 md:grid-cols-2">
+                        <div>
+                          <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.planId') }}</label>
+                          <input v-model="plan.id" type="text" class="input" placeholder="starter / pro / enterprise" />
+                        </div>
+                        <div>
+                          <label class="input-label">{{ t('common.name') }}</label>
+                          <input v-model="plan.name" type="text" class="input" />
+                        </div>
+                      </div>
+
+                      <div class="mt-3 grid gap-4 md:grid-cols-2">
+                        <div>
+                          <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.planBadge') }}</label>
+                          <input v-model="plan.badge" type="text" class="input" />
+                        </div>
+                        <div class="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 dark:border-dark-600">
+                          <div>
+                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                              {{ t('admin.settings.site.landingPricingEditor.planHighlighted') }}
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                              {{ t('admin.settings.site.landingPricingEditor.planHighlightedHint') }}
+                            </div>
+                          </div>
+                          <Toggle v-model="plan.highlighted" />
+                        </div>
+                      </div>
+
+                      <div class="mt-3">
+                        <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.planDescription') }}</label>
+                        <input v-model="plan.description" type="text" class="input" />
+                      </div>
+
+                      <!-- Backend binding -->
+                      <div class="mt-3 grid gap-4 md:grid-cols-2">
+                        <div>
+                          <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.planGroup') }}</label>
+                          <select v-model.number="plan.group_id" class="input">
+                            <option :value="0">{{ t('admin.settings.site.landingPricingEditor.planGroupNone') }}</option>
+                            <option v-for="g in subscriptionGroupOptions" :key="g.id" :value="g.id">
+                              {{ g.name }} (#{{ g.id }})
+                            </option>
+                          </select>
+                          <p v-if="pricingGroupsLoading" class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {{ t('common.loading') }}
+                          </p>
+                          <p v-else class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {{ t('admin.settings.site.landingPricingEditor.planGroupHint') }}
+                          </p>
+                        </div>
+                        <div v-if="plan.group_id && plan.group_id > 0">
+                          <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.validityDays') }}</label>
+                          <div class="grid grid-cols-3 gap-2">
+                            <input v-model.number="plan.validity_days.week" type="number" min="0" class="input" :placeholder="t('admin.settings.site.landingPricingEditor.period.week')" />
+                            <input v-model.number="plan.validity_days.month" type="number" min="0" class="input" :placeholder="t('admin.settings.site.landingPricingEditor.period.month')" />
+                            <input v-model.number="plan.validity_days.custom" type="number" min="0" class="input" :placeholder="t('admin.settings.site.landingPricingEditor.period.custom')" />
+                          </div>
+                          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {{ t('admin.settings.site.landingPricingEditor.validityDaysHint') }}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div v-if="plan.group_id && plan.group_id > 0" class="mt-3">
+                        <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.groupFields') }}</label>
+                        <div class="flex flex-wrap gap-2">
+                          <button
+                            v-for="f in pricingGroupFieldOptions"
+                            :key="f.key"
+                            type="button"
+                            class="btn btn-secondary btn-sm"
+                            :class="plan.group_fields?.includes(f.key) ? 'btn-primary' : 'btn-secondary'"
+                            @click="togglePlanGroupField(plan, f.key)"
+                          >
+                            {{ f.label }}
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- Pricing -->
+                      <div class="mt-3 grid gap-4 md:grid-cols-3">
+                        <div>
+                          <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.priceWeek') }}</label>
+                          <input v-model.number="plan.price.week" type="number" min="0" class="input" />
+                        </div>
+                        <div>
+                          <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.priceMonth') }}</label>
+                          <input v-model.number="plan.price.month" type="number" min="0" class="input" />
+                        </div>
+                        <div>
+                          <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.priceCustom') }}</label>
+                          <input v-model="plan.price.custom" type="text" class="input" />
+                        </div>
+                      </div>
+
+                      <!-- Widgets -->
+                      <div class="mt-3">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                          <label class="input-label mb-0">{{ t('admin.settings.site.landingPricingEditor.widgets') }}</label>
+                          <div class="flex flex-wrap gap-2">
+                            <button
+                              v-for="opt in planWidgetTypeOptions"
+                              :key="opt.type"
+                              type="button"
+                              class="btn btn-secondary btn-sm"
+                              :disabled="opt.type === 'group_field' && (!plan.group_id || plan.group_id <= 0)"
+                              @click="addPlanWidget(plan, opt.type)"
+                            >
+                              <Icon name="plus" size="sm" class="mr-1.5" :stroke-width="2" />
+                              {{ opt.label }}
+                            </button>
+                          </div>
+                        </div>
+
+                        <p v-if="!plan.meta.widgets.length" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          {{ t('admin.settings.site.landingPricingEditor.noWidgets') }}
+                        </p>
+
+                        <div v-else class="mt-2 space-y-2">
+                          <div
+                            v-for="(w, wIdx) in plan.meta.widgets"
+                            :key="wIdx"
+                            class="rounded-lg border border-gray-200 p-3 dark:border-dark-600"
+                          >
+                            <div class="flex items-center justify-between gap-2">
+                              <div class="text-xs font-medium text-gray-900 dark:text-white">
+                                {{ t(`admin.settings.site.landingPricingEditor.widgetType.${w.type === 'group_field' ? 'groupField' : w.type}`) }}
+                              </div>
+                              <div class="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  class="btn btn-ghost btn-sm"
+                                  :disabled="wIdx === 0"
+                                  @click="movePlanWidget(plan, wIdx, -1)"
+                                >
+                                  <Icon name="chevronUp" size="sm" :stroke-width="2" />
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn btn-ghost btn-sm"
+                                  :disabled="wIdx === plan.meta.widgets.length - 1"
+                                  @click="movePlanWidget(plan, wIdx, 1)"
+                                >
+                                  <Icon name="chevronDown" size="sm" :stroke-width="2" />
+                                </button>
+                                <button type="button" class="btn btn-ghost btn-sm text-red-500" @click="removePlanWidget(plan, wIdx)">
+                                  <Icon name="trash" size="sm" :stroke-width="2" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div class="mt-2">
+                              <div class="mb-3 flex flex-wrap items-center gap-2">
+                                <div class="text-xs text-gray-500 dark:text-gray-400">
+                                  {{ t('admin.settings.site.landingPricingEditor.widgetWhen') }}
+                                </div>
+                                <button
+                                  type="button"
+                                  class="btn btn-sm"
+                                  :class="isWidgetPeriodSelected(w, 'week') ? 'btn-primary' : 'btn-secondary'"
+                                  @click="toggleWidgetPeriod(w, 'week')"
+                                >
+                                  {{ t('admin.settings.site.landingPricingEditor.period.week') }}
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn btn-sm"
+                                  :class="isWidgetPeriodSelected(w, 'month') ? 'btn-primary' : 'btn-secondary'"
+                                  @click="toggleWidgetPeriod(w, 'month')"
+                                >
+                                  {{ t('admin.settings.site.landingPricingEditor.period.month') }}
+                                </button>
+                                <button
+                                  type="button"
+                                  class="btn btn-sm"
+                                  :class="isWidgetPeriodSelected(w, 'custom') ? 'btn-primary' : 'btn-secondary'"
+                                  @click="toggleWidgetPeriod(w, 'custom')"
+                                >
+                                  {{ t('admin.settings.site.landingPricingEditor.period.custom') }}
+                                </button>
+                                <span
+                                  v-if="!w.when?.periods?.length"
+                                  class="text-xs text-gray-500 dark:text-gray-400"
+                                >
+                                  {{ t('admin.settings.site.landingPricingEditor.widgetWhenAll') }}
+                                </span>
+                              </div>
+
+                              <template v-if="w.type === 'text'">
+                                <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.text') }}</label>
+                                <input v-model="w.text" type="text" class="input" />
+                              </template>
+
+                              <template v-else-if="w.type === 'kv'">
+                                <div class="grid gap-3 md:grid-cols-2">
+                                  <div>
+                                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.label') }}</label>
+                                    <input v-model="w.label" type="text" class="input" />
+                                  </div>
+                                  <div>
+                                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.value') }}</label>
+                                    <input v-model="w.value" type="text" class="input" />
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template v-else-if="w.type === 'group_field'">
+                                <div class="grid gap-3 md:grid-cols-2">
+                                  <div>
+                                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.groupFieldKey') }}</label>
+                                    <select v-model="w.key" class="input">
+                                      <option v-for="f in pricingGroupFieldOptions" :key="f.key" :value="f.key">
+                                        {{ f.label }}
+                                      </option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.groupFieldLabel') }}</label>
+                                    <input v-model="w.label" type="text" class="input" />
+                                  </div>
+                                </div>
+                                <p v-if="!plan.group_id || plan.group_id <= 0" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                                  {{ t('admin.settings.site.landingPricingEditor.widgetGroupFieldRequiresGroup') }}
+                                </p>
+                              </template>
+
+                              <template v-else-if="w.type === 'list'">
+                                <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.listTitle') }}</label>
+                                <input v-model="w.title" type="text" class="input" />
+                                <div class="mt-2">
+                                  <div class="flex items-center justify-between gap-3">
+                                    <label class="input-label mb-0">{{ t('admin.settings.site.landingPricingEditor.widgetField.listItems') }}</label>
+                                    <button type="button" class="btn btn-secondary btn-sm" @click="addWidgetListItem(w)">
+                                      <Icon name="plus" size="sm" class="mr-1.5" :stroke-width="2" />
+                                      {{ t('admin.settings.site.landingPricingEditor.add') }}
+                                    </button>
+                                  </div>
+                                  <div class="mt-2 space-y-2">
+                                    <div v-for="(_, itemIdx) in w.items" :key="itemIdx" class="flex items-center gap-2">
+                                      <input v-model="w.items[itemIdx]" type="text" class="input flex-1" />
+                                      <button type="button" class="btn btn-ghost btn-sm text-red-500" @click="removeWidgetListItem(w, itemIdx)">
+                                        <Icon name="trash" size="sm" :stroke-width="2" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template v-else-if="w.type === 'tags'">
+                                <div class="grid gap-3 md:grid-cols-2">
+                                  <div>
+                                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.tagsTone') }}</label>
+                                    <select v-model="w.tone" class="input">
+                                      <option value="gray">{{ t('admin.settings.site.landingPricingEditor.widgetTone.gray') }}</option>
+                                      <option value="primary">{{ t('admin.settings.site.landingPricingEditor.widgetTone.primary') }}</option>
+                                      <option value="gold">{{ t('admin.settings.site.landingPricingEditor.widgetTone.gold') }}</option>
+                                    </select>
+                                  </div>
+                                </div>
+                                <div class="mt-2">
+                                  <div class="flex items-center justify-between gap-3">
+                                    <label class="input-label mb-0">{{ t('admin.settings.site.landingPricingEditor.widgetField.tags') }}</label>
+                                    <button type="button" class="btn btn-secondary btn-sm" @click="w.tags.push('')">
+                                      <Icon name="plus" size="sm" class="mr-1.5" :stroke-width="2" />
+                                      {{ t('admin.settings.site.landingPricingEditor.add') }}
+                                    </button>
+                                  </div>
+                                  <div class="mt-2 space-y-2">
+                                    <div v-for="(_, tagIdx) in w.tags" :key="tagIdx" class="flex items-center gap-2">
+                                      <input v-model="w.tags[tagIdx]" type="text" class="input flex-1" />
+                                      <button type="button" class="btn btn-ghost btn-sm text-red-500" @click="w.tags.splice(tagIdx, 1)">
+                                        <Icon name="trash" size="sm" :stroke-width="2" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template v-else-if="w.type === 'divider'">
+                                <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.dividerLabel') }}</label>
+                                <input v-model="w.label" type="text" class="input" />
+                              </template>
+
+                              <template v-else-if="w.type === 'metric'">
+                                <div class="grid gap-3 md:grid-cols-2">
+                                  <div>
+                                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.metricLabel') }}</label>
+                                    <input v-model="w.label" type="text" class="input" />
+                                  </div>
+                                  <div>
+                                    <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.metricValue') }}</label>
+                                    <input v-model="w.value" type="text" class="input" />
+                                  </div>
+                                </div>
+                                <div class="mt-2">
+                                  <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.widgetField.metricHint') }}</label>
+                                  <input v-model="w.hint" type="text" class="input" />
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div v-if="planPreviewDisplayLines(plan).length" class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-700 dark:bg-dark-900/20">
+                          <div class="text-xs font-medium text-gray-900 dark:text-white">{{ t('common.preview') }}</div>
+                          <ul class="mt-2 space-y-1 text-xs text-gray-700 dark:text-dark-200">
+                            <li v-for="(line, pIdx) in planPreviewDisplayLines(plan)" :key="pIdx">{{ line }}</li>
+                          </ul>
+                        </div>
+                      </div>
+
+                      <!-- Features -->
+                      <div class="mt-3">
+                        <div class="flex items-center justify-between gap-3">
+                          <label class="input-label mb-0">{{ t('admin.settings.site.landingPricingEditor.features') }}</label>
+                          <button type="button" class="btn btn-secondary btn-sm" @click="addPlanFeature(plan)">
+                            <Icon name="plus" size="sm" class="mr-1.5" :stroke-width="2" />
+                            {{ t('admin.settings.site.landingPricingEditor.add') }}
+                          </button>
+                        </div>
+                        <div class="mt-2 space-y-2">
+                          <div v-for="(_, fIdx) in plan.features" :key="fIdx" class="flex items-center gap-2">
+                            <input v-model="plan.features[fIdx]" type="text" class="input flex-1" />
+                            <button type="button" class="btn btn-ghost btn-sm text-red-500" @click="removePlanFeature(plan, fIdx)">
+                              <Icon name="trash" size="sm" :stroke-width="2" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Pay-as-you-go -->
+                <div class="rounded-xl border border-gray-200 p-4 dark:border-dark-600">
+                  <div class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ t('admin.settings.site.landingPricingEditor.payg') }}
+                  </div>
+                  <div class="mt-3 grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.paygTitle') }}</label>
+                      <input v-model="landingPricingDraft.payg.title" type="text" class="input" />
+                    </div>
+                    <div>
+                      <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.paygSubtitle') }}</label>
+                      <input v-model="landingPricingDraft.payg.subtitle" type="text" class="input" />
+                    </div>
+                  </div>
+                  <div class="mt-3 grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.paygCtaLabel') }}</label>
+                      <input v-model="landingPricingDraft.payg.cta_label" type="text" class="input" />
+                    </div>
+                    <div>
+                      <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.paygNote') }}</label>
+                      <input v-model="landingPricingDraft.payg.note" type="text" class="input" />
+                    </div>
+                  </div>
+                  <div class="mt-3">
+                    <div class="flex items-center justify-between gap-3">
+                      <label class="input-label mb-0">{{ t('admin.settings.site.landingPricingEditor.features') }}</label>
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        @click="landingPricingDraft.payg.features.push('')"
+                      >
+                        <Icon name="plus" size="sm" class="mr-1.5" :stroke-width="2" />
+                        {{ t('admin.settings.site.landingPricingEditor.add') }}
+                      </button>
+                    </div>
+                    <div class="mt-2 space-y-2">
+                      <div v-for="(_, idx) in landingPricingDraft.payg.features" :key="idx" class="flex items-center gap-2">
+                        <input v-model="landingPricingDraft.payg.features[idx]" type="text" class="input flex-1" />
+                        <button type="button" class="btn btn-ghost btn-sm text-red-500" @click="landingPricingDraft.payg.features.splice(idx, 1)">
+                          <Icon name="trash" size="sm" :stroke-width="2" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Note -->
+                <div>
+                  <label class="input-label">{{ t('admin.settings.site.landingPricingEditor.note') }}</label>
+                  <input v-model="landingPricingDraft.note" type="text" class="input" />
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.site.landingPricingConfigHint') }}
+                  </p>
+                </div>
+
+                <p v-if="landingPricingConfigError" class="text-xs text-red-500">
+                  {{ landingPricingConfigError }}
+                </p>
+              </div>
+
+              <!-- JSON editor -->
+              <div v-else class="mt-2">
+                <textarea
+                  v-model="form.landing_pricing_config"
+                  rows="12"
+                  class="input mt-2 font-mono text-xs"
+                  :placeholder="t('admin.settings.site.landingPricingConfigPlaceholder')"
+                ></textarea>
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.site.landingPricingConfigHint') }}
+                </p>
+                <p v-if="landingPricingConfigError" class="mt-1 text-xs text-red-500">
+                  {{ landingPricingConfigError }}
+                </p>
+              </div>
+            </div>
+
+              <!-- Hide CCS Import Button -->
+              <div class="flex items-center justify-between rounded-xl border border-gray-200/70 bg-white/50 p-4 dark:border-dark-700/60 dark:bg-dark-900/20">
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t('admin.settings.site.hideCcsImportButton')
+                  }}</label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.site.hideCcsImportButtonHint') }}
+                  </p>
+                </div>
+                <Toggle v-model="form.hide_ccs_import_button" />
+              </div>
             </div>
           </div>
         </div>
+          </section>
 
-        <!-- SMTP Settings - Only show when email verification is enabled -->
-        <div v-if="form.email_verify_enabled" class="card">
+          <!-- SMTP Settings - Only show when email verification is enabled -->
+          <section
+            v-if="form.email_verify_enabled"
+            :id="SECTION_IDS.smtp"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.smtp)"
+          >
+            <div class="card">
           <div
             class="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-dark-700"
           >
@@ -934,9 +1781,15 @@
             </div>
           </div>
         </div>
+          </section>
 
-        <!-- Purchase Subscription Page -->
-        <div class="card">
+          <!-- Purchase Subscription Page -->
+          <section
+            :id="SECTION_IDS.purchase"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.purchase)"
+          >
+            <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.purchase.title') }}
@@ -979,9 +1832,16 @@
             </div>
           </div>
         </div>
+          </section>
 
-        <!-- Send Test Email - Only show when email verification is enabled -->
-        <div v-if="form.email_verify_enabled" class="card">
+          <!-- Send Test Email - Only show when email verification is enabled -->
+          <section
+            v-if="form.email_verify_enabled"
+            :id="SECTION_IDS.testEmail"
+            class="scroll-mt-28"
+            v-show="isSectionVisible(SECTION_IDS.testEmail)"
+          >
+            <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
               {{ t('admin.settings.testEmail.title') }}
@@ -1038,35 +1898,15 @@
             </div>
           </div>
         </div>
-
-        <!-- Save Button -->
-        <div class="flex justify-end">
-          <button type="submit" :disabled="saving" class="btn btn-primary">
-            <svg v-if="saving" class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                stroke-width="4"
-              ></circle>
-              <path
-                class="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              ></path>
-            </svg>
-            {{ saving ? t('admin.settings.saving') : t('admin.settings.saveSettings') }}
-          </button>
-        </div>
-      </form>
+          </section>
+        </form>
+      </div>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api'
 import type { SystemSettings, UpdateSettingsRequest } from '@/api/admin/settings'
@@ -1075,10 +1915,38 @@ import Icon from '@/components/icons/Icon.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { useAppStore } from '@/stores'
+import {
+  DEFAULT_LANDING_PRICING_CONFIG_V1_JSON,
+  DEFAULT_LANDING_PRICING_CONFIG_V1,
+  parseLandingPricingConfig,
+  type PricingGroupFieldKey,
+  type PricingPlanWidgetType,
+  type PricingPlanWidgetTone,
+  type PricingPeriod,
+  type PricingTab
+} from '@/utils/landingPricing'
+import type { AdminGroup } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
+
+const SECTION_IDS = {
+  adminApiKey: 'admin-api-key',
+  streamTimeout: 'stream-timeout',
+  gateway: 'gateway',
+  registration: 'registration',
+  referral: 'referral',
+  turnstile: 'turnstile',
+  linuxdo: 'linuxdo',
+  defaults: 'defaults',
+  site: 'site',
+  smtp: 'smtp',
+  purchase: 'purchase',
+  testEmail: 'test-email'
+} as const
+
+type SectionId = (typeof SECTION_IDS)[keyof typeof SECTION_IDS]
 
 const loading = ref(true)
 const saving = ref(false)
@@ -1086,6 +1954,236 @@ const testingSmtp = ref(false)
 const sendingTestEmail = ref(false)
 const testEmailAddress = ref('')
 const logoError = ref('')
+const landingPricingConfigError = ref('')
+const landingPricingEditorMode = ref<'ui' | 'json'>('ui')
+const siteSettingsTab = ref<'general' | 'home' | 'subscriptions'>('general')
+const sectionQuery = ref('')
+const activeSectionId = ref<SectionId>(SECTION_IDS.adminApiKey)
+const mobileSectionJump = ref<SectionId>(SECTION_IDS.adminApiKey)
+
+type EditableLandingPricingPlan = {
+  id: string
+  name: string
+  badge?: string
+  description?: string
+  highlighted: boolean
+  group_id?: number
+  group_fields?: PricingGroupFieldKey[]
+  validity_days: Partial<Record<PricingPeriod, number>>
+  meta: {
+    widgets: EditableLandingPricingWidget[]
+  }
+  price: {
+    week?: number
+    month?: number
+    custom?: string
+  }
+  features: string[]
+}
+
+type EditableLandingPricingWidget =
+  {
+    when?: {
+      periods?: PricingPeriod[]
+    }
+  } & (
+    | {
+        type: 'text'
+        text: string
+      }
+    | {
+        type: 'kv'
+        label: string
+        value: string
+      }
+    | {
+        type: 'group_field'
+        key: PricingGroupFieldKey
+        label?: string
+      }
+    | {
+        type: 'list'
+        title?: string
+        items: string[]
+      }
+    | {
+        type: 'tags'
+        tags: string[]
+        tone?: PricingPlanWidgetTone
+      }
+    | {
+        type: 'divider'
+        label?: string
+      }
+    | {
+        type: 'metric'
+        label: string
+        value: string
+        hint?: string
+      }
+  )
+
+type EditableLandingPricingConfigV1 = {
+  version: 1
+  currency: 'CNY'
+  default_tab: PricingTab
+  subscription: {
+    title: string
+    subtitle?: string
+    default_period: PricingPeriod
+    periods: Array<{ key: PricingPeriod; label: string }>
+    plans: EditableLandingPricingPlan[]
+  }
+  payg: {
+    title: string
+    subtitle?: string
+    cta_label?: string
+    features: string[]
+    note?: string
+  }
+  note?: string
+}
+
+const landingPricingDraft = ref<EditableLandingPricingConfigV1>(createLandingPricingDraft())
+const pricingGroupsLoading = ref(false)
+const pricingGroups = ref<AdminGroup[]>([])
+
+const subscriptionGroupOptions = computed(() => {
+  return pricingGroups.value
+    .filter((g) => g.subscription_type === 'subscription' && g.status === 'active')
+    .map((g) => ({ id: g.id, name: g.name, description: g.description || '' }))
+})
+
+const pricingGroupFieldOptions = computed(() => {
+  return [
+    { key: 'daily_limit_usd' as PricingGroupFieldKey, label: t('admin.settings.site.landingPricingGroupFields.daily') },
+    { key: 'weekly_limit_usd' as PricingGroupFieldKey, label: t('admin.settings.site.landingPricingGroupFields.weekly') },
+    { key: 'monthly_limit_usd' as PricingGroupFieldKey, label: t('admin.settings.site.landingPricingGroupFields.monthly') },
+    { key: 'user_concurrency' as PricingGroupFieldKey, label: t('admin.settings.site.landingPricingGroupFields.concurrency') },
+    { key: 'rate_multiplier' as PricingGroupFieldKey, label: t('admin.settings.site.landingPricingGroupFields.rate') }
+  ]
+})
+
+const pricingGroupsById = computed(() => {
+  const m = new Map<number, AdminGroup>()
+  for (const g of pricingGroups.value) m.set(g.id, g)
+  return m
+})
+
+const planWidgetTypeOptions = computed(() => {
+  return [
+    { type: 'text' as PricingPlanWidgetType, label: t('admin.settings.site.landingPricingEditor.widgetType.text') },
+    { type: 'kv' as PricingPlanWidgetType, label: t('admin.settings.site.landingPricingEditor.widgetType.kv') },
+    { type: 'group_field' as PricingPlanWidgetType, label: t('admin.settings.site.landingPricingEditor.widgetType.groupField') },
+    { type: 'list' as PricingPlanWidgetType, label: t('admin.settings.site.landingPricingEditor.widgetType.list') },
+    { type: 'tags' as PricingPlanWidgetType, label: t('admin.settings.site.landingPricingEditor.widgetType.tags') },
+    { type: 'divider' as PricingPlanWidgetType, label: t('admin.settings.site.landingPricingEditor.widgetType.divider') },
+    { type: 'metric' as PricingPlanWidgetType, label: t('admin.settings.site.landingPricingEditor.widgetType.metric') }
+  ]
+})
+
+function pricingGroupFieldLabel(key: PricingGroupFieldKey): string {
+  const found = pricingGroupFieldOptions.value.find((x) => x.key === key)
+  return found?.label || key
+}
+
+function pricingGroupFieldValue(key: PricingGroupFieldKey, g: AdminGroup): string | null {
+  const unlimited = t('admin.subscriptions.unlimited')
+  switch (key) {
+    case 'daily_limit_usd':
+      return g.daily_limit_usd == null ? unlimited : `$${g.daily_limit_usd}`
+    case 'weekly_limit_usd':
+      return g.weekly_limit_usd == null ? unlimited : `$${g.weekly_limit_usd}`
+    case 'monthly_limit_usd':
+      return g.monthly_limit_usd == null ? unlimited : `$${g.monthly_limit_usd}`
+    case 'user_concurrency':
+      return g.user_concurrency <= 0 ? unlimited : String(g.user_concurrency)
+    case 'rate_multiplier':
+      return `x${g.rate_multiplier}`
+    default:
+      return null
+  }
+}
+
+function pricingGroupFieldLine(key: PricingGroupFieldKey, g: AdminGroup, overrideLabel?: string): string | null {
+  const value = pricingGroupFieldValue(key, g)
+  if (!value) return null
+  const label = overrideLabel && overrideLabel.trim() ? overrideLabel.trim() : pricingGroupFieldLabel(key)
+  return `${label}: ${value}`
+}
+
+function planPreviewDisplayLines(plan: EditableLandingPricingPlan): string[] {
+  const g = plan.group_id ? pricingGroupsById.value.get(plan.group_id) : undefined
+  const previewPeriod: PricingPeriod = landingPricingDraft.value.subscription.default_period
+
+  const lines: string[] = []
+
+  // legacy group_fields
+  if (g && plan.group_fields?.length) {
+    for (const key of plan.group_fields) {
+      const line = pricingGroupFieldLine(key, g)
+      if (line) lines.push(line)
+    }
+  }
+
+  // widgets
+  for (const w of plan.meta.widgets) {
+    const whenPeriods = w.when?.periods
+    if (whenPeriods && whenPeriods.length && !whenPeriods.includes(previewPeriod)) {
+      continue
+    }
+
+    if (w.type === 'text') {
+      if (w.text.trim()) lines.push(w.text.trim())
+      continue
+    }
+    if (w.type === 'kv') {
+      const label = w.label.trim()
+      const value = w.value.trim()
+      if (label && value) lines.push(`${label}: ${value}`)
+      continue
+    }
+    if (w.type === 'group_field') {
+      if (!g) continue
+      const line = pricingGroupFieldLine(w.key, g, w.label)
+      if (line) lines.push(line)
+      continue
+    }
+    if (w.type === 'list') {
+      const title = (w.title || '').trim()
+      for (const item of w.items) {
+        if (!item.trim()) continue
+        lines.push(title ? `${title}: ${item.trim()}` : item.trim())
+      }
+      continue
+    }
+    if (w.type === 'tags') {
+      const tags = (w.tags || []).map((x) => (typeof x === 'string' ? x.trim() : '')).filter((x) => !!x)
+      if (tags.length) lines.push(`Tags: ${tags.join(', ')}`)
+      continue
+    }
+    if (w.type === 'divider') {
+      const label = (w.label || '').trim()
+      lines.push(label ? `--- ${label} ---` : '---')
+      continue
+    }
+    if (w.type === 'metric') {
+      const label = (w.label || '').trim()
+      const value = (w.value || '').trim()
+      if (label && value) lines.push(`${label}: ${value}`)
+      const hint = (w.hint || '').trim()
+      if (hint) lines.push(hint)
+      continue
+    }
+  }
+
+  // legacy features
+  for (const f of plan.features) {
+    if (typeof f === 'string' && f.trim()) lines.push(f.trim())
+  }
+
+  return lines
+}
 
 // Admin API Key 状态
 const adminApiKeyLoading = ref(true)
@@ -1104,6 +2202,22 @@ const streamTimeoutForm = reactive({
   threshold_count: 3,
   threshold_window_minutes: 10
 })
+const initialStreamTimeoutState = ref<string | null>(null)
+
+function streamTimeoutStateSnapshot(): string {
+  return JSON.stringify({
+    enabled: streamTimeoutForm.enabled,
+    action: streamTimeoutForm.action,
+    temp_unsched_minutes: streamTimeoutForm.temp_unsched_minutes,
+    threshold_count: streamTimeoutForm.threshold_count,
+    threshold_window_minutes: streamTimeoutForm.threshold_window_minutes
+  })
+}
+
+const streamTimeoutDirty = computed(() => {
+  if (initialStreamTimeoutState.value == null) return false
+  return streamTimeoutStateSnapshot() !== initialStreamTimeoutState.value
+})
 
 type SettingsForm = SystemSettings & {
   smtp_password: string
@@ -1118,6 +2232,9 @@ const form = reactive<SettingsForm>({
   password_reset_enabled: false,
   totp_enabled: false,
   totp_encryption_key_configured: false,
+  referral_inviter_bonus: 0,
+  referral_invitee_bonus: 0,
+  referral_commission_rate: 0,
   default_balance: 0,
   default_concurrency: 1,
   site_name: 'Sub2API',
@@ -1127,6 +2244,9 @@ const form = reactive<SettingsForm>({
   contact_info: '',
   doc_url: '',
   home_content: '',
+  landing_pricing_enabled: true,
+  landing_pricing_config: '',
+  subscriptions_enabled: true,
   hide_ccs_import_button: false,
   purchase_subscription_enabled: false,
   purchase_subscription_url: '',
@@ -1158,12 +2278,200 @@ const form = reactive<SettingsForm>({
   // Identity patch (Claude -> Gemini)
   enable_identity_patch: true,
   identity_patch_prompt: '',
+  // Gateway runtime toggles
+  gateway_fix_orphaned_tool_results: true,
   // Ops monitoring (vNext)
   ops_monitoring_enabled: true,
   ops_realtime_monitoring_enabled: true,
   ops_query_mode_default: 'auto',
   ops_metrics_interval_seconds: 60
 })
+
+const savingAny = computed(() => saving.value || streamTimeoutSaving.value)
+
+const navItems = computed(() => {
+  const items: Array<{ id: SectionId; label: string }> = [
+    { id: SECTION_IDS.adminApiKey, label: t('admin.settings.adminApiKey.title') },
+    { id: SECTION_IDS.streamTimeout, label: t('admin.settings.streamTimeout.title') },
+    { id: SECTION_IDS.gateway, label: t('admin.settings.gateway.title') },
+    { id: SECTION_IDS.registration, label: t('admin.settings.registration.title') },
+    { id: SECTION_IDS.referral, label: t('admin.settings.referral.title') },
+    { id: SECTION_IDS.turnstile, label: t('admin.settings.turnstile.title') },
+    { id: SECTION_IDS.linuxdo, label: t('admin.settings.linuxdo.title') },
+    { id: SECTION_IDS.defaults, label: t('admin.settings.defaults.title') },
+    { id: SECTION_IDS.site, label: t('admin.settings.site.title') }
+  ]
+
+  if (form.email_verify_enabled) {
+    items.push({ id: SECTION_IDS.smtp, label: t('admin.settings.smtp.title') })
+  }
+
+  items.push({ id: SECTION_IDS.purchase, label: t('admin.settings.purchase.title') })
+
+  if (form.email_verify_enabled) {
+    items.push({ id: SECTION_IDS.testEmail, label: t('admin.settings.testEmail.title') })
+  }
+
+  return items
+})
+
+const filteredNavItems = computed(() => {
+  const q = sectionQuery.value.trim().toLowerCase()
+  if (!q) return navItems.value
+  return navItems.value.filter((item) => item.label.toLowerCase().includes(q))
+})
+
+const visibleSectionIds = computed(() => new Set(filteredNavItems.value.map((x) => x.id)))
+
+function isSectionVisible(id: SectionId): boolean {
+  return visibleSectionIds.value.has(id)
+}
+
+function scrollToSection(id: SectionId) {
+  const el = document.getElementById(id)
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  activeSectionId.value = id
+}
+
+watch(activeSectionId, (id) => {
+  mobileSectionJump.value = id
+})
+
+let sectionObserver: IntersectionObserver | null = null
+
+function refreshSectionObserver() {
+  sectionObserver?.disconnect()
+  if (typeof window === 'undefined') return
+
+  sectionObserver = new IntersectionObserver(
+    (entries) => {
+      const candidates = entries
+        .filter((e) => e.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+      if (!candidates.length) return
+      activeSectionId.value = (candidates[0].target as HTMLElement).id as SectionId
+    },
+    { root: null, rootMargin: '-20% 0px -70% 0px', threshold: [0.01, 0.1, 0.25] }
+  )
+
+  for (const item of filteredNavItems.value) {
+    const el = document.getElementById(item.id)
+    if (el) sectionObserver.observe(el)
+  }
+}
+
+watch(
+  () => loading.value,
+  (isLoading) => {
+    if (!isLoading) nextTick(refreshSectionObserver)
+  },
+  { immediate: true }
+)
+
+watch(
+  () => filteredNavItems.value.map((x) => x.id).join('|'),
+  () => nextTick(refreshSectionObserver)
+)
+
+onBeforeUnmount(() => {
+  sectionObserver?.disconnect()
+})
+
+const initialSettingsState = ref<string | null>(null)
+
+function stableJsonStringify(value: any): string {
+  if (value === undefined) return 'null'
+  if (value === null) return 'null'
+  if (typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableJsonStringify).join(',')}]`
+
+  const keys = Object.keys(value).sort()
+  const entries = keys
+    .filter((k) => value[k] !== undefined)
+    .map((k) => `${JSON.stringify(k)}:${stableJsonStringify(value[k])}`)
+  return `{${entries.join(',')}}`
+}
+
+function normalizeLandingPricingConfigSnapshot(raw: string): string {
+  const trimmed = typeof raw === 'string' ? raw.trim() : ''
+  if (!trimmed) return ''
+  try {
+    return stableJsonStringify(JSON.parse(trimmed))
+  } catch {
+    return trimmed
+  }
+}
+
+function buildUpdateSettingsPayload(): UpdateSettingsRequest {
+  const landingPricingConfig =
+    landingPricingEditorMode.value === 'ui'
+      ? buildLandingPricingJsonFromDraft()
+      : form.landing_pricing_config
+
+  return {
+    registration_enabled: form.registration_enabled,
+    email_verify_enabled: form.email_verify_enabled,
+    promo_code_enabled: form.promo_code_enabled,
+    password_reset_enabled: form.password_reset_enabled,
+    totp_enabled: form.totp_enabled,
+    referral_inviter_bonus: form.referral_inviter_bonus,
+    referral_invitee_bonus: form.referral_invitee_bonus,
+    referral_commission_rate: form.referral_commission_rate,
+    default_balance: form.default_balance,
+    default_concurrency: form.default_concurrency,
+    site_name: form.site_name,
+    site_logo: form.site_logo,
+    site_subtitle: form.site_subtitle,
+    api_base_url: form.api_base_url,
+    contact_info: form.contact_info,
+    doc_url: form.doc_url,
+    home_content: form.home_content,
+    landing_pricing_enabled: form.landing_pricing_enabled,
+    landing_pricing_config: landingPricingConfig,
+    subscriptions_enabled: form.subscriptions_enabled,
+    hide_ccs_import_button: form.hide_ccs_import_button,
+    purchase_subscription_enabled: form.purchase_subscription_enabled,
+    purchase_subscription_url: form.purchase_subscription_url,
+    smtp_host: form.smtp_host,
+    smtp_port: form.smtp_port,
+    smtp_username: form.smtp_username,
+    smtp_password: form.smtp_password || undefined,
+    smtp_from_email: form.smtp_from_email,
+    smtp_from_name: form.smtp_from_name,
+    smtp_use_tls: form.smtp_use_tls,
+    turnstile_enabled: form.turnstile_enabled,
+    turnstile_site_key: form.turnstile_site_key,
+    turnstile_secret_key: form.turnstile_secret_key || undefined,
+    linuxdo_connect_enabled: form.linuxdo_connect_enabled,
+    linuxdo_connect_client_id: form.linuxdo_connect_client_id,
+    linuxdo_connect_client_secret: form.linuxdo_connect_client_secret || undefined,
+    linuxdo_connect_redirect_url: form.linuxdo_connect_redirect_url,
+    enable_model_fallback: form.enable_model_fallback,
+    fallback_model_anthropic: form.fallback_model_anthropic,
+    fallback_model_openai: form.fallback_model_openai,
+    fallback_model_gemini: form.fallback_model_gemini,
+    fallback_model_antigravity: form.fallback_model_antigravity,
+    enable_identity_patch: form.enable_identity_patch,
+    identity_patch_prompt: form.identity_patch_prompt,
+    gateway_fix_orphaned_tool_results: form.gateway_fix_orphaned_tool_results
+  }
+}
+
+function settingsPayloadSnapshot(): string {
+  const payload = buildUpdateSettingsPayload()
+  return JSON.stringify({
+    ...payload,
+    landing_pricing_config: normalizeLandingPricingConfigSnapshot(payload.landing_pricing_config ?? '')
+  })
+}
+
+const settingsDirty = computed(() => {
+  if (initialSettingsState.value == null) return false
+  return settingsPayloadSnapshot() !== initialSettingsState.value
+})
+
+const hasUnsavedChanges = computed(() => settingsDirty.value || streamTimeoutDirty.value)
 
 // LinuxDo OAuth redirect URL suggestion
 const linuxdoRedirectUrlSuggestion = computed(() => {
@@ -1219,6 +2527,489 @@ function handleLogoUpload(event: Event) {
   input.value = ''
 }
 
+function deepCloneJson<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v)) as T
+}
+
+function createLandingPricingDraft(): EditableLandingPricingConfigV1 {
+  const draft = deepCloneJson(DEFAULT_LANDING_PRICING_CONFIG_V1) as EditableLandingPricingConfigV1
+  return hydrateLandingPricingDraftForUI(draft)
+}
+
+function syncLandingPricingDraftFromJson() {
+  const { config, error } = parseLandingPricingConfig(form.landing_pricing_config)
+  // In UI mode we tolerate JSON errors by falling back to default, but keep the error message visible.
+  landingPricingConfigError.value = error || ''
+  landingPricingDraft.value = hydrateLandingPricingDraftForUI(
+    deepCloneJson(config) as EditableLandingPricingConfigV1
+  )
+}
+
+function hydrateLandingPricingDraftForUI(draft: EditableLandingPricingConfigV1): EditableLandingPricingConfigV1 {
+  // Ensure required containers exist
+  if (!draft.subscription) {
+    draft.subscription = { title: '', default_period: 'month', periods: [], plans: [] } as any
+  }
+  if (!Array.isArray(draft.subscription.periods)) draft.subscription.periods = []
+  if (!Array.isArray(draft.subscription.plans)) draft.subscription.plans = []
+  if (!draft.payg) {
+    draft.payg = { title: '', features: [] } as any
+  }
+  if (!Array.isArray(draft.payg.features)) draft.payg.features = []
+
+  for (const plan of draft.subscription.plans as any[]) {
+    if (!plan || typeof plan !== 'object') continue
+    if (!plan.price || typeof plan.price !== 'object') plan.price = {}
+    if (!Array.isArray(plan.features)) plan.features = []
+    if (!plan.validity_days || typeof plan.validity_days !== 'object') plan.validity_days = {}
+    if (!plan.meta || typeof plan.meta !== 'object') plan.meta = {}
+    if (!Array.isArray(plan.meta.widgets)) plan.meta.widgets = []
+    if (typeof plan.highlighted !== 'boolean') plan.highlighted = false
+    if (typeof plan.group_id !== 'number' || !Number.isInteger(plan.group_id) || plan.group_id <= 0) {
+      plan.group_id = 0
+    }
+    if (!Array.isArray(plan.group_fields)) {
+      delete plan.group_fields
+    }
+
+    // Sanitize widgets for UI editing
+    plan.meta.widgets = (plan.meta.widgets as any[]).filter(
+      (w) =>
+        w &&
+        typeof w === 'object' &&
+        typeof w.type === 'string' &&
+        ['text', 'kv', 'group_field', 'list', 'tags', 'divider', 'metric'].includes(w.type)
+    )
+    for (const w of plan.meta.widgets as any[]) {
+      // Normalize widget conditions
+      if ('when' in w && w.when != null) {
+        if (!w.when || typeof w.when !== 'object') {
+          delete w.when
+        } else if ('periods' in w.when && w.when.periods != null) {
+          if (!Array.isArray(w.when.periods)) {
+            delete w.when.periods
+          } else {
+            const allowed: PricingPeriod[] = ['week', 'month', 'custom']
+            const uniq = new Set<PricingPeriod>()
+            for (const p of w.when.periods as any[]) {
+              if (allowed.includes(p)) uniq.add(p)
+            }
+            const nextPeriods = allowed.filter((p) => uniq.has(p))
+            if (nextPeriods.length) w.when.periods = nextPeriods
+            else delete w.when.periods
+          }
+        }
+        if (!w.when || (typeof w.when === 'object' && !('periods' in w.when))) {
+          delete w.when
+        }
+      }
+
+      if (w.type === 'text') {
+        if (typeof w.text !== 'string') w.text = ''
+      } else if (w.type === 'kv') {
+        if (typeof w.label !== 'string') w.label = ''
+        if (typeof w.value !== 'string') w.value = ''
+      } else if (w.type === 'group_field') {
+        if (typeof w.key !== 'string') w.key = 'monthly_limit_usd'
+        if (typeof w.label !== 'string') delete w.label
+      } else if (w.type === 'list') {
+        if (!Array.isArray(w.items)) w.items = []
+        w.items = (w.items as any[]).map((x) => (typeof x === 'string' ? x : ''))
+        if (typeof w.title !== 'string') delete w.title
+      } else if (w.type === 'tags') {
+        if (!Array.isArray(w.tags)) w.tags = []
+        w.tags = (w.tags as any[]).map((x) => (typeof x === 'string' ? x : ''))
+        const tone = typeof w.tone === 'string' ? w.tone : 'gray'
+        w.tone = (tone === 'primary' || tone === 'gray' || tone === 'gold') ? tone : 'gray'
+      } else if (w.type === 'divider') {
+        if (typeof w.label !== 'string') delete w.label
+      } else if (w.type === 'metric') {
+        if (typeof w.label !== 'string') w.label = ''
+        if (typeof w.value !== 'string') w.value = ''
+        if (typeof w.hint !== 'string') delete w.hint
+      }
+    }
+  }
+
+  return draft
+}
+
+function normalizeLandingPricingDraftForSave(draft: EditableLandingPricingConfigV1): EditableLandingPricingConfigV1 {
+  const next = deepCloneJson(draft) as EditableLandingPricingConfigV1
+
+  // Ensure required containers exist
+  if (!next.subscription) next.subscription = { title: '', default_period: 'month', periods: [], plans: [] } as any
+  if (!next.subscription.periods) next.subscription.periods = []
+  if (!next.subscription.plans) next.subscription.plans = []
+  if (!next.payg) next.payg = { title: '', features: [] } as any
+  if (!next.payg.features) next.payg.features = []
+
+  // Trim optional strings
+  next.subscription.title = (next.subscription.title || '').trim()
+  if (typeof next.subscription.subtitle === 'string') {
+    const v = next.subscription.subtitle.trim()
+    if (v) next.subscription.subtitle = v
+    else delete (next.subscription as any).subtitle
+  }
+  if (typeof next.note === 'string') {
+    const v = next.note.trim()
+    if (v) next.note = v
+    else delete (next as any).note
+  }
+
+  next.subscription.periods = next.subscription.periods
+    .map((p) => ({ key: p.key, label: (p.label || '').trim() }))
+    .filter((p) => p.label)
+
+  next.subscription.plans = next.subscription.plans.map((p) => {
+    const plan: any = p
+    plan.id = (plan.id || '').trim()
+    plan.name = (plan.name || '').trim()
+
+    // Required fields
+    if (!plan.price || typeof plan.price !== 'object') plan.price = {}
+    if (!Array.isArray(plan.features)) plan.features = []
+
+    if (typeof plan.badge === 'string') {
+      const v = plan.badge.trim()
+      if (v) plan.badge = v
+      else delete plan.badge
+    }
+    if (typeof plan.description === 'string') {
+      const v = plan.description.trim()
+      if (v) plan.description = v
+      else delete plan.description
+    }
+
+    // group_id: only keep positive integers
+    if (typeof plan.group_id !== 'number' || !Number.isInteger(plan.group_id) || plan.group_id <= 0) {
+      delete plan.group_id
+      delete plan.group_fields
+    }
+
+    if (Array.isArray(plan.group_fields)) {
+      plan.group_fields = plan.group_fields.filter((k: any) => typeof k === 'string')
+      if (!plan.group_fields.length) delete plan.group_fields
+    }
+
+    if (plan.validity_days && typeof plan.validity_days === 'object') {
+      const cleaned: any = {}
+      for (const [k, v] of Object.entries(plan.validity_days)) {
+        if (typeof v === 'number' && Number.isInteger(v) && v > 0) {
+          cleaned[k] = v
+        }
+      }
+      if (Object.keys(cleaned).length) plan.validity_days = cleaned
+      else delete plan.validity_days
+    } else {
+      delete plan.validity_days
+    }
+
+    if (plan.meta && typeof plan.meta === 'object' && Array.isArray(plan.meta.widgets)) {
+      const cleaned: any[] = []
+      for (const w of plan.meta.widgets as any[]) {
+        if (!w || typeof w !== 'object' || typeof w.type !== 'string') continue
+
+        const cleanedWhen = (() => {
+          if (!w.when || typeof w.when !== 'object') return undefined
+          const periodsRaw = (w.when as any).periods
+          if (!Array.isArray(periodsRaw) || periodsRaw.length === 0) return undefined
+          const allowed: PricingPeriod[] = ['week', 'month', 'custom']
+          const uniq = new Set<PricingPeriod>()
+          for (const p of periodsRaw as any[]) {
+            if (allowed.includes(p)) uniq.add(p)
+          }
+          const periods = allowed.filter((p) => uniq.has(p))
+          if (!periods.length) return undefined
+          return { periods }
+        })()
+
+        if (w.type === 'text') {
+          const text = typeof w.text === 'string' ? w.text.trim() : ''
+          if (!text) continue
+          const out: any = { type: 'text', text }
+          if (cleanedWhen) out.when = cleanedWhen
+          cleaned.push(out)
+          continue
+        }
+
+        if (w.type === 'kv') {
+          const label = typeof w.label === 'string' ? w.label.trim() : ''
+          const value = typeof w.value === 'string' ? w.value.trim() : ''
+          if (!label || !value) continue
+          const out: any = { type: 'kv', label, value }
+          if (cleanedWhen) out.when = cleanedWhen
+          cleaned.push(out)
+          continue
+        }
+
+        if (w.type === 'group_field') {
+          // Requires group_id to keep backend validation happy.
+          if (typeof plan.group_id !== 'number' || !Number.isInteger(plan.group_id) || plan.group_id <= 0) {
+            continue
+          }
+          const key = typeof w.key === 'string' ? (w.key as PricingGroupFieldKey) : undefined
+          if (!key) continue
+          const out: any = { type: 'group_field', key }
+          if (typeof w.label === 'string') {
+            const v = w.label.trim()
+            if (v) out.label = v
+          }
+          if (cleanedWhen) out.when = cleanedWhen
+          cleaned.push(out)
+          continue
+        }
+
+        if (w.type === 'list') {
+          const items = Array.isArray(w.items) ? w.items : []
+          const trimmedItems = items
+            .map((x: any) => (typeof x === 'string' ? x.trim() : ''))
+            .filter((x: string) => !!x)
+          if (!trimmedItems.length) continue
+          const out: any = { type: 'list', items: trimmedItems }
+          if (typeof w.title === 'string') {
+            const v = w.title.trim()
+            if (v) out.title = v
+          }
+          if (cleanedWhen) out.when = cleanedWhen
+          cleaned.push(out)
+          continue
+        }
+
+        if (w.type === 'tags') {
+          const tags = Array.isArray(w.tags)
+            ? w.tags.map((x: any) => (typeof x === 'string' ? x.trim() : '')).filter((x: string) => !!x)
+            : []
+          if (!tags.length) continue
+          const out: any = { type: 'tags', tags }
+          if (typeof w.tone === 'string') {
+            const tone = w.tone.trim()
+            if (tone === 'primary' || tone === 'gray' || tone === 'gold') out.tone = tone
+          }
+          if (cleanedWhen) out.when = cleanedWhen
+          cleaned.push(out)
+          continue
+        }
+
+        if (w.type === 'divider') {
+          const out: any = { type: 'divider' }
+          if (typeof w.label === 'string') {
+            const v = w.label.trim()
+            if (v) out.label = v
+          }
+          if (cleanedWhen) out.when = cleanedWhen
+          cleaned.push(out)
+          continue
+        }
+
+        if (w.type === 'metric') {
+          const label = typeof w.label === 'string' ? w.label.trim() : ''
+          const value = typeof w.value === 'string' ? w.value.trim() : ''
+          if (!label || !value) continue
+          const out: any = { type: 'metric', label, value }
+          if (typeof w.hint === 'string') {
+            const v = w.hint.trim()
+            if (v) out.hint = v
+          }
+          if (cleanedWhen) out.when = cleanedWhen
+          cleaned.push(out)
+          continue
+        }
+      }
+      if (cleaned.length) plan.meta = { widgets: cleaned }
+      else delete plan.meta
+    } else {
+      delete plan.meta
+    }
+
+    if (plan.highlighted !== true) {
+      delete plan.highlighted
+    }
+
+    plan.features = plan.features.map((x: any) => (typeof x === 'string' ? x.trim() : '')).filter((x: string) => !!x)
+
+    return plan as EditableLandingPricingPlan
+  })
+
+  // payg
+  next.payg.title = (next.payg.title || '').trim()
+  if (typeof next.payg.subtitle === 'string') {
+    const v = next.payg.subtitle.trim()
+    if (v) next.payg.subtitle = v
+    else delete (next.payg as any).subtitle
+  }
+  if (typeof next.payg.cta_label === 'string') {
+    const v = next.payg.cta_label.trim()
+    if (v) next.payg.cta_label = v
+    else delete (next.payg as any).cta_label
+  }
+  if (typeof next.payg.note === 'string') {
+    const v = next.payg.note.trim()
+    if (v) next.payg.note = v
+    else delete (next.payg as any).note
+  }
+  next.payg.features = next.payg.features.map((x) => (typeof x === 'string' ? x.trim() : '')).filter((x) => !!x)
+
+  return next
+}
+
+function buildLandingPricingJsonFromDraft(): string {
+  const normalized = normalizeLandingPricingDraftForSave(landingPricingDraft.value)
+  return JSON.stringify(normalized, null, 2)
+}
+
+function addLandingPricingPlan() {
+  const plan: EditableLandingPricingPlan = {
+    id: '',
+    name: '',
+    highlighted: false,
+    validity_days: {},
+    meta: { widgets: [] },
+    price: { week: 0, month: 0 },
+    features: []
+  }
+  landingPricingDraft.value.subscription.plans.push(plan)
+}
+
+function removeLandingPricingPlan(index: number) {
+  landingPricingDraft.value.subscription.plans.splice(index, 1)
+}
+
+function addPlanFeature(plan: EditableLandingPricingPlan) {
+  plan.features.push('')
+}
+
+function removePlanFeature(plan: EditableLandingPricingPlan, index: number) {
+  plan.features.splice(index, 1)
+}
+
+function createDefaultPlanWidget(type: PricingPlanWidgetType): EditableLandingPricingWidget {
+  if (type === 'text') return { type: 'text', text: '' }
+  if (type === 'kv') return { type: 'kv', label: '', value: '' }
+  if (type === 'group_field') return { type: 'group_field', key: 'monthly_limit_usd' }
+  if (type === 'list') return { type: 'list', title: '', items: [''] }
+  if (type === 'tags') return { type: 'tags', tags: [''], tone: 'gray' }
+  if (type === 'divider') return { type: 'divider', label: '' }
+  return { type: 'metric', label: '', value: '', hint: '' }
+}
+
+function addPlanWidget(plan: EditableLandingPricingPlan, type: PricingPlanWidgetType) {
+  if (!plan.meta) plan.meta = { widgets: [] }
+  if (!Array.isArray(plan.meta.widgets)) plan.meta.widgets = []
+
+  if (type === 'group_field' && (!plan.group_id || plan.group_id <= 0)) {
+    return
+  }
+
+  plan.meta.widgets.push(createDefaultPlanWidget(type))
+}
+
+function removePlanWidget(plan: EditableLandingPricingPlan, index: number) {
+  plan.meta.widgets.splice(index, 1)
+}
+
+function movePlanWidget(plan: EditableLandingPricingPlan, index: number, delta: number) {
+  const nextIndex = index + delta
+  if (nextIndex < 0 || nextIndex >= plan.meta.widgets.length) return
+  const [item] = plan.meta.widgets.splice(index, 1)
+  plan.meta.widgets.splice(nextIndex, 0, item)
+}
+
+function addWidgetListItem(widget: EditableLandingPricingWidget) {
+  if (widget.type !== 'list') return
+  widget.items.push('')
+}
+
+function removeWidgetListItem(widget: EditableLandingPricingWidget, index: number) {
+  if (widget.type !== 'list') return
+  widget.items.splice(index, 1)
+}
+
+function isWidgetPeriodSelected(widget: EditableLandingPricingWidget, period: PricingPeriod): boolean {
+  const periods = widget.when?.periods
+  if (!periods || !periods.length) return false
+  return periods.includes(period)
+}
+
+function toggleWidgetPeriod(widget: EditableLandingPricingWidget, period: PricingPeriod) {
+  if (!widget.when) widget.when = {}
+  if (!widget.when.periods) widget.when.periods = []
+
+  const idx = widget.when.periods.indexOf(period)
+  if (idx >= 0) {
+    widget.when.periods.splice(idx, 1)
+  } else {
+    widget.when.periods.push(period)
+  }
+
+  // Keep stable order
+  widget.when.periods = widget.when.periods.filter((p) => p === 'week' || p === 'month' || p === 'custom')
+  const order: PricingPeriod[] = ['week', 'month', 'custom']
+  widget.when.periods.sort((a, b) => order.indexOf(a) - order.indexOf(b))
+
+  if (!widget.when.periods.length) {
+    delete widget.when.periods
+  }
+  if (!widget.when.periods) {
+    delete widget.when
+  }
+}
+
+function togglePlanGroupField(plan: EditableLandingPricingPlan, key: PricingGroupFieldKey) {
+  if (!plan.group_fields) plan.group_fields = []
+  const idx = plan.group_fields.indexOf(key)
+  if (idx >= 0) {
+    plan.group_fields.splice(idx, 1)
+    if (!plan.group_fields.length) delete (plan as any).group_fields
+    return
+  }
+  plan.group_fields.push(key)
+}
+
+async function loadPricingGroups() {
+  pricingGroupsLoading.value = true
+  try {
+    pricingGroups.value = await adminAPI.groups.getAll()
+  } catch {
+    pricingGroups.value = []
+  } finally {
+    pricingGroupsLoading.value = false
+  }
+}
+
+function resetLandingPricingConfig() {
+  form.landing_pricing_config = DEFAULT_LANDING_PRICING_CONFIG_V1_JSON
+  landingPricingConfigError.value = ''
+  landingPricingDraft.value = createLandingPricingDraft()
+}
+
+function formatLandingPricingConfig() {
+  if (!form.landing_pricing_config || !form.landing_pricing_config.trim()) {
+    resetLandingPricingConfig()
+    return
+  }
+
+  try {
+    const parsed = JSON.parse(form.landing_pricing_config)
+    form.landing_pricing_config = JSON.stringify(parsed, null, 2)
+    landingPricingConfigError.value = ''
+  } catch (e: any) {
+    landingPricingConfigError.value = e?.message || t('common.invalidJson')
+  }
+}
+
+watch(
+  () => landingPricingEditorMode.value,
+  (mode) => {
+    if (mode === 'ui') {
+      syncLandingPricingDraftFromJson()
+      return
+    }
+    form.landing_pricing_config = buildLandingPricingJsonFromDraft()
+    landingPricingConfigError.value = ''
+  }
+)
+
 async function loadSettings() {
   loading.value = true
   try {
@@ -1227,6 +3018,11 @@ async function loadSettings() {
     form.smtp_password = ''
     form.turnstile_secret_key = ''
     form.linuxdo_connect_client_secret = ''
+    if (!form.landing_pricing_config) {
+      form.landing_pricing_config = DEFAULT_LANDING_PRICING_CONFIG_V1_JSON
+    }
+    syncLandingPricingDraftFromJson()
+    initialSettingsState.value = settingsPayloadSnapshot()
   } catch (error: any) {
     appStore.showError(
       t('admin.settings.failedToLoad') + ': ' + (error.message || t('common.unknownError'))
@@ -1239,54 +3035,39 @@ async function loadSettings() {
 async function saveSettings() {
   saving.value = true
   try {
-    const payload: UpdateSettingsRequest = {
-      registration_enabled: form.registration_enabled,
-      email_verify_enabled: form.email_verify_enabled,
-      promo_code_enabled: form.promo_code_enabled,
-      password_reset_enabled: form.password_reset_enabled,
-      totp_enabled: form.totp_enabled,
-      default_balance: form.default_balance,
-      default_concurrency: form.default_concurrency,
-      site_name: form.site_name,
-      site_logo: form.site_logo,
-      site_subtitle: form.site_subtitle,
-      api_base_url: form.api_base_url,
-      contact_info: form.contact_info,
-      doc_url: form.doc_url,
-      home_content: form.home_content,
-      hide_ccs_import_button: form.hide_ccs_import_button,
-      purchase_subscription_enabled: form.purchase_subscription_enabled,
-      purchase_subscription_url: form.purchase_subscription_url,
-      smtp_host: form.smtp_host,
-      smtp_port: form.smtp_port,
-      smtp_username: form.smtp_username,
-      smtp_password: form.smtp_password || undefined,
-      smtp_from_email: form.smtp_from_email,
-      smtp_from_name: form.smtp_from_name,
-      smtp_use_tls: form.smtp_use_tls,
-      turnstile_enabled: form.turnstile_enabled,
-      turnstile_site_key: form.turnstile_site_key,
-      turnstile_secret_key: form.turnstile_secret_key || undefined,
-      linuxdo_connect_enabled: form.linuxdo_connect_enabled,
-      linuxdo_connect_client_id: form.linuxdo_connect_client_id,
-      linuxdo_connect_client_secret: form.linuxdo_connect_client_secret || undefined,
-      linuxdo_connect_redirect_url: form.linuxdo_connect_redirect_url,
-      enable_model_fallback: form.enable_model_fallback,
-      fallback_model_anthropic: form.fallback_model_anthropic,
-      fallback_model_openai: form.fallback_model_openai,
-      fallback_model_gemini: form.fallback_model_gemini,
-      fallback_model_antigravity: form.fallback_model_antigravity,
-      enable_identity_patch: form.enable_identity_patch,
-      identity_patch_prompt: form.identity_patch_prompt
+    if (landingPricingEditorMode.value === 'ui') {
+      form.landing_pricing_config = buildLandingPricingJsonFromDraft()
     }
-    const updated = await adminAPI.settings.updateSettings(payload)
+    const { error: pricingError } = parseLandingPricingConfig(form.landing_pricing_config)
+    if (pricingError) {
+      landingPricingConfigError.value = pricingError
+      appStore.showError(t('admin.settings.site.landingPricingConfigInvalid') + ': ' + pricingError)
+      return
+    }
+    landingPricingConfigError.value = ''
+
+    const updated = await adminAPI.settings.updateSettings(buildUpdateSettingsPayload())
     Object.assign(form, updated)
     form.smtp_password = ''
     form.turnstile_secret_key = ''
     form.linuxdo_connect_client_secret = ''
+    syncLandingPricingDraftFromJson()
+    initialSettingsState.value = settingsPayloadSnapshot()
     // Refresh cached public settings so sidebar/header update immediately
     await appStore.fetchPublicSettings(true)
     appStore.showSuccess(t('admin.settings.settingsSaved'))
+
+    if (streamTimeoutDirty.value) {
+      try {
+        await saveStreamTimeoutSettings({ silent: true })
+      } catch (error: any) {
+        appStore.showError(
+          t('admin.settings.streamTimeout.saveFailed') +
+            ': ' +
+            (error.message || t('common.unknownError'))
+        )
+      }
+    }
   } catch (error: any) {
     appStore.showError(
       t('admin.settings.failedToSave') + ': ' + (error.message || t('common.unknownError'))
@@ -1413,6 +3194,7 @@ async function loadStreamTimeoutSettings() {
   try {
     const settings = await adminAPI.settings.getStreamTimeoutSettings()
     Object.assign(streamTimeoutForm, settings)
+    initialStreamTimeoutState.value = streamTimeoutStateSnapshot()
   } catch (error: any) {
     console.error('Failed to load stream timeout settings:', error)
   } finally {
@@ -1420,7 +3202,7 @@ async function loadStreamTimeoutSettings() {
   }
 }
 
-async function saveStreamTimeoutSettings() {
+async function saveStreamTimeoutSettings(options?: { silent?: boolean }) {
   streamTimeoutSaving.value = true
   try {
     const updated = await adminAPI.settings.updateStreamTimeoutSettings({
@@ -1431,11 +3213,15 @@ async function saveStreamTimeoutSettings() {
       threshold_window_minutes: streamTimeoutForm.threshold_window_minutes
     })
     Object.assign(streamTimeoutForm, updated)
-    appStore.showSuccess(t('admin.settings.streamTimeout.saved'))
+    initialStreamTimeoutState.value = streamTimeoutStateSnapshot()
+    if (!options?.silent) appStore.showSuccess(t('admin.settings.streamTimeout.saved'))
   } catch (error: any) {
-    appStore.showError(
-      t('admin.settings.streamTimeout.saveFailed') + ': ' + (error.message || t('common.unknownError'))
-    )
+    if (!options?.silent) {
+      appStore.showError(
+        t('admin.settings.streamTimeout.saveFailed') + ': ' + (error.message || t('common.unknownError'))
+      )
+    }
+    throw error
   } finally {
     streamTimeoutSaving.value = false
   }
@@ -1443,6 +3229,7 @@ async function saveStreamTimeoutSettings() {
 
 onMounted(() => {
   loadSettings()
+  loadPricingGroups()
   loadAdminApiKey()
   loadStreamTimeoutSettings()
 })

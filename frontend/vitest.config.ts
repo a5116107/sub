@@ -1,9 +1,17 @@
-import { defineConfig, mergeConfig } from 'vitest/config'
+import { defineConfig } from 'vitest/config'
+import type { ConfigEnv, UserConfigExport } from 'vite'
 import viteConfig from './vite.config'
 
-export default mergeConfig(
-  viteConfig,
-  defineConfig({
+const resolveViteConfig = async (env: ConfigEnv) => {
+  const config = viteConfig as UserConfigExport
+  if (typeof config === 'function') return await config(env)
+  return await config
+}
+
+export default defineConfig(async (env) => {
+  const base = await resolveViteConfig(env)
+  return {
+    ...base,
     test: {
       globals: true,
       environment: 'jsdom',
@@ -31,5 +39,5 @@ export default mergeConfig(
       },
       setupFiles: ['./src/__tests__/setup.ts']
     }
-  })
-)
+  }
+})

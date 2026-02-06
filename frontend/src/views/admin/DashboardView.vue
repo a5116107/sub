@@ -230,6 +230,15 @@
                     @change="loadChartData"
                   />
                 </div>
+
+                <button
+                  @click="openBackfillDialog"
+                  class="btn btn-secondary px-2 md:px-3"
+                  :title="t('admin.dashboard.backfill.open')"
+                >
+                  <Icon name="refresh" size="sm" />
+                  <span class="hidden md:inline">{{ t('admin.dashboard.backfill.open') }}</span>
+                </button>
               </div>
             </div>
           </div>
@@ -258,6 +267,57 @@
         </div>
       </template>
     </div>
+
+    <BaseDialog
+      :show="showBackfillDialog"
+      :title="t('admin.dashboard.backfill.title')"
+      width="normal"
+      closeOnClickOutside
+      @close="closeBackfillDialog"
+    >
+      <p class="text-sm text-gray-600 dark:text-dark-300">
+        {{ t('admin.dashboard.backfill.description') }}
+      </p>
+
+      <div class="mt-4 space-y-3">
+        <div>
+          <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-300">
+            {{ t('admin.dashboard.backfill.start') }}
+          </label>
+          <input
+            v-model="backfillStartLocal"
+            type="datetime-local"
+            class="input w-full"
+          />
+        </div>
+
+        <div>
+          <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-dark-300">
+            {{ t('admin.dashboard.backfill.end') }}
+          </label>
+          <input
+            v-model="backfillEndLocal"
+            type="datetime-local"
+            class="input w-full"
+          />
+        </div>
+
+        <p v-if="backfillError" class="text-sm text-red-600 dark:text-red-400">
+          {{ backfillError }}
+        </p>
+      </div>
+
+      <template #footer>
+        <div class="flex items-center justify-end gap-2">
+          <button @click="closeBackfillDialog" class="btn btn-secondary">
+            {{ t('common.cancel') }}
+          </button>
+          <button @click="submitBackfill" class="btn btn-primary" :disabled="backfillSubmitting">
+            {{ backfillSubmitting ? t('common.processing') : t('admin.dashboard.backfill.submit') }}
+          </button>
+        </div>
+      </template>
+    </BaseDialog>
   </AppLayout>
 </template>
 
@@ -272,6 +332,7 @@ import type { DashboardStats, TrendDataPoint, ModelStat, UserUsageTrendPoint } f
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
@@ -326,6 +387,80 @@ weekAgo.setDate(weekAgo.getDate() - 6)
 const granularity = ref<'day' | 'hour'>('day')
 const startDate = ref(formatLocalDate(weekAgo))
 const endDate = ref(formatLocalDate(now))
+
+// Dashboard aggregation backfill (admin manual trigger)
+const BACKFILL_MAX_DAYS = 31
+const showBackfillDialog = ref(false)
+const backfillStartLocal = ref('')
+const backfillEndLocal = ref('')
+const backfillSubmitting = ref(false)
+const backfillError = ref('')
+
+const toDateTimeLocal = (date: Date): string => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(
+    date.getMinutes()
+  )}`
+}
+
+const openBackfillDialog = () => {
+  const end = new Date()
+  const start = new Date(end)
+  start.setDate(start.getDate() - 2)
+
+  backfillStartLocal.value = toDateTimeLocal(start)
+  backfillEndLocal.value = toDateTimeLocal(end)
+  backfillError.value = ''
+  showBackfillDialog.value = true
+}
+
+const closeBackfillDialog = () => {
+  showBackfillDialog.value = false
+  backfillSubmitting.value = false
+  backfillError.value = ''
+}
+
+const submitBackfill = async () => {
+  backfillError.value = ''
+
+  if (!backfillStartLocal.value || !backfillEndLocal.value) {
+    backfillError.value = t('admin.dashboard.backfill.invalidTime')
+    return
+  }
+
+  const start = new Date(backfillStartLocal.value)
+  const end = new Date(backfillEndLocal.value)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    backfillError.value = t('admin.dashboard.backfill.invalidTime')
+    return
+  }
+  if (end.getTime() <= start.getTime()) {
+    backfillError.value = t('admin.dashboard.backfill.invalidRange')
+    return
+  }
+
+  const maxRangeMs = BACKFILL_MAX_DAYS * 24 * 60 * 60 * 1000
+  if (end.getTime() - start.getTime() > maxRangeMs) {
+    backfillError.value = t('admin.dashboard.backfill.rangeTooLarge', { days: BACKFILL_MAX_DAYS })
+    return
+  }
+
+  backfillSubmitting.value = true
+  try {
+    await adminAPI.dashboard.backfillAggregation({
+      start: start.toISOString(),
+      end: end.toISOString()
+    })
+    appStore.showSuccess(t('admin.dashboard.backfill.accepted'))
+    closeBackfillDialog()
+  } catch (err: any) {
+    const message = err?.message || t('admin.dashboard.backfill.failed')
+    backfillError.value = message
+    appStore.showError(message)
+  } finally {
+    backfillSubmitting.value = false
+  }
+}
 
 // Granularity options for Select component
 const granularityOptions = computed(() => [

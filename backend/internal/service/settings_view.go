@@ -7,6 +7,10 @@ type SystemSettings struct {
 	PasswordResetEnabled bool
 	TotpEnabled          bool // TOTP 双因素认证
 
+	ReferralInviterBonus   float64
+	ReferralInviteeBonus   float64
+	ReferralCommissionRate float64
+
 	SMTPHost               string
 	SMTPPort               int
 	SMTPUsername           string
@@ -35,6 +39,9 @@ type SystemSettings struct {
 	ContactInfo                 string
 	DocURL                      string
 	HomeContent                 string
+	LandingPricingConfig        string
+	LandingPricingEnabled       bool
+	SubscriptionsEnabled        bool
 	HideCcsImportButton         bool
 	PurchaseSubscriptionEnabled bool
 	PurchaseSubscriptionURL     string
@@ -53,6 +60,9 @@ type SystemSettings struct {
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`
 	IdentityPatchPrompt string `json:"identity_patch_prompt"`
 
+	// Gateway runtime toggles
+	GatewayFixOrphanedToolResults bool
+
 	// Ops monitoring (vNext)
 	OpsMonitoringEnabled         bool
 	OpsRealtimeMonitoringEnabled bool
@@ -61,27 +71,28 @@ type SystemSettings struct {
 }
 
 type PublicSettings struct {
-	RegistrationEnabled  bool
-	EmailVerifyEnabled   bool
-	PromoCodeEnabled     bool
-	PasswordResetEnabled bool
-	TotpEnabled          bool // TOTP 双因素认证
-	TurnstileEnabled     bool
-	TurnstileSiteKey     string
-	SiteName             string
-	SiteLogo             string
-	SiteSubtitle         string
-	APIBaseURL           string
-	ContactInfo          string
-	DocURL               string
-	HomeContent          string
-	HideCcsImportButton  bool
-
+	RegistrationEnabled         bool
+	EmailVerifyEnabled          bool
+	PromoCodeEnabled            bool
+	PasswordResetEnabled        bool
+	TotpEnabled                 bool // TOTP 双因素认证
+	TurnstileEnabled            bool
+	TurnstileSiteKey            string
+	SiteName                    string
+	SiteLogo                    string
+	SiteSubtitle                string
+	APIBaseURL                  string
+	ContactInfo                 string
+	DocURL                      string
+	HomeContent                 string
+	LandingPricingConfig        string
+	LandingPricingEnabled       bool
+	SubscriptionsEnabled        bool
+	HideCcsImportButton         bool
 	PurchaseSubscriptionEnabled bool
 	PurchaseSubscriptionURL     string
-
-	LinuxDoOAuthEnabled bool
-	Version             string
+	LinuxDoOAuthEnabled         bool
+	Version                     string
 }
 
 // StreamTimeoutSettings 流超时处理配置（仅控制超时后的处理方式，超时判定由网关配置控制）

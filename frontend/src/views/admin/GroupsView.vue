@@ -311,23 +311,36 @@
         </div>
 
         <!-- Subscription Configuration -->
-        <div class="mt-4 border-t pt-4">
-          <div>
-            <label class="input-label">{{ t('admin.groups.subscription.type') }}</label>
-            <Select v-model="createForm.subscription_type" :options="subscriptionTypeOptions" />
-            <p class="input-hint">{{ t('admin.groups.subscription.typeHint') }}</p>
-          </div>
+         <div class="mt-4 border-t pt-4">
+           <div>
+             <label class="input-label">{{ t('admin.groups.subscription.type') }}</label>
+             <Select v-model="createForm.subscription_type" :options="subscriptionTypeOptions" />
+             <p class="input-hint">{{ t('admin.groups.subscription.typeHint') }}</p>
+           </div>
 
-          <!-- Subscription limits (only show when subscription type is selected) -->
-          <div
-            v-if="createForm.subscription_type === 'subscription'"
-            class="space-y-4 border-l-2 border-primary-200 pl-4 dark:border-primary-800"
-          >
-            <div>
-              <label class="input-label">{{ t('admin.groups.subscription.dailyLimit') }}</label>
-              <input
-                v-model.number="createForm.daily_limit_usd"
-                type="number"
+           <div class="mt-4">
+             <label class="input-label">{{ t('admin.groups.subscription.userConcurrency') }}</label>
+             <input
+               v-model.number="createForm.user_concurrency"
+               type="number"
+               step="1"
+               min="0"
+               class="input"
+               :placeholder="t('admin.groups.subscription.userConcurrencyPlaceholder')"
+             />
+             <p class="input-hint">{{ t('admin.groups.subscription.userConcurrencyHint') }}</p>
+           </div>
+
+           <!-- Subscription limits (only show when subscription type is selected) -->
+           <div
+             v-if="createForm.subscription_type === 'subscription'"
+             class="space-y-4 border-l-2 border-primary-200 pl-4 dark:border-primary-800"
+           >
+             <div>
+               <label class="input-label">{{ t('admin.groups.subscription.dailyLimit') }}</label>
+               <input
+                 v-model.number="createForm.daily_limit_usd"
+                 type="number"
                 step="0.01"
                 min="0"
                 class="input"
@@ -751,27 +764,40 @@
         </div>
 
         <!-- Subscription Configuration -->
-        <div class="mt-4 border-t pt-4">
-          <div>
-            <label class="input-label">{{ t('admin.groups.subscription.type') }}</label>
-            <Select
-              v-model="editForm.subscription_type"
-              :options="subscriptionTypeOptions"
-              :disabled="true"
-            />
-            <p class="input-hint">{{ t('admin.groups.subscription.typeNotEditable') }}</p>
-          </div>
+         <div class="mt-4 border-t pt-4">
+           <div>
+             <label class="input-label">{{ t('admin.groups.subscription.type') }}</label>
+             <Select
+               v-model="editForm.subscription_type"
+               :options="subscriptionTypeOptions"
+               :disabled="true"
+             />
+             <p class="input-hint">{{ t('admin.groups.subscription.typeNotEditable') }}</p>
+           </div>
 
-          <!-- Subscription limits (only show when subscription type is selected) -->
-          <div
-            v-if="editForm.subscription_type === 'subscription'"
-            class="space-y-4 border-l-2 border-primary-200 pl-4 dark:border-primary-800"
-          >
-            <div>
-              <label class="input-label">{{ t('admin.groups.subscription.dailyLimit') }}</label>
-              <input
-                v-model.number="editForm.daily_limit_usd"
-                type="number"
+           <div class="mt-4">
+             <label class="input-label">{{ t('admin.groups.subscription.userConcurrency') }}</label>
+             <input
+               v-model.number="editForm.user_concurrency"
+               type="number"
+               step="1"
+               min="0"
+               class="input"
+               :placeholder="t('admin.groups.subscription.userConcurrencyPlaceholder')"
+             />
+             <p class="input-hint">{{ t('admin.groups.subscription.userConcurrencyHint') }}</p>
+           </div>
+
+           <!-- Subscription limits (only show when subscription type is selected) -->
+           <div
+             v-if="editForm.subscription_type === 'subscription'"
+             class="space-y-4 border-l-2 border-primary-200 pl-4 dark:border-primary-800"
+           >
+             <div>
+               <label class="input-label">{{ t('admin.groups.subscription.dailyLimit') }}</label>
+               <input
+                 v-model.number="editForm.daily_limit_usd"
+                 type="number"
                 step="0.01"
                 min="0"
                 class="input"
@@ -1152,6 +1178,8 @@ const platformOptions = computed(() => [
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
+  { value: 'qwen', label: 'Qwen' },
+  { value: 'iflow', label: 'iFlow' },
   { value: 'antigravity', label: 'Antigravity' }
 ])
 
@@ -1160,6 +1188,8 @@ const platformFilterOptions = computed(() => [
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'openai', label: 'OpenAI' },
   { value: 'gemini', label: 'Gemini' },
+  { value: 'qwen', label: 'Qwen' },
+  { value: 'iflow', label: 'iFlow' },
   { value: 'antigravity', label: 'Antigravity' }
 ])
 
@@ -1236,6 +1266,7 @@ const createForm = reactive({
   daily_limit_usd: null as number | null,
   weekly_limit_usd: null as number | null,
   monthly_limit_usd: null as number | null,
+  user_concurrency: 0,
   // 图片生成计费配置（仅 antigravity 平台使用）
   image_price_1k: null as number | null,
   image_price_2k: null as number | null,
@@ -1407,6 +1438,7 @@ const editForm = reactive({
   daily_limit_usd: null as number | null,
   weekly_limit_usd: null as number | null,
   monthly_limit_usd: null as number | null,
+  user_concurrency: 0,
   // 图片生成计费配置（仅 antigravity 平台使用）
   image_price_1k: null as number | null,
   image_price_2k: null as number | null,
@@ -1492,6 +1524,7 @@ const closeCreateModal = () => {
   createForm.daily_limit_usd = null
   createForm.weekly_limit_usd = null
   createForm.monthly_limit_usd = null
+  createForm.user_concurrency = 0
   createForm.image_price_1k = null
   createForm.image_price_2k = null
   createForm.image_price_4k = null
@@ -1541,6 +1574,7 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.daily_limit_usd = group.daily_limit_usd
   editForm.weekly_limit_usd = group.weekly_limit_usd
   editForm.monthly_limit_usd = group.monthly_limit_usd
+  editForm.user_concurrency = group.user_concurrency ?? 0
   editForm.image_price_1k = group.image_price_1k
   editForm.image_price_2k = group.image_price_2k
   editForm.image_price_4k = group.image_price_4k

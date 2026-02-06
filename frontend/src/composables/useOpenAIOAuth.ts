@@ -55,15 +55,12 @@ export function useOpenAIOAuth() {
         payload.redirect_uri = redirectUri
       }
 
-      const response = await adminAPI.accounts.generateAuthUrl(
-        '/admin/openai/generate-auth-url',
-        payload
-      )
+      const response = await adminAPI.openai.generateAuthUrl(payload)
       authUrl.value = response.auth_url
       sessionId.value = response.session_id
       return true
     } catch (err: any) {
-      error.value = err.response?.data?.detail || 'Failed to generate OpenAI auth URL'
+      error.value = err?.message || err?.response?.data?.detail || 'Failed to generate OpenAI auth URL'
       appStore.showError(error.value)
       return false
     } finally {
@@ -94,10 +91,10 @@ export function useOpenAIOAuth() {
         payload.proxy_id = proxyId
       }
 
-      const tokenInfo = await adminAPI.accounts.exchangeCode('/admin/openai/exchange-code', payload)
+      const tokenInfo = await adminAPI.openai.exchangeCode(payload)
       return tokenInfo as OpenAITokenInfo
     } catch (err: any) {
-      error.value = err.response?.data?.detail || 'Failed to exchange OpenAI auth code'
+      error.value = err?.message || err.response?.data?.detail || 'Failed to exchange OpenAI auth code'
       appStore.showError(error.value)
       return null
     } finally {

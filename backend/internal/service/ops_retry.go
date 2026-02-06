@@ -605,6 +605,14 @@ func (s *OpsService) executeWithAccount(ctx context.Context, reqType opsRetryReq
 	if c != nil && c.Writer != nil {
 		statusCode = c.Writer.Status()
 	}
+	if err != nil && statusCode < 400 {
+		// Failover errors intentionally do not write responses (so handlers can switch accounts).
+		// For ops retry we still want a meaningful status code in the result.
+		var failoverErr *UpstreamFailoverError
+		if errors.As(err, &failoverErr) && failoverErr != nil && failoverErr.StatusCode > 0 {
+			statusCode = failoverErr.StatusCode
+		}
+	}
 
 	upstreamReqID := extractUpstreamRequestID(c)
 	preview, truncated := extractResponsePreview(w)

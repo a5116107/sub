@@ -16,9 +16,14 @@ export { userAPI } from './user'
 export { redeemAPI, type RedeemHistoryItem } from './redeem'
 export { userGroupsAPI } from './groups'
 export { totpAPI } from './totp'
+export { paymentsAPI } from './payments'
+export { default as announcementsAPI } from './announcements'
 
 // Admin APIs
 export { adminAPI } from './admin'
+
+// Public Docs
+export { default as docsAPI, type DocsPage } from './docs'
 
 // Default export
 export { default } from './client'

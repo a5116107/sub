@@ -85,6 +85,10 @@ func (s *authRepoStub) CountByGroupID(ctx context.Context, groupID int64) (int64
 	panic("unexpected CountByGroupID call")
 }
 
+func (s *authRepoStub) CountActiveByGroupID(ctx context.Context, groupID int64) (int64, error) {
+	panic("unexpected CountActiveByGroupID call")
+}
+
 func (s *authRepoStub) ListKeysByUserID(ctx context.Context, userID int64) ([]string, error) {
 	if s.listKeysByUserID == nil {
 		panic("unexpected ListKeysByUserID call")
@@ -184,8 +188,10 @@ func TestAPIKeyService_GetByKey_UsesL2Cache(t *testing.T) {
 				Name:                "g",
 				Platform:            PlatformAnthropic,
 				Status:              StatusActive,
+				IsExclusive:         true,
 				SubscriptionType:    SubscriptionTypeStandard,
 				RateMultiplier:      1,
+				UserConcurrency:     7,
 				ModelRoutingEnabled: true,
 				ModelRouting: map[string][]int64{
 					"claude-opus-*": {1, 2},
@@ -202,6 +208,8 @@ func TestAPIKeyService_GetByKey_UsesL2Cache(t *testing.T) {
 	require.Equal(t, int64(1), apiKey.ID)
 	require.Equal(t, int64(2), apiKey.User.ID)
 	require.Equal(t, groupID, apiKey.Group.ID)
+	require.True(t, apiKey.Group.IsExclusive)
+	require.Equal(t, 7, apiKey.Group.UserConcurrency)
 	require.True(t, apiKey.Group.ModelRoutingEnabled)
 	require.Equal(t, map[string][]int64{"claude-opus-*": {1, 2}}, apiKey.Group.ModelRouting)
 }

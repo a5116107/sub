@@ -119,35 +119,37 @@ func (s *ConcurrencyCacheSuite) TestAccountSlot_MaxZero() {
 
 func (s *ConcurrencyCacheSuite) TestUserSlot_AcquireAndRelease() {
 	userID := int64(42)
+	groupID := int64(101)
 	reqID1, reqID2 := "req1", "req2"
 
-	ok, err := s.cache.AcquireUserSlot(s.ctx, userID, 1, reqID1)
+	ok, err := s.cache.AcquireUserSlot(s.ctx, userID, groupID, 1, reqID1)
 	require.NoError(s.T(), err, "AcquireUserSlot")
 	require.True(s.T(), ok)
 
-	ok, err = s.cache.AcquireUserSlot(s.ctx, userID, 1, reqID2)
+	ok, err = s.cache.AcquireUserSlot(s.ctx, userID, groupID, 1, reqID2)
 	require.NoError(s.T(), err, "AcquireUserSlot 2")
 	require.False(s.T(), ok, "expected second acquire to fail at max=1")
 
-	cur, err := s.cache.GetUserConcurrency(s.ctx, userID)
+	cur, err := s.cache.GetUserConcurrency(s.ctx, userID, groupID)
 	require.NoError(s.T(), err, "GetUserConcurrency")
 	require.Equal(s.T(), 1, cur, "expected concurrency=1")
 
-	require.NoError(s.T(), s.cache.ReleaseUserSlot(s.ctx, userID, reqID1), "ReleaseUserSlot")
+	require.NoError(s.T(), s.cache.ReleaseUserSlot(s.ctx, userID, groupID, reqID1), "ReleaseUserSlot")
 	// Releasing a non-existent slot should not error
-	require.NoError(s.T(), s.cache.ReleaseUserSlot(s.ctx, userID, "non-existent"), "ReleaseUserSlot non-existent")
+	require.NoError(s.T(), s.cache.ReleaseUserSlot(s.ctx, userID, groupID, "non-existent"), "ReleaseUserSlot non-existent")
 
-	cur, err = s.cache.GetUserConcurrency(s.ctx, userID)
+	cur, err = s.cache.GetUserConcurrency(s.ctx, userID, groupID)
 	require.NoError(s.T(), err, "GetUserConcurrency after release")
 	require.Equal(s.T(), 0, cur, "expected concurrency=0 after release")
 }
 
 func (s *ConcurrencyCacheSuite) TestUserSlot_TTL() {
 	userID := int64(200)
+	groupID := int64(202)
 	reqID := "req_ttl_test"
-	slotKey := fmt.Sprintf("%s%d", userSlotKeyPrefix, userID)
+	slotKey := fmt.Sprintf("%s%d:group:%d", userSlotKeyPrefix, userID, groupID)
 
-	ok, err := s.cache.AcquireUserSlot(s.ctx, userID, 5, reqID)
+	ok, err := s.cache.AcquireUserSlot(s.ctx, userID, groupID, 5, reqID)
 	require.NoError(s.T(), err, "AcquireUserSlot")
 	require.True(s.T(), ok)
 
@@ -158,17 +160,18 @@ func (s *ConcurrencyCacheSuite) TestUserSlot_TTL() {
 
 func (s *ConcurrencyCacheSuite) TestWaitQueue_IncrementAndDecrement() {
 	userID := int64(20)
-	waitKey := fmt.Sprintf("%s%d", waitQueueKeyPrefix, userID)
+	groupID := int64(303)
+	waitKey := fmt.Sprintf("%s%d:group:%d", waitQueueKeyPrefix, userID, groupID)
 
-	ok, err := s.cache.IncrementWaitCount(s.ctx, userID, 2)
+	ok, err := s.cache.IncrementWaitCount(s.ctx, userID, groupID, 2)
 	require.NoError(s.T(), err, "IncrementWaitCount 1")
 	require.True(s.T(), ok)
 
-	ok, err = s.cache.IncrementWaitCount(s.ctx, userID, 2)
+	ok, err = s.cache.IncrementWaitCount(s.ctx, userID, groupID, 2)
 	require.NoError(s.T(), err, "IncrementWaitCount 2")
 	require.True(s.T(), ok)
 
-	ok, err = s.cache.IncrementWaitCount(s.ctx, userID, 2)
+	ok, err = s.cache.IncrementWaitCount(s.ctx, userID, groupID, 2)
 	require.NoError(s.T(), err, "IncrementWaitCount 3")
 	require.False(s.T(), ok, "expected wait increment over max to fail")
 
@@ -176,7 +179,7 @@ func (s *ConcurrencyCacheSuite) TestWaitQueue_IncrementAndDecrement() {
 	require.NoError(s.T(), err, "TTL waitKey")
 	s.AssertTTLWithin(ttl, 1*time.Second, testSlotTTL)
 
-	require.NoError(s.T(), s.cache.DecrementWaitCount(s.ctx, userID), "DecrementWaitCount")
+	require.NoError(s.T(), s.cache.DecrementWaitCount(s.ctx, userID, groupID), "DecrementWaitCount")
 
 	val, err := s.rdb.Get(s.ctx, waitKey).Int()
 	if !errors.Is(err, redis.Nil) {
@@ -187,10 +190,11 @@ func (s *ConcurrencyCacheSuite) TestWaitQueue_IncrementAndDecrement() {
 
 func (s *ConcurrencyCacheSuite) TestWaitQueue_DecrementNoNegative() {
 	userID := int64(300)
-	waitKey := fmt.Sprintf("%s%d", waitQueueKeyPrefix, userID)
+	groupID := int64(404)
+	waitKey := fmt.Sprintf("%s%d:group:%d", waitQueueKeyPrefix, userID, groupID)
 
 	// Test decrement on non-existent key - should not error and should not create negative value
-	require.NoError(s.T(), s.cache.DecrementWaitCount(s.ctx, userID), "DecrementWaitCount on non-existent key")
+	require.NoError(s.T(), s.cache.DecrementWaitCount(s.ctx, userID, groupID), "DecrementWaitCount on non-existent key")
 
 	// Verify no key was created or it's not negative
 	val, err := s.rdb.Get(s.ctx, waitKey).Int()
@@ -200,15 +204,15 @@ func (s *ConcurrencyCacheSuite) TestWaitQueue_DecrementNoNegative() {
 	require.GreaterOrEqual(s.T(), val, 0, "expected non-negative wait count after decrement on empty")
 
 	// Set count to 1, then decrement twice
-	ok, err := s.cache.IncrementWaitCount(s.ctx, userID, 5)
+	ok, err := s.cache.IncrementWaitCount(s.ctx, userID, groupID, 5)
 	require.NoError(s.T(), err, "IncrementWaitCount")
 	require.True(s.T(), ok)
 
 	// Decrement once (1 -> 0)
-	require.NoError(s.T(), s.cache.DecrementWaitCount(s.ctx, userID), "DecrementWaitCount")
+	require.NoError(s.T(), s.cache.DecrementWaitCount(s.ctx, userID, groupID), "DecrementWaitCount")
 
 	// Decrement again on 0 - should not go negative
-	require.NoError(s.T(), s.cache.DecrementWaitCount(s.ctx, userID), "DecrementWaitCount on zero")
+	require.NoError(s.T(), s.cache.DecrementWaitCount(s.ctx, userID, groupID), "DecrementWaitCount on zero")
 
 	// Verify count is 0, not negative
 	val, err = s.rdb.Get(s.ctx, waitKey).Int()
@@ -216,6 +220,28 @@ func (s *ConcurrencyCacheSuite) TestWaitQueue_DecrementNoNegative() {
 		require.NoError(s.T(), err, "Get waitKey after double decrement")
 	}
 	require.GreaterOrEqual(s.T(), val, 0, "expected non-negative wait count")
+}
+
+func (s *ConcurrencyCacheSuite) TestUserSlot_GroupIsolation() {
+	userID := int64(500)
+	groupA := int64(1)
+	groupB := int64(2)
+
+	ok, err := s.cache.AcquireUserSlot(s.ctx, userID, groupA, 1, "a1")
+	require.NoError(s.T(), err, "AcquireUserSlot groupA")
+	require.True(s.T(), ok)
+
+	ok, err = s.cache.AcquireUserSlot(s.ctx, userID, groupB, 1, "b1")
+	require.NoError(s.T(), err, "AcquireUserSlot groupB")
+	require.True(s.T(), ok, "expected groupB to be independent from groupA")
+
+	curA, err := s.cache.GetUserConcurrency(s.ctx, userID, groupA)
+	require.NoError(s.T(), err, "GetUserConcurrency groupA")
+	require.Equal(s.T(), 1, curA)
+
+	curB, err := s.cache.GetUserConcurrency(s.ctx, userID, groupB)
+	require.NoError(s.T(), err, "GetUserConcurrency groupB")
+	require.Equal(s.T(), 1, curB)
 }
 
 func (s *ConcurrencyCacheSuite) TestAccountWaitQueue_IncrementAndDecrement() {
@@ -269,13 +295,12 @@ func (s *ConcurrencyCacheSuite) TestGetAccountConcurrency_Missing() {
 
 func (s *ConcurrencyCacheSuite) TestGetUserConcurrency_Missing() {
 	// When no slots exist, GetUserConcurrency should return 0
-	cur, err := s.cache.GetUserConcurrency(s.ctx, 999)
+	cur, err := s.cache.GetUserConcurrency(s.ctx, 999, 1)
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), 0, cur)
 }
 
 func (s *ConcurrencyCacheSuite) TestGetAccountsLoadBatch() {
-	s.T().Skip("TODO: Fix this test - CurrentConcurrency returns 0 instead of expected value in CI")
 	// Setup: Create accounts with different load states
 	account1 := int64(100)
 	account2 := int64(101)

@@ -29,8 +29,14 @@ func RegisterAdminRoutes(
 		// 账号管理
 		registerAccountRoutes(admin, h)
 
+		// 公告管理
+		registerAnnouncementRoutes(admin, h)
+
 		// OpenAI OAuth
 		registerOpenAIOAuthRoutes(admin, h)
+
+		// Qwen OAuth
+		registerQwenOAuthRoutes(admin, h)
 
 		// Gemini OAuth
 		registerGeminiOAuthRoutes(admin, h)
@@ -49,6 +55,9 @@ func RegisterAdminRoutes(
 
 		// 系统设置
 		registerSettingsRoutes(admin, h)
+
+		// 文档管理
+		registerDocsRoutes(admin, h)
 
 		// 运维监控（Ops）
 		registerOpsRoutes(admin, h)
@@ -161,6 +170,19 @@ func registerDashboardRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
+func registerDocsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	docs := admin.Group("/docs")
+	{
+		docs.GET("/pages", h.Admin.Setting.ListDocsPages)
+		docs.POST("/pages", h.Admin.Setting.CreateDocsPage)
+		docs.PUT("/pages/:key", h.Admin.Setting.UpdateDocsPageMeta)
+		docs.DELETE("/pages/:key", h.Admin.Setting.DeleteDocsPage)
+
+		docs.GET("/:key", h.Admin.Setting.GetDocsPage)
+		docs.PUT("/:key", h.Admin.Setting.UpdateDocsPage)
+	}
+}
+
 func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	users := admin.Group("/users")
 	{
@@ -229,6 +251,18 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
+func registerAnnouncementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	announcements := admin.Group("/announcements")
+	{
+		announcements.GET("", h.Admin.Announcement.List)
+		announcements.POST("", h.Admin.Announcement.Create)
+		announcements.GET("/:id", h.Admin.Announcement.GetByID)
+		announcements.PUT("/:id", h.Admin.Announcement.Update)
+		announcements.DELETE("/:id", h.Admin.Announcement.Delete)
+		announcements.GET("/:id/read-status", h.Admin.Announcement.ListReadStatus)
+	}
+}
+
 func registerOpenAIOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	openai := admin.Group("/openai")
 	{
@@ -237,6 +271,17 @@ func registerOpenAIOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		openai.POST("/refresh-token", h.Admin.OpenAIOAuth.RefreshToken)
 		openai.POST("/accounts/:id/refresh", h.Admin.OpenAIOAuth.RefreshAccountToken)
 		openai.POST("/create-from-oauth", h.Admin.OpenAIOAuth.CreateAccountFromOAuth)
+	}
+}
+
+func registerQwenOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	qwen := admin.Group("/qwen")
+	{
+		qwen.POST("/device/start", h.Admin.QwenOAuth.StartDeviceFlow)
+		qwen.POST("/device/poll", h.Admin.QwenOAuth.PollDeviceFlowToken)
+		qwen.POST("/refresh-token", h.Admin.QwenOAuth.RefreshToken)
+		qwen.POST("/accounts/:id/refresh", h.Admin.QwenOAuth.RefreshAccountToken)
+		qwen.POST("/create-from-device", h.Admin.QwenOAuth.CreateAccountFromDeviceFlow)
 	}
 }
 

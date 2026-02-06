@@ -35,6 +35,19 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/docs',
+    redirect: '/docs/overview'
+  },
+  {
+    path: '/docs/:slug',
+    name: 'Docs',
+    component: () => import('@/views/docs/DocsView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Docs'
+    }
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/auth/LoginView.vue'),
@@ -177,14 +190,38 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/purchase',
+    name: 'Purchase',
+    component: () => import('@/views/user/PurchaseView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Purchase',
+      titleKey: 'purchase.title',
+      descriptionKey: 'purchase.description'
+    }
+  },
+  {
+    path: '/purchase-subscription',
     name: 'PurchaseSubscription',
     component: () => import('@/views/user/PurchaseSubscriptionView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
       title: 'Purchase Subscription',
-      titleKey: 'purchase.title',
-      descriptionKey: 'purchase.description'
+      titleKey: 'purchaseSubscription.title',
+      descriptionKey: 'purchaseSubscription.description'
+    }
+  },
+  {
+    path: '/billing',
+    name: 'Billing',
+    component: () => import('@/views/user/BillingView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Billing',
+      titleKey: 'billing.title',
+      descriptionKey: 'billing.description'
     }
   },
 
@@ -266,6 +303,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/announcements',
+    name: 'AdminAnnouncements',
+    component: () => import('@/views/admin/AnnouncementsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Announcements',
+      titleKey: 'admin.announcements.title',
+      descriptionKey: 'admin.announcements.description'
+    }
+  },
+  {
     path: '/admin/proxies',
     name: 'AdminProxies',
     component: () => import('@/views/admin/ProxiesView.vue'),
@@ -311,6 +360,18 @@ const routes: RouteRecordRaw[] = [
       title: 'System Settings',
       titleKey: 'admin.settings.title',
       descriptionKey: 'admin.settings.description'
+    }
+  },
+  {
+    path: '/admin/docs',
+    name: 'AdminDocs',
+    component: () => import('@/views/admin/DocsEditorView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Docs',
+      titleKey: 'admin.docs.title',
+      descriptionKey: 'admin.docs.subtitle'
     }
   },
   {

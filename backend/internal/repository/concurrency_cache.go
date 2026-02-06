@@ -25,9 +25,9 @@ const (
 	// 并发槽位键前缀（有序集合）
 	// 格式: concurrency:account:{accountID}
 	accountSlotKeyPrefix = "concurrency:account:"
-	// 格式: concurrency:user:{userID}
+	// 格式: concurrency:user:{userID}:group:{groupID}
 	userSlotKeyPrefix = "concurrency:user:"
-	// 等待队列计数器格式: concurrency:wait:{userID}
+	// 等待队列计数器格式: concurrency:wait:{userID}:group:{groupID}
 	waitQueueKeyPrefix = "concurrency:wait:"
 	// 账号级等待队列计数器格式: wait:account:{accountID}
 	accountWaitKeyPrefix = "wait:account:"
@@ -39,7 +39,7 @@ const (
 var (
 	// acquireScript 使用有序集合计数并在未达上限时添加槽位
 	// 使用 Redis TIME 命令获取服务器时间，避免多实例时钟不同步问题
-	// KEYS[1] = 有序集合键 (concurrency:account:{id} / concurrency:user:{id})
+	// KEYS[1] = 有序集合键 (concurrency:account:{id} / concurrency:user:{userID}:group:{groupID})
 	// ARGV[1] = maxConcurrency
 	// ARGV[2] = TTL（秒）
 	// ARGV[3] = requestID
@@ -148,6 +148,7 @@ var (
 		`)
 
 	// getAccountsLoadBatchScript - batch load query with expired slot cleanup
+	// KEYS[1..2n] = slotKey1, waitKey1, slotKey2, waitKey2, ...
 	// ARGV[1] = slot TTL (seconds)
 	// ARGV[2..n] = accountID1, maxConcurrency1, accountID2, maxConcurrency2, ...
 	getAccountsLoadBatchScript = redis.NewScript(`
@@ -159,18 +160,21 @@ var (
 			local nowSeconds = tonumber(timeResult[1])
 			local cutoffTime = nowSeconds - slotTTL
 
-			local i = 2
-			while i <= #ARGV do
-				local accountID = ARGV[i]
-				local maxConcurrency = tonumber(ARGV[i + 1])
+			local numAccounts = math.floor((#ARGV - 1) / 2)
+			for idx = 1, numAccounts do
+				local argIndex = 2 + (idx - 1) * 2
+				local keyIndex = 1 + (idx - 1) * 2
 
-				local slotKey = 'concurrency:account:' .. accountID
+				local accountID = ARGV[argIndex]
+				local maxConcurrency = tonumber(ARGV[argIndex + 1])
+
+				local slotKey = KEYS[keyIndex]
+				local waitKey = KEYS[keyIndex + 1]
 
 				-- Clean up expired slots before counting
 				redis.call('ZREMRANGEBYSCORE', slotKey, '-inf', cutoffTime)
 				local currentConcurrency = redis.call('ZCARD', slotKey)
 
-				local waitKey = 'wait:account:' .. accountID
 				local waitingCount = redis.call('GET', waitKey)
 				if waitingCount == false then
 					waitingCount = 0
@@ -187,8 +191,6 @@ var (
 				table.insert(result, currentConcurrency)
 				table.insert(result, waitingCount)
 				table.insert(result, loadRate)
-
-				i = i + 2
 			end
 
 			return result
@@ -236,11 +238,25 @@ func accountSlotKey(accountID int64) string {
 }
 
 func userSlotKey(userID int64) string {
-	return fmt.Sprintf("%s%d", userSlotKeyPrefix, userID)
+	return fmt.Sprintf("%s%d:group:%d", userSlotKeyPrefix, userID, 0)
 }
 
 func waitQueueKey(userID int64) string {
-	return fmt.Sprintf("%s%d", waitQueueKeyPrefix, userID)
+	return fmt.Sprintf("%s%d:group:%d", waitQueueKeyPrefix, userID, 0)
+}
+
+func userGroupSlotKey(userID int64, groupID int64) string {
+	if groupID < 0 {
+		groupID = 0
+	}
+	return fmt.Sprintf("%s%d:group:%d", userSlotKeyPrefix, userID, groupID)
+}
+
+func userGroupWaitQueueKey(userID int64, groupID int64) string {
+	if groupID < 0 {
+		groupID = 0
+	}
+	return fmt.Sprintf("%s%d:group:%d", waitQueueKeyPrefix, userID, groupID)
 }
 
 func accountWaitKey(accountID int64) string {
@@ -276,8 +292,8 @@ func (c *concurrencyCache) GetAccountConcurrency(ctx context.Context, accountID 
 
 // User slot operations
 
-func (c *concurrencyCache) AcquireUserSlot(ctx context.Context, userID int64, maxConcurrency int, requestID string) (bool, error) {
-	key := userSlotKey(userID)
+func (c *concurrencyCache) AcquireUserSlot(ctx context.Context, userID int64, groupID int64, maxConcurrency int, requestID string) (bool, error) {
+	key := userGroupSlotKey(userID, groupID)
 	// 时间戳在 Lua 脚本内使用 Redis TIME 命令获取，确保多实例时钟一致
 	result, err := acquireScript.Run(ctx, c.rdb, []string{key}, maxConcurrency, c.slotTTLSeconds, requestID).Int()
 	if err != nil {
@@ -286,13 +302,13 @@ func (c *concurrencyCache) AcquireUserSlot(ctx context.Context, userID int64, ma
 	return result == 1, nil
 }
 
-func (c *concurrencyCache) ReleaseUserSlot(ctx context.Context, userID int64, requestID string) error {
-	key := userSlotKey(userID)
+func (c *concurrencyCache) ReleaseUserSlot(ctx context.Context, userID int64, groupID int64, requestID string) error {
+	key := userGroupSlotKey(userID, groupID)
 	return c.rdb.ZRem(ctx, key, requestID).Err()
 }
 
-func (c *concurrencyCache) GetUserConcurrency(ctx context.Context, userID int64) (int, error) {
-	key := userSlotKey(userID)
+func (c *concurrencyCache) GetUserConcurrency(ctx context.Context, userID int64, groupID int64) (int, error) {
+	key := userGroupSlotKey(userID, groupID)
 	// 时间戳在 Lua 脚本内使用 Redis TIME 命令获取
 	result, err := getCountScript.Run(ctx, c.rdb, []string{key}, c.slotTTLSeconds).Int()
 	if err != nil {
@@ -303,8 +319,8 @@ func (c *concurrencyCache) GetUserConcurrency(ctx context.Context, userID int64)
 
 // Wait queue operations
 
-func (c *concurrencyCache) IncrementWaitCount(ctx context.Context, userID int64, maxWait int) (bool, error) {
-	key := waitQueueKey(userID)
+func (c *concurrencyCache) IncrementWaitCount(ctx context.Context, userID int64, groupID int64, maxWait int) (bool, error) {
+	key := userGroupWaitQueueKey(userID, groupID)
 	result, err := incrementWaitScript.Run(ctx, c.rdb, []string{key}, maxWait, c.waitQueueTTLSeconds).Int()
 	if err != nil {
 		return false, err
@@ -312,8 +328,8 @@ func (c *concurrencyCache) IncrementWaitCount(ctx context.Context, userID int64,
 	return result == 1, nil
 }
 
-func (c *concurrencyCache) DecrementWaitCount(ctx context.Context, userID int64) error {
-	key := waitQueueKey(userID)
+func (c *concurrencyCache) DecrementWaitCount(ctx context.Context, userID int64, groupID int64) error {
+	key := userGroupWaitQueueKey(userID, groupID)
 	_, err := decrementWaitScript.Run(ctx, c.rdb, []string{key}).Result()
 	return err
 }
@@ -352,12 +368,14 @@ func (c *concurrencyCache) GetAccountsLoadBatch(ctx context.Context, accounts []
 		return map[int64]*service.AccountLoadInfo{}, nil
 	}
 
+	keys := make([]string, 0, len(accounts)*2)
 	args := []any{c.slotTTLSeconds}
 	for _, acc := range accounts {
+		keys = append(keys, accountSlotKey(acc.ID), accountWaitKey(acc.ID))
 		args = append(args, acc.ID, acc.MaxConcurrency)
 	}
 
-	result, err := getAccountsLoadBatchScript.Run(ctx, c.rdb, []string{}, args...).Slice()
+	result, err := getAccountsLoadBatchScript.Run(ctx, c.rdb, keys, args...).Slice()
 	if err != nil {
 		return nil, err
 	}

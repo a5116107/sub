@@ -56,15 +56,17 @@ type UsageStats struct {
 type UsageService struct {
 	usageRepo            UsageLogRepository
 	userRepo             UserRepository
+	settingService       *SettingService
 	entClient            *dbent.Client
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 }
 
 // NewUsageService 创建使用统计服务实例
-func NewUsageService(usageRepo UsageLogRepository, userRepo UserRepository, entClient *dbent.Client, authCacheInvalidator APIKeyAuthCacheInvalidator) *UsageService {
+func NewUsageService(usageRepo UsageLogRepository, userRepo UserRepository, settingService *SettingService, entClient *dbent.Client, authCacheInvalidator APIKeyAuthCacheInvalidator) *UsageService {
 	return &UsageService{
 		usageRepo:            usageRepo,
 		userRepo:             userRepo,
+		settingService:       settingService,
 		entClient:            entClient,
 		authCacheInvalidator: authCacheInvalidator,
 	}
@@ -73,6 +75,11 @@ func NewUsageService(usageRepo UsageLogRepository, userRepo UserRepository, entC
 // Create 创建使用日志
 func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*UsageLog, error) {
 	// 使用数据库事务保证「使用日志插入」与「扣费」的原子性，避免重复扣费或漏扣风险。
+	commissionRate := 0.0
+	if s.settingService != nil {
+		commissionRate = s.settingService.GetReferralCommissionRate(ctx)
+	}
+
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
 		return nil, fmt.Errorf("begin transaction: %w", err)
@@ -85,9 +92,14 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 	}
 
 	// 验证用户存在
-	_, err = s.userRepo.GetByID(txCtx, req.UserID)
+	user, err := s.userRepo.GetByID(txCtx, req.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
+	}
+
+	var inviterUserID int64
+	if user != nil && user.InvitedByUserID != nil {
+		inviterUserID = *user.InvitedByUserID
 	}
 
 	// 创建使用日志
@@ -128,6 +140,45 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 		balanceUpdated = true
 	}
 
+	// Referral commission: inviter earns rebate from invitee usage.
+	inviterBalanceUpdated := false
+	if inserted && req.ActualCost > 0 && commissionRate > 0 && inviterUserID > 0 && inviterUserID != req.UserID {
+		inviter, err := s.userRepo.GetByID(txCtx, inviterUserID)
+		if err != nil {
+			if !errors.Is(err, ErrUserNotFound) {
+				return nil, fmt.Errorf("get inviter: %w", err)
+			}
+			inviter = nil
+		}
+
+		if inviter != nil && inviter.IsActive() {
+			commissionAmount := req.ActualCost * commissionRate
+			if commissionAmount > 0 {
+				txClient := s.entClient
+				if tx := dbent.TxFromContext(txCtx); tx != nil {
+					txClient = tx.Client()
+				}
+
+				_, err := txClient.ReferralCommission.Create().
+					SetUsageLogID(usageLog.ID).
+					SetInviterUserID(inviterUserID).
+					SetInviteeUserID(req.UserID).
+					SetAmount(commissionAmount).
+					Save(txCtx)
+				if err != nil {
+					if !dbent.IsConstraintError(err) {
+						return nil, fmt.Errorf("create referral commission: %w", err)
+					}
+				} else {
+					if err := s.userRepo.UpdateBalance(txCtx, inviterUserID, commissionAmount); err != nil {
+						return nil, fmt.Errorf("update inviter balance: %w", err)
+					}
+					inviterBalanceUpdated = true
+				}
+			}
+		}
+	}
+
 	if tx != nil {
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("commit transaction: %w", err)
@@ -135,6 +186,9 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 	}
 
 	s.invalidateUsageCaches(ctx, req.UserID, balanceUpdated)
+	if inviterBalanceUpdated {
+		s.invalidateUsageCaches(ctx, inviterUserID, true)
+	}
 
 	return usageLog, nil
 }

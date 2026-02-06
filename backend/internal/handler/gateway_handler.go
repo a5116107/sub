@@ -14,13 +14,16 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	pkgerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/service/payloadrules"
 
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/sjson"
 )
 
 // GatewayHandler handles API gateway requests
@@ -33,6 +36,8 @@ type GatewayHandler struct {
 	concurrencyHelper         *ConcurrencyHelper
 	maxAccountSwitches        int
 	maxAccountSwitchesGemini  int
+	payloadRulesEngine        *payloadrules.Engine
+	payloadRulesStats         *payloadrules.StatsCollector
 }
 
 // NewGatewayHandler creates a new GatewayHandler
@@ -48,6 +53,8 @@ func NewGatewayHandler(
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 10
 	maxAccountSwitchesGemini := 3
+	var rulesEngine *payloadrules.Engine
+	var rulesStats *payloadrules.StatsCollector
 	if cfg != nil {
 		pingInterval = time.Duration(cfg.Concurrency.PingInterval) * time.Second
 		if cfg.Gateway.MaxAccountSwitches > 0 {
@@ -55,6 +62,14 @@ func NewGatewayHandler(
 		}
 		if cfg.Gateway.MaxAccountSwitchesGemini > 0 {
 			maxAccountSwitchesGemini = cfg.Gateway.MaxAccountSwitchesGemini
+		}
+		engine, compiled := payloadrules.NewEngine(cfg.Gateway.PayloadRules)
+		for _, w := range compiled.Warnings {
+			log.Printf("[PayloadRules] %s", w)
+		}
+		rulesEngine = engine
+		if rulesEngine != nil && rulesEngine.HasRules() {
+			rulesStats = payloadrules.NewStatsCollector(time.Minute)
 		}
 	}
 	return &GatewayHandler{
@@ -66,6 +81,8 @@ func NewGatewayHandler(
 		concurrencyHelper:         NewConcurrencyHelper(concurrencyService, SSEPingFormatClaude, pingInterval),
 		maxAccountSwitches:        maxAccountSwitches,
 		maxAccountSwitchesGemini:  maxAccountSwitchesGemini,
+		payloadRulesEngine:        rulesEngine,
+		payloadRulesStats:         rulesStats,
 	}
 }
 
@@ -111,6 +128,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
 	}
+	originalParsedReq := parsedReq
 	reqModel := parsedReq.Model
 	reqStream := parsedReq.Stream
 
@@ -128,9 +146,17 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 获取订阅信息（可能为nil）- 提前获取用于后续检查
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 
+	// Concurrency is tracked per (user_id, group_id). Group may be nil.
+	groupID := int64(0)
+	if apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	} else if apiKey.Group != nil {
+		groupID = apiKey.Group.ID
+	}
+
 	// 0. 检查wait队列是否已满
 	maxWait := service.CalculateMaxWait(subject.Concurrency)
-	canWait, err := h.concurrencyHelper.IncrementWaitCount(c.Request.Context(), subject.UserID, maxWait)
+	canWait, err := h.concurrencyHelper.IncrementWaitCount(c.Request.Context(), subject.UserID, groupID, maxWait)
 	waitCounted := false
 	if err != nil {
 		log.Printf("Increment wait count failed: %v", err)
@@ -145,12 +171,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// Ensure we decrement if we exit before acquiring the user slot.
 	defer func() {
 		if waitCounted {
-			h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID)
+			h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID, groupID)
 		}
 	}()
 
 	// 1. 首先获取用户并发槽位
-	userReleaseFunc, err := h.concurrencyHelper.AcquireUserSlotWithWait(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted)
+	userReleaseFunc, err := h.concurrencyHelper.AcquireUserSlotWithWait(c, subject.UserID, groupID, subject.Concurrency, reqStream, &streamStarted)
 	if err != nil {
 		log.Printf("User concurrency acquire failed: %v", err)
 		h.handleConcurrencyError(c, err, "user", streamStarted)
@@ -158,7 +184,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 	// User slot acquired: no longer waiting in the queue.
 	if waitCounted {
-		h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID)
+		h.concurrencyHelper.DecrementWaitCount(c.Request.Context(), subject.UserID, groupID)
 		waitCounted = false
 	}
 	// 在请求结束或 Context 取消时确保释放槽位，避免客户端断开造成泄漏
@@ -167,16 +193,82 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		defer userReleaseFunc()
 	}
 
+	// Apply generic payload rules (safe subset) before billing reservation, so reservation reflects the final payload.
+	if h.payloadRulesEngine != nil && h.payloadRulesEngine.HasRules() {
+		mutated, stats := h.payloadRulesEngine.Apply(payloadrules.ApplyInput{
+			Protocol: payloadrules.ProtocolAnthropicMessages,
+			Path:     c.Request.URL.Path,
+			Model:    reqModel,
+			Payload:  body,
+		})
+		if h.payloadRulesStats != nil {
+			h.payloadRulesStats.Record(stats)
+		}
+		if stats.Changed {
+			parsedAfter, parseErr := service.ParseGatewayRequest(mutated)
+			if parseErr == nil && parsedAfter != nil && strings.TrimSpace(parsedAfter.Model) != "" {
+				// Keep streaming decision stable: do not allow rules to flip `stream`.
+				if parsedAfter.Stream != reqStream {
+					reverted, errSet := sjson.SetBytes(mutated, "stream", reqStream)
+					if errSet == nil {
+						mutated = reverted
+						parsedAfter.Stream = reqStream
+						parsedAfter.Body = mutated
+					}
+				}
+				body = mutated
+				parsedReq = parsedAfter
+				reqModel = parsedAfter.Model
+				reqStream = parsedAfter.Stream
+				setOpsRequestContext(c, reqModel, reqStream, body)
+			} else {
+				log.Printf("[PayloadRules] invalid mutated payload ignored: path=%s model=%s err=%v", c.Request.URL.Path, reqModel, parseErr)
+			}
+		}
+	}
+
 	// 2. 【新增】Wait后二次检查余额/订阅
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+	reserveUSD := 0.0
+	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() && subscription != nil {
+		estimated, err := h.gatewayService.EstimateSubscriptionReservationUSD(reqModel, body, service.SubscriptionReserveAnthropic)
+		if err != nil {
+			log.Printf("Estimate subscription reservation failed: %v", err)
+			h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "billing_error", "Billing service temporarily unavailable. Please retry later.", streamStarted)
+			return
+		}
+		reserveUSD = estimated
+		if h.gatewayService.ApplyRateMultiplierToSubscription() {
+			multiplier := apiKey.Group.RateMultiplier
+			if multiplier <= 0 {
+				multiplier = 1.0
+			}
+			reserveUSD = reserveUSD * multiplier
+		}
+	}
+
+	reservation, err := h.billingCacheService.CheckBillingEligibilityAndReserve(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, reserveUSD)
+	released := false
+	defer func() {
+		if reservation == nil || released {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = h.billingCacheService.FinalizeSubscriptionReservation(ctx, reservation.UserID, reservation.GroupID, reservation.AmountUSD, 0)
+	}()
+
+	if err != nil {
 		log.Printf("Billing eligibility check failed after wait: %v", err)
 		status, code, message := billingErrorDetails(err)
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
 
-	// 计算粘性会话hash
-	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
+	// 计算粘性会话hash（用户侧可控），再按 user scope 防止跨用户碰撞/Pinning。
+	sessionHash := h.gatewayService.GenerateSessionHash(originalParsedReq)
+	if apiKey != nil && apiKey.User != nil {
+		sessionHash = service.ScopeStickySessionKey(apiKey.User.ID, sessionHash)
+	}
 
 	// 获取平台：优先使用强制平台（/antigravity 路由，中间件已设置 request.Context），否则使用分组平台
 	platform := ""
@@ -309,9 +401,18 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			clientIP := ip.GetClientIP(c)
 
 			// 异步记录使用量（subscription已在函数开头获取）
-			go func(result *service.ForwardResult, usedAccount *service.Account, ua, clientIP string) {
+			clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
+			reservedUSD := 0.0
+			if reservation != nil {
+				reservedUSD = reservation.AmountUSD
+				released = true
+			}
+			go func(result *service.ForwardResult, usedAccount *service.Account, ua, clientIP, clientRequestID string, reservedUSD float64) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
+				if strings.TrimSpace(clientRequestID) != "" {
+					ctx = context.WithValue(ctx, ctxkey.ClientRequestID, strings.TrimSpace(clientRequestID))
+				}
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:       result,
 					APIKey:       apiKey,
@@ -320,10 +421,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					Subscription: subscription,
 					UserAgent:    ua,
 					IPAddress:    clientIP,
+					ReservedUSD:  reservedUSD,
 				}); err != nil {
 					log.Printf("Record usage failed: %v", err)
 				}
-			}(result, account, userAgent, clientIP)
+			}(result, account, userAgent, clientIP, clientRequestID, reservedUSD)
 			return
 		}
 	}
@@ -335,7 +437,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	for {
 		// 选择支持该模型的账号
-		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, failedAccountIDs, parsedReq.MetadataUserID)
+		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, failedAccountIDs, originalParsedReq.MetadataUserID)
 		if err != nil {
 			if len(failedAccountIDs) == 0 {
 				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
@@ -754,6 +856,32 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 
 	// 计算粘性会话 hash
 	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
+	if apiKey != nil && apiKey.User != nil {
+		sessionHash = service.ScopeStickySessionKey(apiKey.User.ID, sessionHash)
+	}
+
+	// Apply generic payload rules (safe subset) after billing check, before routing.
+	if h.payloadRulesEngine != nil && h.payloadRulesEngine.HasRules() {
+		mutated, stats := h.payloadRulesEngine.Apply(payloadrules.ApplyInput{
+			Protocol: payloadrules.ProtocolAnthropicMessages,
+			Path:     c.Request.URL.Path,
+			Model:    parsedReq.Model,
+			Payload:  body,
+		})
+		if h.payloadRulesStats != nil {
+			h.payloadRulesStats.Record(stats)
+		}
+		if stats.Changed {
+			parsedAfter, parseErr := service.ParseGatewayRequest(mutated)
+			if parseErr == nil && parsedAfter != nil && strings.TrimSpace(parsedAfter.Model) != "" {
+				body = mutated
+				parsedReq = parsedAfter
+				setOpsRequestContext(c, parsedReq.Model, parsedReq.Stream, body)
+			} else {
+				log.Printf("[PayloadRules] invalid mutated payload ignored: path=%s model=%s err=%v", c.Request.URL.Path, parsedReq.Model, parseErr)
+			}
+		}
+	}
 
 	// 选择支持该模型的账号
 	account, err := h.gatewayService.SelectAccountForModel(c.Request.Context(), apiKey.GroupID, sessionHash, parsedReq.Model)

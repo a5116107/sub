@@ -1,26 +1,46 @@
 <template>
-  <div class="empty-state">
-    <!-- Icon -->
-    <div
-      class="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-gray-100 dark:bg-dark-800"
-    >
-      <slot name="icon">
-        <component v-if="icon" :is="icon" class="empty-state-icon h-10 w-10" aria-hidden="true" />
-        <svg
-          v-else
-          class="empty-state-icon h-10 w-10"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          stroke-width="1.5"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+  <div class="empty-state-enhanced">
+    <!-- Background decorations -->
+    <div class="empty-state-bg">
+      <div class="empty-state-orb empty-state-orb-1"></div>
+      <div class="empty-state-orb empty-state-orb-2"></div>
+    </div>
+
+    <!-- Icon with ring decoration and gradient background -->
+    <div class="empty-state-icon-wrapper">
+      <!-- Ring decoration -->
+      <div class="empty-state-ring"></div>
+      <div
+        class="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-gray-100 to-gray-50 dark:from-dark-800 dark:to-dark-900 shadow-inner ring-1 ring-gray-200/50 dark:ring-dark-700/50"
+      >
+        <slot name="icon">
+          <component v-if="icon" :is="icon" class="h-10 w-10 text-gray-400 dark:text-dark-500" aria-hidden="true" />
+          <Icon
+            v-else-if="type === 'search'"
+            name="search"
+            size="xl"
+            class="text-gray-400 dark:text-dark-500"
           />
-        </svg>
-      </slot>
+          <Icon
+            v-else-if="type === 'error'"
+            name="exclamationTriangle"
+            size="xl"
+            class="text-amber-500"
+          />
+          <Icon
+            v-else-if="type === 'success'"
+            name="checkCircle"
+            size="xl"
+            class="text-emerald-500"
+          />
+          <Icon
+            v-else
+            name="inbox"
+            size="xl"
+            class="text-gray-400 dark:text-dark-500"
+          />
+        </slot>
+      </div>
     </div>
 
     <!-- Title -->
@@ -29,23 +49,23 @@
     </h3>
 
     <!-- Description -->
-    <p class="empty-state-description">
+    <p v-if="description" class="empty-state-description">
       {{ description }}
     </p>
 
     <!-- Action -->
-    <div v-if="actionText || $slots.action" class="mt-6">
+    <div v-if="actionText || $slots.action" class="empty-state-action">
       <slot name="action">
-        <component
-          :is="actionTo ? 'RouterLink' : 'button'"
+        <Button
           v-if="actionText"
+          :variant="actionVariant"
+          :icon="actionIconName"
+          icon-position="left"
           :to="actionTo"
           @click="!actionTo && $emit('action')"
-          class="btn btn-primary"
         >
-          <Icon v-if="actionIcon" name="plus" size="md" class="mr-2" />
           {{ actionText }}
-        </component>
+        </Button>
       </slot>
     </div>
   </div>
@@ -56,25 +76,39 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Component } from 'vue'
 import Icon from '@/components/icons/Icon.vue'
+import Button from './Button.vue'
+import type { IconName } from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
 
+type EmptyStateType = 'default' | 'search' | 'error' | 'success'
+type ActionVariant = 'primary' | 'secondary' | 'ghost'
+
 interface Props {
-  icon?: Component | string
+  icon?: Component | IconName
+  type?: EmptyStateType
   title?: string
   description?: string
   actionText?: string
   actionTo?: string | object
-  actionIcon?: boolean
+  actionIcon?: IconName
+  actionVariant?: ActionVariant
   message?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  type: 'default',
   description: '',
-  actionIcon: true
+  actionIcon: 'plus',
+  actionVariant: 'primary'
 })
 
 const displayTitle = computed(() => props.title || t('common.noData'))
+
+const actionIconName = computed(() => {
+  if (props.actionIcon) return props.actionIcon
+  return 'plus'
+})
 
 defineEmits(['action'])
 </script>

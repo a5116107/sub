@@ -58,23 +58,37 @@
       </div>
 
       <!-- Step Content -->
-      <div class="rounded-2xl bg-white p-8 shadow-xl dark:bg-dark-800">
-        <!-- Step 1: Database -->
-        <div v-if="currentStep === 0" class="space-y-6">
-          <div class="mb-6 text-center">
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
-              {{ t('setup.database.title') }}
-            </h2>
-            <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
-              {{ t('setup.database.description') }}
-            </p>
-          </div>
+        <div class="rounded-2xl bg-white p-8 shadow-xl dark:bg-dark-800">
+          <!-- Step 1: Database -->
+          <div v-if="currentStep === 0" class="space-y-6">
+            <div class="mb-6 text-center">
+              <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                {{ t('setup.database.title') }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-dark-400">
+                {{ t('setup.database.description') }}
+              </p>
+            </div>
 
-          <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="input-label">{{ t('setup.database.host') }}</label>
+              <label class="input-label">{{ t('setup.token.label') }}</label>
               <input
-                v-model="formData.database.host"
+                v-model="setupToken"
+                type="password"
+                class="input"
+                :placeholder="t('setup.token.placeholder')"
+                autocomplete="off"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+                {{ t('setup.token.help') }}
+              </p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="input-label">{{ t('setup.database.host') }}</label>
+                <input
+                  v-model="formData.database.host"
                 type="text"
                 class="input"
                 placeholder="localhost"
@@ -89,6 +103,18 @@
                 placeholder="5432"
               />
             </div>
+          </div>
+
+          <div class="flex items-center justify-between rounded-xl border border-gray-200 p-3 dark:border-dark-700">
+            <div>
+              <p class="text-sm font-medium text-gray-900 dark:text-white">
+                {{ t("setup.redis.enableTls") }}
+              </p>
+              <p class="text-xs text-gray-500 dark:text-dark-400">
+                {{ t("setup.redis.enableTlsHint") }}
+              </p>
+            </div>
+            <Toggle v-model="formData.redis.enable_tls" />
           </div>
 
           <div class="grid grid-cols-2 gap-4">
@@ -466,13 +492,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { testDatabase, testRedis, install, type InstallRequest } from '@/api/setup'
-import Select from '@/components/common/Select.vue'
-import Icon from '@/components/icons/Icon.vue'
+ import { ref, reactive, computed, watch } from 'vue'
+ import { useI18n } from 'vue-i18n'
+ import { testDatabase, testRedis, install, setSetupToken, type InstallRequest } from '@/api/setup'
+ import Select from '@/components/common/Select.vue'
+ import Icon from '@/components/icons/Icon.vue'
 
-const { t } = useI18n()
+ const { t } = useI18n()
 
 const steps = computed(() => [
   { id: 'database', title: t('setup.database.title') },
@@ -490,14 +516,23 @@ const testingDb = ref(false)
 const testingRedis = ref(false)
 const dbConnected = ref(false)
 const redisConnected = ref(false)
-const installing = ref(false)
-const confirmPassword = ref('')
-const serviceReady = ref(false)
+ const installing = ref(false)
+ const confirmPassword = ref('')
+ const serviceReady = ref(false)
+ const setupToken = ref('')
 
-// Default server port
-const getCurrentPort = (): number => {
-  const port = window.location.port
-  if (port) {
+ watch(
+   setupToken,
+   (value) => {
+     setSetupToken(value)
+   },
+   { immediate: true }
+ )
+
+ // Default server port
+ const getCurrentPort = (): number => {
+   const port = window.location.port
+   if (port) {
     return parseInt(port, 10)
   }
 
@@ -517,7 +552,8 @@ const formData = reactive<InstallRequest>({
     host: 'localhost',
     port: 6379,
     password: '',
-    db: 0
+    db: 0,
+    enable_tls: false
   },
   admin: {
     email: '',
@@ -539,13 +575,28 @@ const canProceed = computed(() => {
     case 2:
       return (
         formData.admin.email &&
-        formData.admin.password.length >= 6 &&
+        formData.admin.password.length >= 8 &&
         formData.admin.password === confirmPassword.value
       )
     default:
       return true
   }
 })
+
+type SetupApiError = {
+  response?: {
+    data?: {
+      message?: string
+      detail?: string
+    }
+  }
+  message?: string
+}
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  const err = error as SetupApiError
+  return err.response?.data?.message || err.response?.data?.detail || err.message || fallback
+}
 
 async function testDatabaseConnection() {
   testingDb.value = true
@@ -556,8 +607,7 @@ async function testDatabaseConnection() {
     await testDatabase(formData.database)
     dbConnected.value = true
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { detail?: string } }; message?: string }
-    errorMessage.value = err.response?.data?.detail || err.message || 'Connection failed'
+    errorMessage.value = getErrorMessage(error, 'Connection failed')
   } finally {
     testingDb.value = false
   }
@@ -572,8 +622,7 @@ async function testRedisConnection() {
     await testRedis(formData.redis)
     redisConnected.value = true
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { detail?: string } }; message?: string }
-    errorMessage.value = err.response?.data?.detail || err.message || 'Connection failed'
+    errorMessage.value = getErrorMessage(error, 'Connection failed')
   } finally {
     testingRedis.value = false
   }
@@ -596,8 +645,7 @@ async function performInstall() {
     // Start polling for service restart
     waitForServiceRestart()
   } catch (error: unknown) {
-    const err = error as { response?: { data?: { detail?: string } }; message?: string }
-    errorMessage.value = err.response?.data?.detail || err.message || 'Installation failed'
+    errorMessage.value = getErrorMessage(error, 'Installation failed')
   } finally {
     installing.value = false
   }

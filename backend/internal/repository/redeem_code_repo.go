@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -75,8 +76,9 @@ func (r *redeemCodeRepository) GetByID(ctx context.Context, id int64) (*service.
 }
 
 func (r *redeemCodeRepository) GetByCode(ctx context.Context, code string) (*service.RedeemCode, error) {
+	code = strings.TrimSpace(code)
 	m, err := r.client.RedeemCode.Query().
-		Where(redeemcode.CodeEQ(code)).
+		Where(redeemcode.CodeEqualFold(code)).
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -200,6 +202,65 @@ func (r *redeemCodeRepository) ListByUser(ctx context.Context, userID int64, lim
 	}
 
 	return redeemCodeEntitiesToService(codes), nil
+}
+
+func (r *redeemCodeRepository) GetStats(ctx context.Context) (*service.RedeemCodeStats, error) {
+	totalCodes, err := r.client.RedeemCode.Query().Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	activeCodes, err := r.client.RedeemCode.Query().Where(redeemcode.StatusEQ(service.StatusUnused)).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	usedCodes, err := r.client.RedeemCode.Query().Where(redeemcode.StatusEQ(service.StatusUsed)).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	expiredCodes, err := r.client.RedeemCode.Query().Where(redeemcode.StatusEQ(service.StatusExpired)).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var sumRows []struct {
+		SumValue float64 `json:"sum_value"`
+	}
+	if err := r.client.RedeemCode.Query().
+		Aggregate(dbent.As(dbent.Sum(redeemcode.FieldValue), "sum_value")).
+		Scan(ctx, &sumRows); err != nil {
+		return nil, err
+	}
+	totalValue := 0.0
+	if len(sumRows) > 0 {
+		totalValue = sumRows[0].SumValue
+	}
+
+	var typeRows []struct {
+		Type  string `json:"type"`
+		Count int64  `json:"count"`
+	}
+	if err := r.client.RedeemCode.Query().
+		GroupBy(redeemcode.FieldType).
+		Aggregate(dbent.As(dbent.Count(), "count")).
+		Scan(ctx, &typeRows); err != nil {
+		return nil, err
+	}
+	byType := make(map[string]int64, len(typeRows))
+	for _, row := range typeRows {
+		byType[row.Type] = row.Count
+	}
+
+	return &service.RedeemCodeStats{
+		TotalCodes:            int64(totalCodes),
+		ActiveCodes:           int64(activeCodes),
+		UsedCodes:             int64(usedCodes),
+		ExpiredCodes:          int64(expiredCodes),
+		TotalValueDistributed: totalValue,
+		ByType:                byType,
+	}, nil
 }
 
 func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {

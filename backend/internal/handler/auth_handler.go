@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+	"log"
 	"log/slog"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -308,23 +310,48 @@ func (h *AuthHandler) ValidatePromoCode(c *gin.Context) {
 		return
 	}
 
-	promoCode, err := h.promoService.ValidatePromoCode(c.Request.Context(), req.Code)
-	if err != nil {
-		// 根据错误类型返回对应的错误码
-		errorCode := "PROMO_CODE_INVALID"
-		switch err {
-		case service.ErrPromoCodeNotFound:
-			errorCode = "PROMO_CODE_NOT_FOUND"
-		case service.ErrPromoCodeExpired:
-			errorCode = "PROMO_CODE_EXPIRED"
-		case service.ErrPromoCodeDisabled:
-			errorCode = "PROMO_CODE_DISABLED"
-		case service.ErrPromoCodeMaxUsed:
-			errorCode = "PROMO_CODE_MAX_USED"
-		case service.ErrPromoCodeAlreadyUsed:
-			errorCode = "PROMO_CODE_ALREADY_USED"
+	ctx := c.Request.Context()
+
+	// 1) Admin promo codes
+	if h.promoService != nil {
+		promoCode, err := h.promoService.ValidatePromoCode(ctx, req.Code)
+		if err == nil && promoCode != nil {
+			response.Success(c, ValidatePromoCodeResponse{
+				Valid:       true,
+				BonusAmount: promoCode.BonusAmount,
+			})
+			return
 		}
 
+		if err != nil && err != service.ErrPromoCodeNotFound {
+			// 根据错误类型返回对应的错误码
+			errorCode := "PROMO_CODE_INVALID"
+			switch err {
+			case service.ErrPromoCodeExpired:
+				errorCode = "PROMO_CODE_EXPIRED"
+			case service.ErrPromoCodeDisabled:
+				errorCode = "PROMO_CODE_DISABLED"
+			case service.ErrPromoCodeMaxUsed:
+				errorCode = "PROMO_CODE_MAX_USED"
+			case service.ErrPromoCodeAlreadyUsed:
+				errorCode = "PROMO_CODE_ALREADY_USED"
+			}
+
+			response.Success(c, ValidatePromoCodeResponse{
+				Valid:     false,
+				ErrorCode: errorCode,
+			})
+			return
+		}
+	}
+
+	// 2) Per-user invite codes (referral)
+	inviter, err := h.userService.GetByInviteCode(ctx, req.Code)
+	if err != nil {
+		errorCode := "PROMO_CODE_INVALID"
+		if errors.Is(err, service.ErrUserNotFound) {
+			errorCode = "PROMO_CODE_NOT_FOUND"
+		}
 		response.Success(c, ValidatePromoCodeResponse{
 			Valid:     false,
 			ErrorCode: errorCode,
@@ -332,17 +359,21 @@ func (h *AuthHandler) ValidatePromoCode(c *gin.Context) {
 		return
 	}
 
-	if promoCode == nil {
+	if inviter == nil || !inviter.IsActive() {
 		response.Success(c, ValidatePromoCodeResponse{
 			Valid:     false,
-			ErrorCode: "PROMO_CODE_INVALID",
+			ErrorCode: "PROMO_CODE_DISABLED",
 		})
 		return
 	}
 
+	inviteeBonus := 0.0
+	if h.settingSvc != nil {
+		inviteeBonus = h.settingSvc.GetReferralInviteeBonus(ctx)
+	}
 	response.Success(c, ValidatePromoCodeResponse{
 		Valid:       true,
-		BonusAmount: promoCode.BonusAmount,
+		BonusAmount: inviteeBonus,
 	})
 }
 
@@ -372,17 +403,19 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 
-	// Build frontend base URL from request
-	scheme := "https"
-	if c.Request.TLS == nil {
-		// Check X-Forwarded-Proto header (common in reverse proxy setups)
-		if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
-			scheme = proto
-		} else {
-			scheme = "http"
-		}
+	frontendBaseURL, err := service.TrustedFrontendBaseURL(service.FrontendBaseURLInput{
+		Origin: c.GetHeader("Origin"),
+		Host:   c.Request.Host,
+		IsTLS:  c.Request.TLS != nil,
+	}, h.cfg)
+	if err != nil {
+		// Fail closed without leaking account existence. Log for operators.
+		log.Printf("[Auth] ForgotPassword: cannot determine trusted frontend base URL: %v", err)
+		response.Success(c, ForgotPasswordResponse{
+			Message: "If your email is registered, you will receive a password reset link shortly.",
+		})
+		return
 	}
-	frontendBaseURL := scheme + "://" + c.Request.Host
 
 	// Request password reset (async)
 	// Note: This returns success even if email doesn't exist (to prevent enumeration)

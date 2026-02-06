@@ -114,12 +114,6 @@ func (_u *APIKeyUpdate) SetNillableGroupID(v *int64) *APIKeyUpdate {
 	return _u
 }
 
-// ClearGroupID clears the value of the "group_id" field.
-func (_u *APIKeyUpdate) ClearGroupID() *APIKeyUpdate {
-	_u.mutation.ClearGroupID()
-	return _u
-}
-
 // SetStatus sets the "status" field.
 func (_u *APIKeyUpdate) SetStatus(v string) *APIKeyUpdate {
 	_u.mutation.SetStatus(v)
@@ -167,6 +161,116 @@ func (_u *APIKeyUpdate) AppendIPBlacklist(v []string) *APIKeyUpdate {
 // ClearIPBlacklist clears the value of the "ip_blacklist" field.
 func (_u *APIKeyUpdate) ClearIPBlacklist() *APIKeyUpdate {
 	_u.mutation.ClearIPBlacklist()
+	return _u
+}
+
+// SetAllowBalance sets the "allow_balance" field.
+func (_u *APIKeyUpdate) SetAllowBalance(v bool) *APIKeyUpdate {
+	_u.mutation.SetAllowBalance(v)
+	return _u
+}
+
+// SetNillableAllowBalance sets the "allow_balance" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableAllowBalance(v *bool) *APIKeyUpdate {
+	if v != nil {
+		_u.SetAllowBalance(*v)
+	}
+	return _u
+}
+
+// SetAllowSubscription sets the "allow_subscription" field.
+func (_u *APIKeyUpdate) SetAllowSubscription(v bool) *APIKeyUpdate {
+	_u.mutation.SetAllowSubscription(v)
+	return _u
+}
+
+// SetNillableAllowSubscription sets the "allow_subscription" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableAllowSubscription(v *bool) *APIKeyUpdate {
+	if v != nil {
+		_u.SetAllowSubscription(*v)
+	}
+	return _u
+}
+
+// SetSubscriptionStrict sets the "subscription_strict" field.
+func (_u *APIKeyUpdate) SetSubscriptionStrict(v bool) *APIKeyUpdate {
+	_u.mutation.SetSubscriptionStrict(v)
+	return _u
+}
+
+// SetNillableSubscriptionStrict sets the "subscription_strict" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableSubscriptionStrict(v *bool) *APIKeyUpdate {
+	if v != nil {
+		_u.SetSubscriptionStrict(*v)
+	}
+	return _u
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (_u *APIKeyUpdate) SetExpiresAt(v time.Time) *APIKeyUpdate {
+	_u.mutation.SetExpiresAt(v)
+	return _u
+}
+
+// SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableExpiresAt(v *time.Time) *APIKeyUpdate {
+	if v != nil {
+		_u.SetExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (_u *APIKeyUpdate) ClearExpiresAt() *APIKeyUpdate {
+	_u.mutation.ClearExpiresAt()
+	return _u
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (_u *APIKeyUpdate) SetQuotaLimitUsd(v float64) *APIKeyUpdate {
+	_u.mutation.ResetQuotaLimitUsd()
+	_u.mutation.SetQuotaLimitUsd(v)
+	return _u
+}
+
+// SetNillableQuotaLimitUsd sets the "quota_limit_usd" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableQuotaLimitUsd(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetQuotaLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddQuotaLimitUsd adds value to the "quota_limit_usd" field.
+func (_u *APIKeyUpdate) AddQuotaLimitUsd(v float64) *APIKeyUpdate {
+	_u.mutation.AddQuotaLimitUsd(v)
+	return _u
+}
+
+// ClearQuotaLimitUsd clears the value of the "quota_limit_usd" field.
+func (_u *APIKeyUpdate) ClearQuotaLimitUsd() *APIKeyUpdate {
+	_u.mutation.ClearQuotaLimitUsd()
+	return _u
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (_u *APIKeyUpdate) SetQuotaUsedUsd(v float64) *APIKeyUpdate {
+	_u.mutation.ResetQuotaUsedUsd()
+	_u.mutation.SetQuotaUsedUsd(v)
+	return _u
+}
+
+// SetNillableQuotaUsedUsd sets the "quota_used_usd" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableQuotaUsedUsd(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetQuotaUsedUsd(*v)
+	}
+	return _u
+}
+
+// AddQuotaUsedUsd adds value to the "quota_used_usd" field.
+func (_u *APIKeyUpdate) AddQuotaUsedUsd(v float64) *APIKeyUpdate {
+	_u.mutation.AddQuotaUsedUsd(v)
 	return _u
 }
 
@@ -295,6 +399,9 @@ func (_u *APIKeyUpdate) check() error {
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "APIKey.user"`)
 	}
+	if _u.mutation.GroupCleared() && len(_u.mutation.GroupIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "APIKey.group"`)
+	}
 	return nil
 }
 
@@ -349,6 +456,36 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.IPBlacklistCleared() {
 		_spec.ClearField(apikey.FieldIPBlacklist, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.AllowBalance(); ok {
+		_spec.SetField(apikey.FieldAllowBalance, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AllowSubscription(); ok {
+		_spec.SetField(apikey.FieldAllowSubscription, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SubscriptionStrict(); ok {
+		_spec.SetField(apikey.FieldSubscriptionStrict, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ExpiresAt(); ok {
+		_spec.SetField(apikey.FieldExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.ExpiresAtCleared() {
+		_spec.ClearField(apikey.FieldExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.QuotaLimitUsd(); ok {
+		_spec.SetField(apikey.FieldQuotaLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaLimitUsd(); ok {
+		_spec.AddField(apikey.FieldQuotaLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.QuotaLimitUsdCleared() {
+		_spec.ClearField(apikey.FieldQuotaLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.QuotaUsedUsd(); ok {
+		_spec.SetField(apikey.FieldQuotaUsedUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaUsedUsd(); ok {
+		_spec.AddField(apikey.FieldQuotaUsedUsd, field.TypeFloat64, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -555,12 +692,6 @@ func (_u *APIKeyUpdateOne) SetNillableGroupID(v *int64) *APIKeyUpdateOne {
 	return _u
 }
 
-// ClearGroupID clears the value of the "group_id" field.
-func (_u *APIKeyUpdateOne) ClearGroupID() *APIKeyUpdateOne {
-	_u.mutation.ClearGroupID()
-	return _u
-}
-
 // SetStatus sets the "status" field.
 func (_u *APIKeyUpdateOne) SetStatus(v string) *APIKeyUpdateOne {
 	_u.mutation.SetStatus(v)
@@ -608,6 +739,116 @@ func (_u *APIKeyUpdateOne) AppendIPBlacklist(v []string) *APIKeyUpdateOne {
 // ClearIPBlacklist clears the value of the "ip_blacklist" field.
 func (_u *APIKeyUpdateOne) ClearIPBlacklist() *APIKeyUpdateOne {
 	_u.mutation.ClearIPBlacklist()
+	return _u
+}
+
+// SetAllowBalance sets the "allow_balance" field.
+func (_u *APIKeyUpdateOne) SetAllowBalance(v bool) *APIKeyUpdateOne {
+	_u.mutation.SetAllowBalance(v)
+	return _u
+}
+
+// SetNillableAllowBalance sets the "allow_balance" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableAllowBalance(v *bool) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetAllowBalance(*v)
+	}
+	return _u
+}
+
+// SetAllowSubscription sets the "allow_subscription" field.
+func (_u *APIKeyUpdateOne) SetAllowSubscription(v bool) *APIKeyUpdateOne {
+	_u.mutation.SetAllowSubscription(v)
+	return _u
+}
+
+// SetNillableAllowSubscription sets the "allow_subscription" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableAllowSubscription(v *bool) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetAllowSubscription(*v)
+	}
+	return _u
+}
+
+// SetSubscriptionStrict sets the "subscription_strict" field.
+func (_u *APIKeyUpdateOne) SetSubscriptionStrict(v bool) *APIKeyUpdateOne {
+	_u.mutation.SetSubscriptionStrict(v)
+	return _u
+}
+
+// SetNillableSubscriptionStrict sets the "subscription_strict" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableSubscriptionStrict(v *bool) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionStrict(*v)
+	}
+	return _u
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (_u *APIKeyUpdateOne) SetExpiresAt(v time.Time) *APIKeyUpdateOne {
+	_u.mutation.SetExpiresAt(v)
+	return _u
+}
+
+// SetNillableExpiresAt sets the "expires_at" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableExpiresAt(v *time.Time) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (_u *APIKeyUpdateOne) ClearExpiresAt() *APIKeyUpdateOne {
+	_u.mutation.ClearExpiresAt()
+	return _u
+}
+
+// SetQuotaLimitUsd sets the "quota_limit_usd" field.
+func (_u *APIKeyUpdateOne) SetQuotaLimitUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetQuotaLimitUsd()
+	_u.mutation.SetQuotaLimitUsd(v)
+	return _u
+}
+
+// SetNillableQuotaLimitUsd sets the "quota_limit_usd" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableQuotaLimitUsd(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetQuotaLimitUsd(*v)
+	}
+	return _u
+}
+
+// AddQuotaLimitUsd adds value to the "quota_limit_usd" field.
+func (_u *APIKeyUpdateOne) AddQuotaLimitUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddQuotaLimitUsd(v)
+	return _u
+}
+
+// ClearQuotaLimitUsd clears the value of the "quota_limit_usd" field.
+func (_u *APIKeyUpdateOne) ClearQuotaLimitUsd() *APIKeyUpdateOne {
+	_u.mutation.ClearQuotaLimitUsd()
+	return _u
+}
+
+// SetQuotaUsedUsd sets the "quota_used_usd" field.
+func (_u *APIKeyUpdateOne) SetQuotaUsedUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetQuotaUsedUsd()
+	_u.mutation.SetQuotaUsedUsd(v)
+	return _u
+}
+
+// SetNillableQuotaUsedUsd sets the "quota_used_usd" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableQuotaUsedUsd(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetQuotaUsedUsd(*v)
+	}
+	return _u
+}
+
+// AddQuotaUsedUsd adds value to the "quota_used_usd" field.
+func (_u *APIKeyUpdateOne) AddQuotaUsedUsd(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddQuotaUsedUsd(v)
 	return _u
 }
 
@@ -749,6 +990,9 @@ func (_u *APIKeyUpdateOne) check() error {
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "APIKey.user"`)
 	}
+	if _u.mutation.GroupCleared() && len(_u.mutation.GroupIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "APIKey.group"`)
+	}
 	return nil
 }
 
@@ -820,6 +1064,36 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if _u.mutation.IPBlacklistCleared() {
 		_spec.ClearField(apikey.FieldIPBlacklist, field.TypeJSON)
+	}
+	if value, ok := _u.mutation.AllowBalance(); ok {
+		_spec.SetField(apikey.FieldAllowBalance, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.AllowSubscription(); ok {
+		_spec.SetField(apikey.FieldAllowSubscription, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.SubscriptionStrict(); ok {
+		_spec.SetField(apikey.FieldSubscriptionStrict, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ExpiresAt(); ok {
+		_spec.SetField(apikey.FieldExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.ExpiresAtCleared() {
+		_spec.ClearField(apikey.FieldExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.QuotaLimitUsd(); ok {
+		_spec.SetField(apikey.FieldQuotaLimitUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaLimitUsd(); ok {
+		_spec.AddField(apikey.FieldQuotaLimitUsd, field.TypeFloat64, value)
+	}
+	if _u.mutation.QuotaLimitUsdCleared() {
+		_spec.ClearField(apikey.FieldQuotaLimitUsd, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.QuotaUsedUsd(); ok {
+		_spec.SetField(apikey.FieldQuotaUsedUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedQuotaUsedUsd(); ok {
+		_spec.AddField(apikey.FieldQuotaUsedUsd, field.TypeFloat64, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{

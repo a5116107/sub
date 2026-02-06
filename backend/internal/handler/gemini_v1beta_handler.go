@@ -14,11 +14,13 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/gemini"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/service/payloadrules"
 
 	"github.com/gin-gonic/gin"
 )
@@ -185,9 +187,17 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	// For Gemini native API, do not send Claude-style ping frames.
 	geminiConcurrency := NewConcurrencyHelper(h.concurrencyHelper.concurrencyService, SSEPingFormatNone, 0)
 
+	// Concurrency is tracked per (user_id, group_id). Group may be nil (force platform).
+	groupID := int64(0)
+	if apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	} else if apiKey.Group != nil {
+		groupID = apiKey.Group.ID
+	}
+
 	// 0) wait queue check
 	maxWait := service.CalculateMaxWait(authSubject.Concurrency)
-	canWait, err := geminiConcurrency.IncrementWaitCount(c.Request.Context(), authSubject.UserID, maxWait)
+	canWait, err := geminiConcurrency.IncrementWaitCount(c.Request.Context(), authSubject.UserID, groupID, maxWait)
 	waitCounted := false
 	if err != nil {
 		log.Printf("Increment wait count failed: %v", err)
@@ -200,19 +210,19 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 	defer func() {
 		if waitCounted {
-			geminiConcurrency.DecrementWaitCount(c.Request.Context(), authSubject.UserID)
+			geminiConcurrency.DecrementWaitCount(c.Request.Context(), authSubject.UserID, groupID)
 		}
 	}()
 
 	// 1) user concurrency slot
 	streamStarted := false
-	userReleaseFunc, err := geminiConcurrency.AcquireUserSlotWithWait(c, authSubject.UserID, authSubject.Concurrency, stream, &streamStarted)
+	userReleaseFunc, err := geminiConcurrency.AcquireUserSlotWithWait(c, authSubject.UserID, groupID, authSubject.Concurrency, stream, &streamStarted)
 	if err != nil {
 		googleError(c, http.StatusTooManyRequests, err.Error())
 		return
 	}
 	if waitCounted {
-		geminiConcurrency.DecrementWaitCount(c.Request.Context(), authSubject.UserID)
+		geminiConcurrency.DecrementWaitCount(c.Request.Context(), authSubject.UserID, groupID)
 		waitCounted = false
 	}
 	// 确保请求取消时也会释放槽位，避免长连接被动中断造成泄漏
@@ -248,6 +258,58 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 	isCLI := isGeminiCLIRequest(c, body)
 	cleanedForUnknownBinding := false
+	// Apply generic payload rules (safe subset) before billing reservation, so reservation reflects the final payload.
+	if h.payloadRulesEngine != nil && h.payloadRulesEngine.HasRules() {
+		mutated, stats := h.payloadRulesEngine.Apply(payloadrules.ApplyInput{
+			Protocol: payloadrules.ProtocolGeminiV1Beta,
+			Path:     c.Request.URL.Path,
+			Model:    modelName,
+			Payload:  body,
+		})
+		if h.payloadRulesStats != nil {
+			h.payloadRulesStats.Record(stats)
+		}
+		if stats.Changed {
+			body = mutated
+			setOpsRequestContext(c, modelName, stream, body)
+		}
+	}
+
+	// 3) billing eligibility check (after wait)
+	reserveUSD := 0.0
+	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() && subscription != nil {
+		estimated, err := h.gatewayService.EstimateSubscriptionReservationUSD(modelName, body, service.SubscriptionReserveGemini)
+		if err != nil {
+			log.Printf("Estimate subscription reservation failed: %v", err)
+			googleError(c, http.StatusServiceUnavailable, "Billing service temporarily unavailable. Please retry later.")
+			return
+		}
+		reserveUSD = estimated
+		if h.gatewayService.ApplyRateMultiplierToSubscription() {
+			multiplier := apiKey.Group.RateMultiplier
+			if multiplier <= 0 {
+				multiplier = 1.0
+			}
+			reserveUSD = reserveUSD * multiplier
+		}
+	}
+
+	reservation, err := h.billingCacheService.CheckBillingEligibilityAndReserve(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, reserveUSD)
+	released := false
+	defer func() {
+		if reservation == nil || released {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = h.billingCacheService.FinalizeSubscriptionReservation(ctx, reservation.UserID, reservation.GroupID, reservation.AmountUSD, 0)
+	}()
+
+	if err != nil {
+		status, _, message := billingErrorDetails(err)
+		googleError(c, status, message)
+		return
+	}
 
 	maxAccountSwitches := h.maxAccountSwitchesGemini
 	switchCount := 0
@@ -367,9 +429,18 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		clientIP := ip.GetClientIP(c)
 
 		// 6) record usage async
-		go func(result *service.ForwardResult, usedAccount *service.Account, ua, ip string) {
+		clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
+		reservedUSD := 0.0
+		if reservation != nil {
+			reservedUSD = reservation.AmountUSD
+			released = true
+		}
+		go func(result *service.ForwardResult, usedAccount *service.Account, ua, ip, clientRequestID string, reservedUSD float64) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
+			if strings.TrimSpace(clientRequestID) != "" {
+				ctx = context.WithValue(ctx, ctxkey.ClientRequestID, strings.TrimSpace(clientRequestID))
+			}
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 				Result:       result,
 				APIKey:       apiKey,
@@ -378,10 +449,11 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				Subscription: subscription,
 				UserAgent:    ua,
 				IPAddress:    ip,
+				ReservedUSD:  reservedUSD,
 			}); err != nil {
 				log.Printf("Record usage failed: %v", err)
 			}
-		}(result, account, userAgent, clientIP)
+		}(result, account, userAgent, clientIP, clientRequestID, reservedUSD)
 		return
 	}
 }

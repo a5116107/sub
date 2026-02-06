@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,6 +48,19 @@ func (s *userRepoStub) GetByID(ctx context.Context, id int64) (*User, error) {
 
 func (s *userRepoStub) GetByEmail(ctx context.Context, email string) (*User, error) {
 	panic("unexpected GetByEmail call")
+}
+
+func (s *userRepoStub) GetByInviteCode(ctx context.Context, inviteCode string) (*User, error) {
+	if s.user != nil && s.user.InviteCode != nil && strings.EqualFold(*s.user.InviteCode, inviteCode) {
+		return s.user, nil
+	}
+	for i := range s.created {
+		u := s.created[i]
+		if u != nil && u.InviteCode != nil && strings.EqualFold(*u.InviteCode, inviteCode) {
+			return u, nil
+		}
+	}
+	return nil, ErrUserNotFound
 }
 
 func (s *userRepoStub) GetFirstAdmin(ctx context.Context) (*User, error) {
@@ -103,6 +117,38 @@ func (s *userRepoStub) EnableTotp(ctx context.Context, userID int64) error {
 
 func (s *userRepoStub) DisableTotp(ctx context.Context, userID int64) error {
 	panic("unexpected DisableTotp call")
+}
+
+func (s *userRepoStub) SetInviteCodeIfEmpty(ctx context.Context, userID int64, inviteCode string) (bool, error) {
+	if s.user != nil && s.user.ID == userID && s.user.InviteCode == nil {
+		s.user.InviteCode = &inviteCode
+		return true, nil
+	}
+	for i := range s.created {
+		u := s.created[i]
+		if u != nil && u.ID == userID && u.InviteCode == nil {
+			u.InviteCode = &inviteCode
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *userRepoStub) SetInvitedByIfEmpty(ctx context.Context, userID int64, inviterUserID int64, invitedAt time.Time) (bool, error) {
+	if s.user != nil && s.user.ID == userID && s.user.InvitedByUserID == nil {
+		s.user.InvitedByUserID = &inviterUserID
+		s.user.InvitedAt = &invitedAt
+		return true, nil
+	}
+	for i := range s.created {
+		u := s.created[i]
+		if u != nil && u.ID == userID && u.InvitedByUserID == nil {
+			u.InvitedByUserID = &inviterUserID
+			u.InvitedAt = &invitedAt
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 type groupRepoStub struct {
@@ -274,6 +320,10 @@ func (s *redeemRepoStub) ListByUser(ctx context.Context, userID int64, limit int
 	panic("unexpected ListByUser call")
 }
 
+func (s *redeemRepoStub) GetStats(ctx context.Context) (*RedeemCodeStats, error) {
+	panic("unexpected GetStats call")
+}
+
 type subscriptionInvalidateCall struct {
 	userID  int64
 	groupID int64
@@ -313,6 +363,14 @@ func (s *billingCacheStub) SetSubscriptionCache(ctx context.Context, userID, gro
 
 func (s *billingCacheStub) UpdateSubscriptionUsage(ctx context.Context, userID, groupID int64, cost float64) error {
 	panic("unexpected UpdateSubscriptionUsage call")
+}
+
+func (s *billingCacheStub) ReserveSubscriptionUsage(ctx context.Context, userID, groupID int64, reserveUSD float64, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64) (int, error) {
+	panic("unexpected ReserveSubscriptionUsage call")
+}
+
+func (s *billingCacheStub) FinalizeSubscriptionUsage(ctx context.Context, userID, groupID int64, reservedUSD, actualUSD float64) error {
+	panic("unexpected FinalizeSubscriptionUsage call")
 }
 
 func (s *billingCacheStub) InvalidateSubscriptionCache(ctx context.Context, userID, groupID int64) error {

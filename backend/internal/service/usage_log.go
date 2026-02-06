@@ -14,6 +14,8 @@ type UsageLog struct {
 	AccountID int64
 	RequestID string
 	Model     string
+	// BilledModel is the actual model used for pricing after mapping (optional for legacy records).
+	BilledModel *string
 
 	GroupID        *int64
 	SubscriptionID *int64

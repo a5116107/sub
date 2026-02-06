@@ -2,7 +2,7 @@ package schema
 
 import (
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -49,15 +49,15 @@ func (Group) Fields() []ent.Field {
 			Default(false),
 		field.String("status").
 			MaxLen(20).
-			Default(service.StatusActive),
+			Default(domain.StatusActive),
 
 		// Subscription-related fields (added by migration 003)
 		field.String("platform").
 			MaxLen(50).
-			Default(service.PlatformAnthropic),
+			Default(domain.PlatformAnthropic),
 		field.String("subscription_type").
 			MaxLen(20).
-			Default(service.SubscriptionTypeStandard),
+			Default(domain.SubscriptionTypeStandard),
 		field.Float("daily_limit_usd").
 			Optional().
 			Nillable().
@@ -72,6 +72,9 @@ func (Group) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}),
 		field.Int("default_validity_days").
 			Default(30),
+		// user_concurrency: 分组维度的用户并发限制（0 表示不覆盖用户默认并发）
+		field.Int("user_concurrency").
+			Default(0),
 
 		// 图片生成计费配置（antigravity 和 gemini 平台使用）
 		field.Float("image_price_1k").

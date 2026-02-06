@@ -10,6 +10,23 @@ export default {
     login: 'Login',
     getStarted: 'Get Started',
     goToDashboard: 'Go to Dashboard',
+    nav: {
+      enterprise: 'Enterprise-ready',
+      features: 'Features',
+      providers: 'Providers'
+    },
+    pricing: {
+      goToPurchase: 'Go to purchase',
+      nav: 'Pricing',
+      customHint: 'Custom billing is available for enterprise plans (contact sales).',
+      groupFields: {
+        daily: 'Daily limit (USD)',
+        weekly: 'Weekly limit (USD)',
+        monthly: 'Monthly limit (USD)',
+        concurrency: 'Concurrency',
+        rate: 'Rate multiplier'
+      }
+    },
     tags: {
       subscriptionToApi: 'Subscription to API',
       stickySession: 'Sticky Session',
@@ -45,6 +62,11 @@ export default {
   setup: {
     title: 'Sub2API Setup',
     description: 'Configure your Sub2API instance',
+    token: {
+      label: 'Setup Token (optional)',
+      placeholder: 'Enter setup token',
+      help: 'If your server requires a setup token, enter it here.'
+    },
     database: {
       title: 'Database Configuration',
       description: 'Connect to your PostgreSQL database',
@@ -69,7 +91,9 @@ export default {
       port: 'Port',
       password: 'Password (optional)',
       database: 'Database',
-      passwordPlaceholder: 'Password'
+      passwordPlaceholder: 'Password',
+      enableTls: 'Enable TLS',
+      enableTlsHint: 'Use TLS when connecting to Redis (public CA certs)'
     },
     admin: {
       title: 'Admin Account',
@@ -112,6 +136,9 @@ export default {
     update: 'Update',
     confirm: 'Confirm',
     reset: 'Reset',
+    format: 'Format',
+    preview: 'Preview',
+    invalidJson: 'Invalid JSON',
     search: 'Search',
     filter: 'Filter',
     export: 'Export',
@@ -185,6 +212,7 @@ export default {
   // Navigation
   nav: {
     dashboard: 'Dashboard',
+    announcements: 'Announcements',
     apiKeys: 'API Keys',
     usage: 'Usage',
     redeem: 'Redeem',
@@ -207,7 +235,20 @@ export default {
     github: 'GitHub',
     mySubscriptions: 'My Subscriptions',
     buySubscription: 'Purchase Subscription',
+    purchase: 'Purchase',
     docs: 'Docs'
+  },
+
+  // Documentation
+  docs: {
+    loadFailed: 'Failed to load docs. Please try again.',
+    nav: {
+      title: 'Documentation',
+      overview: 'Overview',
+      quickstart: 'Quickstart',
+      compatibility: 'Compatibility',
+      faq: 'FAQ'
+    }
   },
 
   // Auth
@@ -235,6 +276,8 @@ export default {
     invalidEmail: 'Please enter a valid email address',
     passwordRequired: 'Password is required',
     passwordMinLength: 'Password must be at least 6 characters',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
     loginFailed: 'Login failed. Please check your credentials and try again.',
     registrationFailed: 'Registration failed. Please try again.',
     loginSuccess: 'Login successful! Welcome back.',
@@ -367,6 +410,8 @@ export default {
     group: 'Group',
     noGroup: 'No group',
     created: 'Created',
+    tableView: 'Table View',
+    cardView: 'Card View',
     copyToClipboard: 'Copy to clipboard',
     copied: 'Copied!',
     importToCcSwitch: 'Import to CCS',
@@ -394,6 +439,27 @@ export default {
     groupChangedSuccess: 'Group changed successfully',
     failedToChangeGroup: 'Failed to change group',
     groupRequired: 'Please select a group',
+    billingPolicy: 'Billing Policy',
+    billingPolicyHint:
+      'When both balance and subscription are enabled and you have an active subscription for the bound group, subscription quota will be used first.',
+    billingPolicyInvalid: 'Please enable at least one billing source (balance or subscription).',
+    allowSubscription: 'Allow subscription quota',
+    allowSubscriptionHint: 'Allow this key to consume subscription package quota (when available for the bound group).',
+    allowBalance: 'Allow wallet balance',
+    allowBalanceHint: 'Allow this key to fall back to wallet balance billing when subscription quota is unavailable.',
+    subscriptionStrict: 'No balance fallback when subscribed',
+    subscriptionStrictHint:
+      'When enabled and you have an active subscription for the bound group, requests must use subscription quota and will never fall back to wallet balance.',
+    subscriptionStrictInvalid: 'Strict subscription requires subscription quota to be enabled.',
+    quotaLimitUsd: 'Key quota limit (USD)',
+    quotaLimitUsdPlaceholder: 'e.g. 10.00',
+    quotaLimitUsdHint: 'Optional. Total USD quota limit for this key.',
+    quotaLimitUsdInvalid: 'Please enter a valid quota limit (>= 0).',
+    expiresAt: 'Key expires at',
+    expiresAtPlaceholder: 'Select date/time',
+    expiresAtHint: 'Optional. Requests will be rejected after this time.',
+    expiresAtInvalid: 'Please enter a valid expiration time.',
+    expiresAtMustBeFuture: 'Expiration time must be in the future.',
     usage: 'Usage',
     today: 'Today',
     total: 'Total',
@@ -560,6 +626,62 @@ export default {
     pleaseEnterCode: 'Please enter a redeem code'
   },
 
+  // Purchase
+  purchase: {
+    title: 'Purchase',
+    description: 'Choose a plan and complete your payment',
+    howToBuy: {
+      title: 'How to purchase',
+      desc: 'Select your plan and follow the payment steps. If online payment is unavailable, contact support.'
+    },
+    checkSubscriptions: 'Check subscriptions',
+    contact: 'Contact',
+    copyContact: 'Copy contact',
+    contactCopied: 'Contact copied',
+    selected: 'Selected',
+    notSelected: 'Not selected',
+    nextStep: 'Next step',
+    pleaseSelectPlan: 'Please select a plan',
+    noContactInfo: 'No contact info configured',
+    nextStepToast: 'Please contact support to complete your purchase.',
+    onlineTopupTitle: 'Online top-up',
+    onlineTopupDesc: 'Create a top-up order and pay via a supported provider. Your balance will be credited after the provider callback is verified.',
+    amountLabel: 'Amount',
+    providerLabel: 'Provider',
+    channelLabel: 'Channel',
+    amountRequired: 'Please enter a valid amount',
+    providerRequired: 'Please select a provider',
+    channelRequired: 'Please select a channel',
+    createOrder: 'Create order & pay',
+    creatingOrder: 'Creating order...',
+    paymentUnavailable: 'Online payment is currently unavailable',
+    paymentUnavailableHint: 'Ask the administrator to enable payment providers in the backend config.'
+  },
+
+  // Billing
+  billing: {
+    title: 'Billing',
+    description: 'Payment status and balance update',
+    currentBalance: 'Current Balance',
+    tip: 'Balance is credited after webhook verification. It may take a short while.',
+    refresh: 'Refresh',
+    refreshing: 'Refreshing...',
+    refreshFailed: 'Failed to refresh billing status',
+    goToPurchase: 'Go to purchase',
+    orderTitle: 'Latest order',
+    orderNo: 'Order No',
+    amount: 'Amount',
+    provider: 'Provider',
+    orderHint: 'If your balance does not update, please contact support with the order number.',
+    noOrder: 'No recent payment order found on this device.',
+    noOrderHint: 'If you just paid, go back to Purchase and try again, or contact support.',
+    statusPending: 'Pending',
+    statusPaid: 'Paid',
+    statusFailed: 'Failed',
+    statusCanceled: 'Canceled',
+    statusExpired: 'Expired'
+  },
+
   // Profile
   profile: {
     title: 'Profile Settings',
@@ -569,6 +691,9 @@ export default {
     memberSince: 'Member Since',
     administrator: 'Administrator',
     user: 'User',
+    inviteCode: 'Invite Code',
+    copyInviteCode: 'Copy code',
+    copyInviteLink: 'Copy register link',
     username: 'Username',
     enterUsername: 'Enter username',
     editProfile: 'Edit Profile',
@@ -722,7 +847,67 @@ export default {
       standard: 'Standard',
       noDataAvailable: 'No data available',
       recentUsage: 'Recent Usage',
+      backfill: {
+        open: 'Backfill',
+        title: 'Dashboard Aggregation Backfill',
+        description: 'Trigger a manual backfill for pre-aggregated dashboard data.',
+        start: 'Start Time',
+        end: 'End Time',
+        submit: 'Trigger Backfill',
+        invalidTime: 'Please provide a valid start and end time.',
+        invalidRange: 'Start time must be before end time.',
+        rangeTooLarge: 'Range too large (max {days} days).',
+        accepted: 'Backfill accepted. Aggregation will run in the background.',
+        failed: 'Failed to trigger backfill'
+      },
       failedToLoad: 'Failed to load dashboard statistics'
+    },
+
+    // Docs
+    docs: {
+      title: 'Docs',
+      subtitle: 'Manage in-site docs/articles served under /docs',
+      viewPublic: 'View Public Docs',
+      pages: 'Pages',
+      createPage: 'Create Page',
+      slug: 'Slug',
+      slugPlaceholder: 'e.g. security / pricing / terms',
+      slugRequired: 'Slug is required',
+      titleZh: 'Title (ZH)',
+      titleEn: 'Title (EN)',
+      group: 'Group',
+      groupPlaceholder: 'e.g. Docs / Blog / Security',
+      order: 'Order',
+      format: 'Format',
+      formats: {
+        markdown: 'Markdown',
+        html: 'HTML',
+        text: 'Plain text'
+      },
+      public: 'Public',
+      private: 'Private',
+      ungrouped: 'Ungrouped',
+      selectHint: 'Select a page from the left panel first',
+      meta: 'Metadata',
+      openPage: 'Open Page',
+      content: 'Content',
+      page: 'Page',
+      lang: 'Language',
+      status: 'Status',
+      unsaved: 'Unsaved changes',
+      saved: 'Saved',
+      updatedAt: 'Updated',
+      editor: 'Content Editor',
+      placeholder: 'Write Markdown here...',
+      htmlPlaceholder: 'Write HTML here...',
+      textPlaceholder: 'Write plain text here...',
+      htmlSanitizedHint: 'Note: HTML is sanitized on the frontend before rendering (scripts will be removed).',
+      deleteConfirm: 'Delete this page? This will remove both zh/en content and cannot be undone.',
+      loadFailed: 'Failed to load docs page',
+      saveFailed: 'Failed to save docs page',
+      savedToast: 'Docs saved',
+      createdToast: 'Page created',
+      deletedToast: 'Page deleted'
     },
 
     // Users
@@ -967,7 +1152,9 @@ export default {
         anthropic: 'Anthropic',
         openai: 'OpenAI',
         gemini: 'Gemini',
-        antigravity: 'Antigravity'
+        antigravity: 'Antigravity',
+        qwen: 'Qwen',
+        iflow: 'iFlow'
       },
       deleteConfirm:
         "Are you sure you want to delete '{name}'? All associated API keys will no longer belong to any group.",
@@ -981,6 +1168,10 @@ export default {
         typeNotEditable: 'Billing type cannot be changed after group creation.',
         standard: 'Standard (Balance)',
         subscription: 'Subscription (Quota)',
+        userConcurrency: 'User Concurrency',
+        userConcurrencyHint:
+          "Max concurrent requests for this group. 0 means it won't override the user's default concurrency.",
+        userConcurrencyPlaceholder: '0 (no override)',
         dailyLimit: 'Daily Limit (USD)',
         weeklyLimit: 'Weekly Limit (USD)',
         monthlyLimit: 'Monthly Limit (USD)',
@@ -1027,6 +1218,8 @@ export default {
     subscriptions: {
       title: 'Subscription Management',
       description: 'Manage user subscriptions and quota limits',
+      disabled: 'Subscriptions are disabled',
+      disabledDesc: 'This feature is currently turned off by the administrator.',
       assignSubscription: 'Assign Subscription',
       adjustSubscription: 'Adjust Subscription',
       revokeSubscription: 'Revoke Subscription',
@@ -1151,7 +1344,9 @@ export default {
         claude: 'Claude',
         openai: 'OpenAI',
         gemini: 'Gemini',
-        antigravity: 'Antigravity'
+        antigravity: 'Antigravity',
+        qwen: 'Qwen',
+        iflow: 'iFlow'
       },
       types: {
         oauth: 'OAuth',
@@ -1254,9 +1449,16 @@ export default {
       testConnection: 'Test Connection',
       reAuthorize: 'Re-Authorize',
       refreshToken: 'Refresh Token',
+      refreshTier: 'Refresh Tier',
       noAccountsYet: 'No accounts yet',
       createFirstAccount: 'Create your first account to start using AI services.',
       tokenRefreshed: 'Token refreshed successfully',
+      tierRefreshed: 'Tier refreshed successfully',
+      batchTierRefreshTitle: 'Batch Tier Refresh',
+      batchTierRefreshSummary: 'Tier refresh: {success} succeeded, {failed} failed',
+      batchTierRefreshAccountId: 'Account ID',
+      batchTierRefreshError: 'Error',
+      batchTierRefreshFailed: 'Batch tier refresh failed',
       accountDeleted: 'Account deleted successfully',
       rateLimitCleared: 'Rate limit cleared successfully',
       bulkSchedulableEnabled: 'Successfully enabled scheduling for {count} account(s)',
@@ -1270,7 +1472,8 @@ export default {
         edit: 'Bulk Edit',
         delete: 'Bulk Delete',
         enableScheduling: 'Enable Scheduling',
-        disableScheduling: 'Disable Scheduling'
+        disableScheduling: 'Disable Scheduling',
+        refreshTier: 'Refresh Tier'
       },
       bulkEdit: {
         title: 'Bulk Edit Accounts',
@@ -1296,6 +1499,7 @@ export default {
       failedToResetStatus: 'Failed to reset account status',
       failedToLoad: 'Failed to load accounts',
       failedToRefresh: 'Failed to refresh token',
+      failedToRefreshTier: 'Failed to refresh tier',
       failedToDelete: 'Failed to delete account',
       failedToClearRateLimit: 'Failed to clear rate limit',
       deleteConfirm: "Are you sure you want to delete '{name}'? This action cannot be undone.",
@@ -1318,6 +1522,23 @@ export default {
       openai: {
         baseUrlHint: 'Leave default for official OpenAI API',
         apiKeyHint: 'Your OpenAI API Key'
+      },
+      // Qwen specific hints
+      qwen: {
+        baseUrlHint: 'Leave default for official Qwen API (default https://portal.qwen.ai/v1)',
+        apiKeyHint: 'Your Qwen API Key (or access token)',
+        deviceFlowNote: 'Recommended: use Device Flow to avoid copying tokens in the browser.',
+        accountType: {
+          oauthTitle: 'OAuth (Device Flow)',
+          oauthDesc: 'Authorize via user code; server securely exchanges tokens.',
+          apiKeyTitle: 'API Key',
+          apiKeyDesc: 'Manually enter an API key (or access token).'
+        }
+      },
+      // iFlow specific hints
+      iflow: {
+        baseUrlHint: 'Leave default for official iFlow API (default https://apis.iflow.cn/v1)',
+        apiKeyHint: 'Your iFlow API Key'
       },
       modelRestriction: 'Model Restriction (Optional)',
       modelWhitelist: 'Model Whitelist',
@@ -1482,6 +1703,20 @@ export default {
             'Option 1: Copy the complete URL\n(http://localhost:xxx/auth/callback?code=...)\nOption 2: Copy only the code parameter value',
           authCodeHint:
             'You can copy the entire URL or just the code parameter value, the system will auto-detect'
+        },
+        // Qwen specific
+        qwen: {
+          title: 'Qwen Account Authorization',
+          deviceFlowTitle: 'Qwen Device Flow Authorization',
+          deviceFlowDesc: 'Open the verification URL and enter the user code to authorize.',
+          start: 'Start Authorization',
+          starting: 'Starting...',
+          userCodeLabel: 'User Code',
+          verifyUrlLabel: 'Verification URL',
+          afterAuthHint: 'After authorization, click “Complete Authorization” below to create the account.',
+          checkAuth: 'Check Authorization',
+          checking: 'Checking...',
+          authorized: 'Authorized'
         },
         // Gemini specific
 	        gemini: {
@@ -1951,6 +2186,73 @@ export default {
       }
     },
 
+    // Announcements
+    announcements: {
+      title: 'Announcements',
+      description: 'Create announcements and target by conditions',
+      createAnnouncement: 'Create Announcement',
+      editAnnouncement: 'Edit Announcement',
+      deleteAnnouncement: 'Delete Announcement',
+      searchAnnouncements: 'Search announcements...',
+      status: 'Status',
+      allStatus: 'All Status',
+      columns: {
+        title: 'Title',
+        status: 'Status',
+        targeting: 'Targeting',
+        timeRange: 'Schedule',
+        createdAt: 'Created At',
+        actions: 'Actions'
+      },
+      statusLabels: {
+        draft: 'Draft',
+        active: 'Active',
+        archived: 'Archived'
+      },
+      form: {
+        title: 'Title',
+        content: 'Content (Markdown supported)',
+        status: 'Status',
+        startsAt: 'Starts At',
+        endsAt: 'Ends At',
+        startsAtHint: 'Leave empty to start immediately',
+        endsAtHint: 'Leave empty to never expire',
+        targetingMode: 'Targeting',
+        targetingAll: 'All users',
+        targetingCustom: 'Custom rules',
+        addOrGroup: 'Add OR group',
+        addAndCondition: 'Add AND condition',
+        conditionType: 'Condition type',
+        conditionSubscription: 'Subscription',
+        conditionBalance: 'Balance',
+        operator: 'Operator',
+        balanceValue: 'Balance threshold',
+        selectPackages: 'Select packages'
+      },
+      operators: {
+        gt: '>',
+        gte: '≥',
+        lt: '<',
+        lte: '≤',
+        eq: '='
+      },
+      targetingSummaryAll: 'All users',
+      targetingSummaryCustom: 'Custom ({groups} groups)',
+      timeImmediate: 'Immediate',
+      timeNever: 'Never',
+      readStatus: 'Read Status',
+      eligible: 'Eligible',
+      readAt: 'Read at',
+      unread: 'Unread',
+      searchUsers: 'Search users...',
+      failedToLoad: 'Failed to load announcements',
+      failedToCreate: 'Failed to create announcement',
+      failedToUpdate: 'Failed to update announcement',
+      failedToDelete: 'Failed to delete announcement',
+      failedToLoadReadStatus: 'Failed to load read status',
+      deleteConfirm: 'Are you sure you want to delete this announcement? This action cannot be undone.'
+    },
+
     // Promo Codes
     promo: {
       title: 'Promo Code Management',
@@ -2014,6 +2316,27 @@ export default {
     usage: {
       title: 'Usage Records',
       description: 'View and manage all user usage records',
+      charts: {
+        title: 'Charts',
+        show: 'Show charts',
+        hide: 'Hide charts'
+      },
+      filters: {
+        more: 'More filters',
+        less: 'Less filters'
+      },
+      presets: {
+        title: 'Presets',
+        recent: 'Recent',
+        favorites: 'Favorites',
+        save: 'Save',
+        namePlaceholder: 'Preset name',
+        emptyRecent: 'No recent presets yet',
+        emptyFavorites: 'No favorites yet',
+        applied: 'Preset applied',
+        saved: 'Saved to favorites',
+        deleted: 'Removed from favorites'
+      },
       userFilter: 'User',
       searchUserPlaceholder: 'Search user by email...',
       searchApiKeyPlaceholder: 'Search API key by name...',
@@ -2036,6 +2359,7 @@ export default {
       outputTokens: 'Output Tokens',
       cacheCreationTokens: 'Cache Creation Tokens',
       cacheReadTokens: 'Cache Read Tokens',
+      cacheHitRate: 'Cache Hit Rate',
       failedToLoad: 'Failed to load usage records',
       billingType: 'Billing Type',
       allBillingTypes: 'All Billing Types',
@@ -2806,7 +3130,8 @@ export default {
     // Settings
     settings: {
       title: 'System Settings',
-      description: 'Manage registration, email verification, default values, and SMTP settings',
+      description: 'Manage system security, site, pricing, and email settings',
+      jumpToSection: 'Jump to section',
       registration: {
         title: 'Registration Settings',
         description: 'Control user registration and verification',
@@ -2822,6 +3147,16 @@ export default {
         totpHint: 'Allow users to use authenticator apps like Google Authenticator',
         totpKeyNotConfigured:
           'Please configure TOTP_ENCRYPTION_KEY in environment variables first. Generate a key with: openssl rand -hex 32'
+      },
+      referral: {
+        title: 'Referral / Invite',
+        description: 'Configure invite codes and inviter rebates',
+        inviterBonus: 'Inviter signup bonus',
+        inviterBonusHint: 'Added to inviter balance when a new user registers with their invite code',
+        inviteeBonus: 'Invitee signup bonus',
+        inviteeBonusHint: 'Added to invitee balance when registering with a valid invite code',
+        commissionRate: 'Commission rate',
+        commissionRateHint: '0-1. Inviter earns this proportion of invitee actual cost'
       },
       turnstile: {
         title: 'Cloudflare Turnstile',
@@ -2864,7 +3199,12 @@ export default {
       },
       site: {
         title: 'Site Settings',
-        description: 'Customize site branding',
+        description: 'Branding, links, home content, and pricing',
+        tabs: {
+          general: 'General',
+          home: 'Home',
+          subscriptions: 'Subscriptions & Pricing'
+        },
         siteName: 'Site Name',
         siteNamePlaceholder: 'Sub2API',
         siteNameHint: 'Displayed in emails and page titles',
@@ -2880,6 +3220,10 @@ export default {
         contactInfoHint: 'Customer support contact info, displayed on redeem page, profile, etc.',
         docUrl: 'Documentation URL',
         docUrlPlaceholder: 'https://docs.example.com',
+        subscriptionsEnabled: 'Enable subscriptions',
+        subscriptionsEnabledHint: 'Controls user/admin subscription pages and subscription APIs (disabled => hidden + 403).',
+        landingPricingEnabled: 'Enable landing pricing',
+        landingPricingEnabledHint: 'Controls the subscription plans (pricing) section on /home and /purchase.',
         docUrlHint: 'Link to your documentation site. Leave empty to hide the documentation link.',
         siteLogo: 'Site Logo',
         uploadImage: 'Upload Image',
@@ -2892,6 +3236,99 @@ export default {
         homeContentPlaceholder: 'Enter custom content for the home page. Supports Markdown & HTML. If a URL is entered, it will be displayed as an iframe.',
         homeContentHint: 'Customize the home page content. Supports Markdown/HTML. If you enter a URL (starting with http:// or https://), it will be used as an iframe src to embed an external page. When set, the default status information will no longer be displayed.',
         homeContentIframeWarning: '⚠️ iframe mode note: Some websites have X-Frame-Options or CSP security policies that prevent embedding in iframes. If the page appears blank or shows an error, please verify the target website allows embedding, or consider using HTML mode to build your own content.',
+        landingPricingConfig: 'Landing / Pricing Config (JSON)',
+        landingPricingConfigPlaceholder:
+          'Enter JSON config (plans, prices, copywriting, etc.; optional: group_id, group_fields, validity_days, meta.widgets)',
+        landingPricingConfigHint:
+          'Used by the home pricing section and /purchase page. Supports weekly/monthly/custom and pay-as-you-go info. Optional: set plan.group_id to bind a backend subscription group (subscription_type=subscription), use group_fields to select which group fields to display, use validity_days to define validity (days) per period, and use meta.widgets to render typed fields.',
+        landingPricingConfigInvalid: 'Invalid pricing config',
+        landingPricingEditor: {
+          ui: 'Visual',
+          defaultTab: 'Default Tab',
+          tab: {
+            subscription: 'Subscription',
+            payg: 'Pay-as-you-go'
+          },
+          currency: 'Currency',
+          subscriptionTitle: 'Subscription Title',
+          subscriptionSubtitle: 'Subscription Subtitle',
+          defaultPeriod: 'Default Period',
+          period: {
+            week: 'Weekly',
+            month: 'Monthly',
+            custom: 'Custom'
+          },
+          periodOptions: 'Period Options',
+          periodLabelPlaceholder: 'Display label (e.g. Weekly / Monthly / Custom)',
+          plans: 'Plans',
+          add: 'Add',
+          addPlan: 'Add plan',
+          noPlans: 'No plans yet. Click "Add plan" to create one.',
+          unnamedPlan: 'Untitled plan',
+          planId: 'Plan ID',
+          planBadge: 'Badge (optional)',
+          planDescription: 'Description (optional)',
+          planHighlighted: 'Highlighted',
+          planHighlightedHint: 'UI-only: used to show a recommended style on /home and /purchase.',
+          widgets: 'Widgets (typed, optional)',
+          noWidgets: 'No widgets yet. Add widgets to display structured fields on plan cards.',
+          widgetType: {
+            text: 'Text',
+            kv: 'Key/Value',
+            groupField: 'Backend group field',
+            list: 'List',
+            tags: 'Tags',
+            divider: 'Divider',
+            metric: 'Metric'
+          },
+          widgetTone: {
+            primary: 'Primary',
+            gray: 'Gray',
+            gold: 'Gold'
+          },
+          widgetWhen: 'Show on periods (optional)',
+          widgetWhenAll: 'All periods',
+          widgetField: {
+            text: 'Text',
+            label: 'Label',
+            value: 'Value',
+            groupFieldKey: 'Field',
+            groupFieldLabel: 'Label override (optional)',
+            listTitle: 'List title (optional)',
+            listItems: 'Items',
+            tagsTone: 'Tone',
+            tags: 'Tags',
+            dividerLabel: 'Divider label (optional)',
+            metricLabel: 'Label',
+            metricValue: 'Value',
+            metricHint: 'Hint (optional)'
+          },
+          widgetGroupFieldRequiresGroup: 'This widget type requires binding a backend group first.',
+          planGroup: 'Bind backend group (optional)',
+          planGroupNone: 'None',
+          planGroupHint:
+            'Recommended: bind an active group with subscription_type=subscription to keep plans in sync with backend quotas.',
+          validityDays: 'Validity (days, optional)',
+          validityDaysHint: 'Used by backend assignment/extend flows. Leave empty to use backend defaults.',
+          groupFields: 'Group fields to display (optional)',
+          priceWeek: 'Weekly price (CNY)',
+          priceMonth: 'Monthly price (CNY)',
+          priceCustom: 'Custom price label',
+          features: 'Features (free text list)',
+          payg: 'Pay-as-you-go',
+          paygTitle: 'Title',
+          paygSubtitle: 'Subtitle (optional)',
+          paygCtaLabel: 'CTA label (optional)',
+          paygNote: 'Note (optional)',
+          note: 'Global note (optional)'
+        },
+        landingPricingGroupFields: {
+          daily: 'Daily limit (USD)',
+          weekly: 'Weekly limit (USD)',
+          monthly: 'Monthly limit (USD)',
+          concurrency: 'User concurrency',
+          rate: 'Rate multiplier'
+        },
         hideCcsImportButton: 'Hide CCS Import Button',
         hideCcsImportButtonHint: 'When enabled, the "Import to CCS" button will be hidden on the API Keys page'
       },
@@ -2998,6 +3435,13 @@ export default {
         saved: 'Stream timeout settings saved',
         saveFailed: 'Failed to save stream timeout settings'
       },
+      gateway: {
+        title: 'Gateway Settings',
+        description: 'LLM gateway compatibility and auto-fix',
+        fixOrphanedToolResults: 'Auto-remove orphan tool_result',
+        fixOrphanedToolResultsHint:
+          'Automatically removes tool_result blocks whose tool_use_id references a missing tool_use, avoiding Claude 400. Disable as a fallback if it causes compatibility issues.'
+      },
       saveSettings: 'Save Settings',
       saving: 'Saving...',
       settingsSaved: 'Settings saved successfully',
@@ -3052,7 +3496,7 @@ export default {
   },
 
   // Purchase Subscription Page
-  purchase: {
+  purchaseSubscription: {
     title: 'Purchase Subscription',
     description: 'Purchase a subscription via the embedded page',
     openInNewTab: 'Open in new tab',
@@ -3063,10 +3507,36 @@ export default {
       'The administrator enabled the entry but has not configured a purchase URL. Please contact admin.'
   },
 
+  // Announcements Page
+  announcements: {
+    title: 'Announcements',
+    description: 'View system announcements',
+    unreadOnly: 'Show unread only',
+    markRead: 'Mark as read',
+    markAllRead: 'Mark all as read',
+    viewAll: 'View all announcements',
+    markedAsRead: 'Marked as read',
+    allMarkedAsRead: 'All announcements marked as read',
+    newCount: '{count} new announcement | {count} new announcements',
+    readAt: 'Read at',
+    read: 'Read',
+    unread: 'Unread',
+    startsAt: 'Starts at',
+    endsAt: 'Ends at',
+    empty: 'No announcements',
+    emptyUnread: 'No unread announcements',
+    total: 'announcements',
+    emptyDescription: 'There are no system announcements at this time',
+    readStatus: 'You have read this announcement',
+    markReadHint: 'Click "Mark as read" to mark this announcement'
+  },
+
   // User Subscriptions Page
   userSubscriptions: {
     title: 'My Subscriptions',
     description: 'View your subscription plans and usage',
+    disabled: 'Subscriptions are disabled',
+    disabledDesc: 'This feature is currently turned off by the administrator.',
     noActiveSubscriptions: 'No Active Subscriptions',
     noActiveSubscriptionsDesc:
       "You don't have any active subscriptions. Contact administrator to get one.",

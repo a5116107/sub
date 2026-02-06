@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
@@ -41,12 +42,13 @@ func ProvideTokenRefreshService(
 	accountRepo AccountRepository,
 	oauthService *OAuthService,
 	openaiOAuthService *OpenAIOAuthService,
+	qwenOAuthService *QwenOAuthService,
 	geminiOAuthService *GeminiOAuthService,
 	antigravityOAuthService *AntigravityOAuthService,
 	cacheInvalidator TokenCacheInvalidator,
 	cfg *config.Config,
 ) *TokenRefreshService {
-	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, geminiOAuthService, antigravityOAuthService, cacheInvalidator, cfg)
+	svc := NewTokenRefreshService(accountRepo, oauthService, openaiOAuthService, qwenOAuthService, geminiOAuthService, antigravityOAuthService, cacheInvalidator, cfg)
 	svc.Start()
 	return svc
 }
@@ -61,6 +63,20 @@ func ProvideDashboardAggregationService(repo DashboardAggregationRepository, tim
 // ProvideUsageCleanupService 创建并启动使用记录清理任务服务
 func ProvideUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboardAgg *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
 	svc := NewUsageCleanupService(repo, timingWheel, dashboardAgg, cfg)
+	svc.Start()
+	return svc
+}
+
+// ProvideBillingReconcileService creates and starts BillingReconcileService when enabled.
+func ProvideBillingReconcileService(
+	entClient *dbent.Client,
+	userRepo UserRepository,
+	userSubRepo UserSubscriptionRepository,
+	usageLogRepo UsageLogRepository,
+	billingCacheService *BillingCacheService,
+	cfg *config.Config,
+) *BillingReconcileService {
+	svc := NewBillingReconcileService(entClient, userRepo, userSubRepo, usageLogRepo, billingCacheService, cfg)
 	svc.Start()
 	return svc
 }
@@ -221,16 +237,20 @@ var ProviderSet = wire.NewSet(
 	NewProxyService,
 	NewRedeemService,
 	NewPromoService,
+	NewPaymentService,
 	NewUsageService,
 	NewDashboardService,
 	ProvidePricingService,
 	NewBillingService,
 	NewBillingCacheService,
+	ProvideBillingReconcileService,
+	NewAnnouncementService,
 	NewAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
 	NewOAuthService,
 	NewOpenAIOAuthService,
+	NewQwenOAuthService,
 	NewGeminiOAuthService,
 	NewGeminiQuotaService,
 	NewCompositeTokenCacheInvalidator,
@@ -242,6 +262,8 @@ var ProviderSet = wire.NewSet(
 	NewOpenAITokenProvider,
 	NewClaudeTokenProvider,
 	NewAntigravityGatewayService,
+	NewQwenGatewayService,
+	NewIFlowGatewayService,
 	ProvideRateLimitService,
 	NewAccountUsageService,
 	NewAccountTestService,

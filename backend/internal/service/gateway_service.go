@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
@@ -35,7 +37,7 @@ import (
 const (
 	claudeAPIURL            = "https://api.anthropic.com/v1/messages?beta=true"
 	claudeAPICountTokensURL = "https://api.anthropic.com/v1/messages/count_tokens?beta=true"
-	stickySessionTTL        = time.Hour // 粘性会话TTL
+	defaultStickySessionTTL = time.Hour // 粘性会话TTL
 	defaultMaxLineSize      = 40 * 1024 * 1024
 	claudeCodeSystemPrompt  = "You are Claude Code, Anthropic's official CLI for Claude."
 	maxCacheControlBlocks   = 4 // Anthropic API 允许的最大 cache_control 块数量
@@ -44,6 +46,65 @@ const (
 func (s *GatewayService) debugModelRoutingEnabled() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("SUB2API_DEBUG_MODEL_ROUTING")))
 	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+func (s *GatewayService) stickySessionTTL() time.Duration {
+	if s != nil && s.cfg != nil && s.cfg.Gateway.Scheduling.StickySessionTTL > 0 {
+		return s.cfg.Gateway.Scheduling.StickySessionTTL
+	}
+	return defaultStickySessionTTL
+}
+
+func (s *GatewayService) cacheControlLimitRemovalStrategy() string {
+	if s != nil && s.cfg != nil && strings.TrimSpace(s.cfg.Gateway.CacheControlLimitRemovalStrategy) != "" {
+		return strings.ToLower(strings.TrimSpace(s.cfg.Gateway.CacheControlLimitRemovalStrategy))
+	}
+	return "messages_tail_then_head"
+}
+
+func (s *GatewayService) fixOrphanedToolResultsEnabled(ctx context.Context) bool {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// Prefer the admin (DB-backed) toggle when available.
+	if s != nil && s.rateLimitService != nil && s.rateLimitService.settingService != nil {
+		return s.rateLimitService.settingService.IsGatewayFixOrphanedToolResultsEnabled(ctx)
+	}
+
+	// Fallback to config and fail-open.
+	if s == nil || s.cfg == nil {
+		return true
+	}
+	return s.cfg.Gateway.FixOrphanedToolResults
+}
+
+func (s *GatewayService) claudeCodeCompatMode() string {
+	if s == nil || s.cfg == nil {
+		return "auto"
+	}
+	mode := strings.ToLower(strings.TrimSpace(s.cfg.Gateway.ClaudeCodeCompat.Mode))
+	switch mode {
+	case "always", "never", "auto":
+		return mode
+	case "":
+		return "auto"
+	default:
+		return "auto"
+	}
+}
+
+// shouldApplyClaudeCodeCompat determines whether to apply Claude Code–specific compat behavior.
+// This is a limited "compat mode" switch (no obfuscation): it only gates existing request shaping.
+func (s *GatewayService) shouldApplyClaudeCodeCompat(userAgent, metadataUserID string) bool {
+	switch s.claudeCodeCompatMode() {
+	case "always":
+		return true
+	case "never":
+		return false
+	default: // "auto"
+		return !isClaudeCodeClient(userAgent, metadataUserID)
+	}
 }
 
 func shortSessionHash(sessionHash string) string {
@@ -176,6 +237,7 @@ type ForwardResult struct {
 	RequestID        string
 	Usage            ClaudeUsage
 	Model            string
+	BilledModel      string
 	Stream           bool
 	Duration         time.Duration
 	FirstTokenMs     *int // 首字时间（流式请求）
@@ -202,6 +264,7 @@ type GatewayService struct {
 	usageLogRepo        UsageLogRepository
 	userRepo            UserRepository
 	userSubRepo         UserSubscriptionRepository
+	entClient           *dbent.Client
 	cache               GatewayCache
 	cfg                 *config.Config
 	schedulerSnapshot   *SchedulerSnapshotService
@@ -214,6 +277,7 @@ type GatewayService struct {
 	concurrencyService  *ConcurrencyService
 	claudeTokenProvider *ClaudeTokenProvider
 	sessionLimitCache   SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
+	referralRateCache   referralCommissionRateCache
 }
 
 // NewGatewayService creates a new GatewayService
@@ -235,6 +299,7 @@ func NewGatewayService(
 	deferredService *DeferredService,
 	claudeTokenProvider *ClaudeTokenProvider,
 	sessionLimitCache SessionLimitCache,
+	entClient *dbent.Client,
 ) *GatewayService {
 	return &GatewayService{
 		accountRepo:         accountRepo,
@@ -242,6 +307,7 @@ func NewGatewayService(
 		usageLogRepo:        usageLogRepo,
 		userRepo:            userRepo,
 		userSubRepo:         userSubRepo,
+		entClient:           entClient,
 		cache:               cache,
 		cfg:                 cfg,
 		schedulerSnapshot:   schedulerSnapshot,
@@ -255,6 +321,10 @@ func NewGatewayService(
 		claudeTokenProvider: claudeTokenProvider,
 		sessionLimitCache:   sessionLimitCache,
 	}
+}
+
+func (s *GatewayService) ApplyRateMultiplierToSubscription() bool {
+	return applyRateMultiplierToSubscription(s.cfg)
 }
 
 // GenerateSessionHash 从预解析请求计算粘性会话 hash
@@ -302,7 +372,7 @@ func (s *GatewayService) BindStickySession(ctx context.Context, groupID *int64, 
 	if sessionHash == "" || accountID <= 0 || s.cache == nil {
 		return nil
 	}
-	return s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, accountID, stickySessionTTL)
+	return s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, accountID, s.stickySessionTTL())
 }
 
 // GetCachedSessionAccountID retrieves the account ID bound to a sticky session.
@@ -675,7 +745,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 									result.ReleaseFunc() // 释放槽位
 									// 继续到负载感知选择
 								} else {
-									_ = s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, stickySessionTTL)
+									_ = s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, s.stickySessionTTL())
 									if s.debugModelRoutingEnabled() {
 										log.Printf("[ModelRoutingDebug] routed sticky hit: group_id=%v model=%s session=%s account=%d", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), stickyAccountID)
 									}
@@ -770,7 +840,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 							continue
 						}
 						if sessionHash != "" && s.cache != nil {
-							_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, item.account.ID, stickySessionTTL)
+							_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, item.account.ID, s.stickySessionTTL())
 						}
 						if s.debugModelRoutingEnabled() {
 							log.Printf("[ModelRoutingDebug] routed select: group_id=%v model=%s session=%s account=%d", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), item.account.ID)
@@ -833,7 +903,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 						if !s.checkAndRegisterSession(ctx, account, sessionHash) {
 							result.ReleaseFunc() // 释放槽位，继续到 Layer 2
 						} else {
-							_ = s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, stickySessionTTL)
+							_ = s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, s.stickySessionTTL())
 							return &AccountSelectionResult{
 								Account:     account,
 								Acquired:    true,
@@ -964,7 +1034,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 						continue
 					}
 					if sessionHash != "" && s.cache != nil {
-						_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, item.account.ID, stickySessionTTL)
+						_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, item.account.ID, s.stickySessionTTL())
 					}
 					return &AccountSelectionResult{
 						Account:     item.account,
@@ -1009,7 +1079,7 @@ func (s *GatewayService) tryAcquireByLegacyOrder(ctx context.Context, candidates
 				continue
 			}
 			if sessionHash != "" && s.cache != nil {
-				_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, acc.ID, stickySessionTTL)
+				_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, acc.ID, s.stickySessionTTL())
 			}
 			return &AccountSelectionResult{
 				Account:     acc,
@@ -1485,7 +1555,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 							_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 						}
 						if !clearSticky && s.isAccountInGroup(account, groupID) && account.Platform == platform && account.IsSchedulableForModel(requestedModel) && (requestedModel == "" || s.isModelSupportedByAccount(account, requestedModel)) {
-							if err := s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, stickySessionTTL); err != nil {
+							if err := s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, s.stickySessionTTL()); err != nil {
 								log.Printf("refresh session ttl failed: session=%s err=%v", sessionHash, err)
 							}
 							if s.debugModelRoutingEnabled() {
@@ -1563,7 +1633,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 
 		if selected != nil {
 			if sessionHash != "" && s.cache != nil {
-				if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, selected.ID, stickySessionTTL); err != nil {
+				if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, selected.ID, s.stickySessionTTL()); err != nil {
 					log.Printf("set session account failed: session=%s account_id=%d err=%v", sessionHash, selected.ID, err)
 				}
 			}
@@ -1588,7 +1658,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 						_ = s.cache.DeleteSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 					}
 					if !clearSticky && s.isAccountInGroup(account, groupID) && account.Platform == platform && account.IsSchedulableForModel(requestedModel) && (requestedModel == "" || s.isModelSupportedByAccount(account, requestedModel)) {
-						if err := s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, stickySessionTTL); err != nil {
+						if err := s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, s.stickySessionTTL()); err != nil {
 							log.Printf("refresh session ttl failed: session=%s err=%v", sessionHash, err)
 						}
 						return account, nil
@@ -1662,7 +1732,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 
 	// 4. 建立粘性绑定
 	if sessionHash != "" && s.cache != nil {
-		if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, selected.ID, stickySessionTTL); err != nil {
+		if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, selected.ID, s.stickySessionTTL()); err != nil {
 			log.Printf("set session account failed: session=%s account_id=%d err=%v", sessionHash, selected.ID, err)
 		}
 	}
@@ -1699,7 +1769,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 						}
 						if !clearSticky && s.isAccountInGroup(account, groupID) && account.IsSchedulableForModel(requestedModel) && (requestedModel == "" || s.isModelSupportedByAccount(account, requestedModel)) {
 							if account.Platform == nativePlatform || (account.Platform == PlatformAntigravity && account.IsMixedSchedulingEnabled()) {
-								if err := s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, stickySessionTTL); err != nil {
+								if err := s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, s.stickySessionTTL()); err != nil {
 									log.Printf("refresh session ttl failed: session=%s err=%v", sessionHash, err)
 								}
 								if s.debugModelRoutingEnabled() {
@@ -1778,7 +1848,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 
 		if selected != nil {
 			if sessionHash != "" && s.cache != nil {
-				if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, selected.ID, stickySessionTTL); err != nil {
+				if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, selected.ID, s.stickySessionTTL()); err != nil {
 					log.Printf("set session account failed: session=%s account_id=%d err=%v", sessionHash, selected.ID, err)
 				}
 			}
@@ -1804,7 +1874,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 					}
 					if !clearSticky && s.isAccountInGroup(account, groupID) && account.IsSchedulableForModel(requestedModel) && (requestedModel == "" || s.isModelSupportedByAccount(account, requestedModel)) {
 						if account.Platform == nativePlatform || (account.Platform == PlatformAntigravity && account.IsMixedSchedulingEnabled()) {
-							if err := s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, stickySessionTTL); err != nil {
+							if err := s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), sessionHash, s.stickySessionTTL()); err != nil {
 								log.Printf("refresh session ttl failed: session=%s err=%v", sessionHash, err)
 							}
 							return account, nil
@@ -1879,7 +1949,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 
 	// 4. 建立粘性绑定
 	if sessionHash != "" && s.cache != nil {
-		if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, selected.ID, stickySessionTTL); err != nil {
+		if err := s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, selected.ID, s.stickySessionTTL()); err != nil {
 			log.Printf("set session account failed: session=%s account_id=%d err=%v", sessionHash, selected.ID, err)
 		}
 	}
@@ -1892,6 +1962,10 @@ func (s *GatewayService) isModelSupportedByAccount(account *Account, requestedMo
 	if account.Platform == PlatformAntigravity {
 		// Antigravity 平台使用专门的模型支持检查
 		return IsAntigravityModelSupported(requestedModel)
+	}
+	// Gemini API Key 账户直接透传，由上游判断模型是否支持
+	if account.Platform == PlatformGemini && account.Type == AccountTypeAPIKey {
+		return true
 	}
 	// 其他平台使用账户的模型支持检查
 	return account.IsModelSupported(requestedModel)
@@ -2090,7 +2164,7 @@ func injectClaudeCodePrompt(body []byte, system any) []byte {
 
 // enforceCacheControlLimit 强制执行 cache_control 块数量限制（最多 4 个）
 // 超限时优先从 messages 中移除 cache_control，保护 system 中的缓存控制
-func enforceCacheControlLimit(body []byte) []byte {
+func enforceCacheControlLimit(body []byte, removalStrategy string) []byte {
 	var data map[string]any
 	if err := json.Unmarshal(body, &data); err != nil {
 		return body
@@ -2106,8 +2180,25 @@ func enforceCacheControlLimit(body []byte) []byte {
 	}
 
 	// 超限：优先从 messages 中移除，再从 system 中移除
+	strategy := strings.ToLower(strings.TrimSpace(removalStrategy))
+
+	removeFromMessages := func() bool {
+		switch strategy {
+		case "messages_tail":
+			return removeCacheControlFromMessagesTail(data)
+		case "messages_tail_then_head":
+			return removeCacheControlFromMessagesTail(data) || removeCacheControlFromMessages(data)
+		case "messages_head_then_tail":
+			return removeCacheControlFromMessages(data) || removeCacheControlFromMessagesTail(data)
+		case "messages_head", "":
+			fallthrough
+		default:
+			return removeCacheControlFromMessages(data)
+		}
+	}
+
 	for count > maxCacheControlBlocks {
-		if removeCacheControlFromMessages(data) {
+		if removeFromMessages() {
 			count--
 			continue
 		}
@@ -2277,17 +2368,19 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	reqModel := parsed.Model
 	reqStream := parsed.Stream
 
-	// 智能注入 Claude Code 系统提示词（仅 OAuth/SetupToken 账号需要）
-	// 条件：1) OAuth/SetupToken 账号  2) 不是 Claude Code 客户端  3) 不是 Haiku 模型  4) system 中还没有 Claude Code 提示词
+	applyClaudeCompat := s.shouldApplyClaudeCodeCompat(c.GetHeader("User-Agent"), parsed.MetadataUserID)
+
+	// Claude Code compat: 智能注入 Claude Code 系统提示词（仅 OAuth/SetupToken 账号需要）
+	// 额外条件：1) 非 Haiku 模型  2) system 中还没有 Claude Code 提示词
 	if account.IsOAuth() &&
-		!isClaudeCodeClient(c.GetHeader("User-Agent"), parsed.MetadataUserID) &&
+		applyClaudeCompat &&
 		!strings.Contains(strings.ToLower(reqModel), "haiku") &&
 		!systemIncludesClaudeCodePrompt(parsed.System) {
 		body = injectClaudeCodePrompt(body, parsed.System)
 	}
 
 	// 强制执行 cache_control 块数量限制（最多 4 个）
-	body = enforceCacheControlLimit(body)
+	body = enforceCacheControlLimit(body, s.cacheControlLimitRemovalStrategy())
 
 	// 应用模型映射（仅对apikey类型账号）
 	originalModel := reqModel
@@ -2336,6 +2429,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
 			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
 			// Ensure the client receives an error response (handlers assume Forward writes on non-failover errors).
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			setOpsUpstreamError(c, 0, safeErr, "")
@@ -2347,6 +2443,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				Kind:               "request_error",
 				Message:            safeErr,
 			})
+			if strings.TrimSpace(proxyURL) != "" {
+				// Proxy request errors are often transient per-exit; allow handler to failover to another account/proxy.
+				log.Printf("Account %d: upstream request error via proxy, triggering failover: %s", account.ID, safeErr)
+				return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
+			}
+
 			c.JSON(http.StatusBadGateway, gin.H{
 				"type": "error",
 				"error": gin.H{
@@ -2362,6 +2464,78 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 			if readErr == nil {
 				_ = resp.Body.Close()
+
+				// Detect orphaned tool_result errors (400) and retry once with cleaned tool blocks.
+				// This is conservative: only triggers when upstream indicates missing tool_use ids.
+				if s.fixOrphanedToolResultsEnabled(ctx) {
+					if isOrphanErr, _ := detectOrphanedToolResultError(respBody); isOrphanErr {
+						cleanedBody := FilterOrphanedToolResults(body)
+						if !bytes.Equal(cleanedBody, body) {
+							appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+								Platform:           account.Platform,
+								AccountID:          account.ID,
+								AccountName:        account.Name,
+								UpstreamStatusCode: resp.StatusCode,
+								UpstreamRequestID:  resp.Header.Get("x-request-id"),
+								Kind:               "orphan_tool_result_error",
+								Message:            extractUpstreamErrorMessage(respBody),
+								Detail: func() string {
+									if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+										return truncateString(string(respBody), s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes)
+									}
+									return ""
+								}(),
+							})
+
+							// Avoid extra requests when retry budget is exhausted.
+							if time.Since(retryStart) >= maxRetryElapsed {
+								resp.Body = io.NopCloser(bytes.NewReader(respBody))
+								break
+							}
+
+							log.Printf("Account %d: detected orphaned tool_result error, retrying with cleaned tool_result blocks", account.ID)
+							retryReq, buildErr := s.buildUpstreamRequest(ctx, c, account, cleanedBody, token, tokenType, reqModel)
+							if buildErr == nil {
+								retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
+								if retryErr == nil {
+									if retryResp.StatusCode < 400 {
+										resp = retryResp
+										break
+									}
+
+									retryRespBody, retryReadErr := io.ReadAll(io.LimitReader(retryResp.Body, 2<<20))
+									_ = retryResp.Body.Close()
+									if retryReadErr == nil {
+										// Continue 400 handling (e.g. signature retry) using the retry response context.
+										resp = &http.Response{
+											StatusCode: retryResp.StatusCode,
+											Header:     retryResp.Header.Clone(),
+											Body:       io.NopCloser(bytes.NewReader(retryRespBody)),
+										}
+										respBody = retryRespBody
+									} else {
+										log.Printf("Account %d: orphan tool_result retry read failed: %v", account.ID, retryReadErr)
+									}
+								} else {
+									if retryResp != nil && retryResp.Body != nil {
+										_ = retryResp.Body.Close()
+									}
+									appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+										Platform:           account.Platform,
+										AccountID:          account.ID,
+										AccountName:        account.Name,
+										UpstreamStatusCode: 0,
+										Kind:               "orphan_tool_result_retry_request_error",
+										Message:            sanitizeUpstreamErrorMessage(retryErr.Error()),
+									})
+									log.Printf("Account %d: orphan tool_result retry failed: %v", account.ID, retryErr)
+								}
+							} else {
+								log.Printf("Account %d: orphan tool_result retry build request failed: %v", account.ID, buildErr)
+							}
+						}
+					}
+				}
 
 				if s.isThinkingBlockSignatureError(respBody) {
 					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -2683,6 +2857,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		RequestID:        resp.Header.Get("x-request-id"),
 		Usage:            *usage,
 		Model:            originalModel, // 使用原始模型用于计费和日志
+		BilledModel:      reqModel,      // 上游实际使用（映射后）模型，用于定价
 		Stream:           reqStream,
 		Duration:         time.Since(startTime),
 		FirstTokenMs:     firstTokenMs,
@@ -2704,9 +2879,15 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		}
 	}
 
+	metadataUserID := ""
+	if len(body) > 0 {
+		metadataUserID = gjson.GetBytes(body, "metadata.user_id").String()
+	}
+	applyClaudeCompat := s.shouldApplyClaudeCodeCompat(c.GetHeader("User-Agent"), metadataUserID)
+
 	// OAuth账号：应用统一指纹
 	var fingerprint *Fingerprint
-	if account.IsOAuth() && s.identityService != nil {
+	if account.IsOAuth() && s.identityService != nil && applyClaudeCompat {
 		// 1. 获取或创建指纹（包含随机生成的ClientID）
 		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 		if err != nil {
@@ -2724,6 +2905,11 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 				}
 			}
 		}
+	}
+
+	// Proactive cleanup: remove orphaned tool_result blocks before forwarding.
+	if s.fixOrphanedToolResultsEnabled(ctx) {
+		body = FilterOrphanedToolResults(body)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
@@ -2889,6 +3075,51 @@ func (s *GatewayService) isThinkingBlockSignatureError(respBody []byte) bool {
 	}
 
 	return false
+}
+
+var orphanedToolUseIDPattern = regexp.MustCompile(`\\b(?:toolu_[A-Za-z0-9_]+|call_function_[A-Za-z0-9_]+)\\b`)
+
+func detectOrphanedToolResultError(respBody []byte) (bool, []string) {
+	msg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+	if msg == "" {
+		return false, nil
+	}
+	lower := strings.ToLower(msg)
+
+	// Must mention tool blocks.
+	if !strings.Contains(lower, "tool_result") {
+		return false, nil
+	}
+	if !strings.Contains(lower, "tool_use") && !strings.Contains(lower, "tool_use_id") {
+		return false, nil
+	}
+
+	// Must indicate the referenced tool_use is missing.
+	missingRef := strings.Contains(lower, "non-existent") ||
+		strings.Contains(lower, "nonexistent") ||
+		strings.Contains(lower, "does not exist") ||
+		strings.Contains(lower, "not found") ||
+		strings.Contains(lower, "unexpected `tool_use_id`")
+	if !missingRef {
+		return false, nil
+	}
+
+	rawIDs := orphanedToolUseIDPattern.FindAllString(msg, -1)
+	if len(rawIDs) == 0 {
+		return true, nil
+	}
+
+	// Dedupe while preserving order.
+	seen := make(map[string]struct{}, len(rawIDs))
+	ids := make([]string, 0, len(rawIDs))
+	for _, id := range rawIDs {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return true, ids
 }
 
 func (s *GatewayService) shouldFailoverOn400(respBody []byte) bool {
@@ -3457,6 +3688,7 @@ type RecordUsageInput struct {
 	Subscription *UserSubscription // 可选：订阅信息
 	UserAgent    string            // 请求的 User-Agent
 	IPAddress    string            // 请求的客户端 IP 地址
+	ReservedUSD  float64           // 可选：订阅额度预留（用于并发/单请求穿透防护）
 }
 
 // RecordUsage 记录使用量并扣费（或更新订阅用量）
@@ -3466,6 +3698,16 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
+
+	// Ensure a stable, non-empty RequestID for idempotency (usage_logs unique key).
+	clientRID, _ := ctx.Value(ctxkey.ClientRequestID).(string)
+	clientRID = strings.TrimSpace(clientRID)
+	providedRID, _ := ctx.Value(ctxkey.ClientRequestIDProvided).(bool)
+	if providedRID && clientRID != "" {
+		result.RequestID = clientRID
+	} else if strings.TrimSpace(result.RequestID) == "" && clientRID != "" {
+		result.RequestID = clientRID
+	}
 
 	// 获取费率倍数
 	multiplier := s.cfg.Default.RateMultiplier
@@ -3496,7 +3738,11 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 			CacheReadTokens:     result.Usage.CacheReadInputTokens,
 		}
 		var err error
-		cost, err = s.billingService.CalculateCost(result.Model, tokens, multiplier)
+		pricingModel := strings.TrimSpace(result.BilledModel)
+		if pricingModel == "" {
+			pricingModel = result.Model
+		}
+		cost, err = s.billingService.CalculateCost(pricingModel, tokens, multiplier)
 		if err != nil {
 			log.Printf("Calculate cost failed: %v", err)
 			cost = &CostBreakdown{ActualCost: 0}
@@ -3509,6 +3755,19 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
 	}
+
+	// If the handler reserved subscription quota, always finalize it to avoid leaking reservations.
+	finalizedReservation := false
+	finalizeReservation := func(actualUSD float64) {
+		if finalizedReservation || !isSubscriptionBilling || input.ReservedUSD <= 0 || apiKey.GroupID == nil {
+			return
+		}
+		finalizedReservation = true
+		ctx2, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		_ = s.billingCacheService.FinalizeSubscriptionReservation(ctx2, user.ID, *apiKey.GroupID, input.ReservedUSD, actualUSD)
+	}
+	defer finalizeReservation(0)
 
 	// 创建使用日志
 	durationMs := int(result.Duration.Milliseconds())
@@ -3543,6 +3802,9 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		ImageSize:             imageSize,
 		CreatedAt:             time.Now(),
 	}
+	if v := strings.TrimSpace(result.BilledModel); v != "" && v != strings.TrimSpace(result.Model) {
+		usageLog.BilledModel = &v
+	}
 
 	// 添加 UserAgent
 	if input.UserAgent != "" {
@@ -3562,9 +3824,11 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		usageLog.SubscriptionID = &subscription.ID
 	}
 
-	inserted, err := s.usageLogRepo.Create(ctx, usageLog)
-	if err != nil {
-		log.Printf("Create usage log failed: %v", err)
+	_, createErr := s.usageLogRepo.Create(ctx, usageLog)
+	if createErr != nil {
+		log.Printf("Create usage log failed: %v", createErr)
+		s.deferredService.ScheduleLastUsedUpdate(account.ID)
+		return nil
 	}
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
@@ -3573,26 +3837,148 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		return nil
 	}
 
-	shouldBill := inserted || err != nil
+	subscriptionCostUSD := cost.TotalCost
+	if isSubscriptionBilling && s.ApplyRateMultiplierToSubscription() {
+		subscriptionCostUSD = cost.ActualCost
+	}
 
-	// 根据计费类型执行扣费
+	// Billing must be idempotent: apply charges at most once per usage_log_id.
+	deltaUSD := cost.ActualCost
 	if isSubscriptionBilling {
-		// 订阅模式：更新订阅用量（使用 TotalCost 原始费用，不考虑倍率）
-		if shouldBill && cost.TotalCost > 0 {
-			if err := s.userSubRepo.IncrementUsage(ctx, subscription.ID, cost.TotalCost); err != nil {
-				log.Printf("Increment subscription usage failed: %v", err)
-			}
-			// 异步更新订阅缓存
-			s.billingCacheService.QueueUpdateSubscriptionUsage(user.ID, *apiKey.GroupID, cost.TotalCost)
+		deltaUSD = subscriptionCostUSD
+	}
+	if deltaUSD > 0 {
+		entry := &BillingUsageEntry{
+			UsageLogID:  usageLog.ID,
+			UserID:      user.ID,
+			APIKeyID:    apiKey.ID,
+			BillingType: billingType,
+			Applied:     false,
+			DeltaUSD:    deltaUSD,
 		}
-	} else {
-		// 余额模式：扣除用户余额（使用 ActualCost 考虑倍率后的费用）
-		if shouldBill && cost.ActualCost > 0 {
-			if err := s.userRepo.DeductBalance(ctx, user.ID, cost.ActualCost); err != nil {
-				log.Printf("Deduct balance failed: %v", err)
+		if subscription != nil {
+			entry.SubscriptionID = &subscription.ID
+		}
+
+		appliedThisCall := false
+		appliedAmountUSD := 0.0
+
+		// Prefer applying billing atomically in a DB transaction to avoid "entry created but not applied" gaps
+		// and to ensure retries can safely resume billing.
+		if s.entClient != nil {
+			tx, err := s.entClient.Tx(ctx)
+			if err != nil {
+				log.Printf("Begin billing transaction failed: %v", err)
+			} else {
+				defer func() { _ = tx.Rollback() }()
+				txCtx := dbent.NewTxContext(ctx, tx)
+
+				_, err := s.usageLogRepo.CreateBillingUsageEntry(txCtx, entry)
+				if err != nil {
+					log.Printf("Create billing usage entry failed: %v", err)
+				} else {
+					// Lock entry row to ensure only one goroutine applies billing.
+					alreadyApplied, lockErr := func() (bool, error) {
+						rows, err := tx.Client().QueryContext(txCtx, "SELECT applied FROM billing_usage_entries WHERE id = $1 FOR UPDATE", entry.ID)
+						if err != nil {
+							return false, err
+						}
+						defer func() { _ = rows.Close() }()
+						if !rows.Next() {
+							if err := rows.Err(); err != nil {
+								return false, err
+							}
+							return false, sql.ErrNoRows
+						}
+						var applied bool
+						if err := rows.Scan(&applied); err != nil {
+							return false, err
+						}
+						if err := rows.Err(); err != nil {
+							return false, err
+						}
+						return applied, nil
+					}()
+					if lockErr != nil {
+						log.Printf("Lock billing usage entry failed: %v", lockErr)
+					} else if !alreadyApplied {
+						if isSubscriptionBilling {
+							if err := s.userSubRepo.IncrementUsage(txCtx, subscription.ID, subscriptionCostUSD); err != nil {
+								log.Printf("Increment subscription usage failed: %v", err)
+							} else if err := s.usageLogRepo.MarkBillingUsageEntryApplied(txCtx, entry.ID); err != nil {
+								log.Printf("Mark billing usage entry applied failed: %v", err)
+							} else {
+								appliedThisCall = true
+								appliedAmountUSD = subscriptionCostUSD
+								if err := tx.APIKey.UpdateOneID(apiKey.ID).AddQuotaUsedUsd(appliedAmountUSD).Exec(txCtx); err != nil {
+									log.Printf("Increment api key quota used failed: %v", err)
+								}
+							}
+						} else {
+							if err := s.userRepo.DeductBalance(txCtx, user.ID, cost.ActualCost); err != nil {
+								log.Printf("Deduct balance failed: %v", err)
+							} else if err := s.usageLogRepo.MarkBillingUsageEntryApplied(txCtx, entry.ID); err != nil {
+								log.Printf("Mark billing usage entry applied failed: %v", err)
+							} else {
+								appliedThisCall = true
+								appliedAmountUSD = cost.ActualCost
+								if err := tx.APIKey.UpdateOneID(apiKey.ID).AddQuotaUsedUsd(appliedAmountUSD).Exec(txCtx); err != nil {
+									log.Printf("Increment api key quota used failed: %v", err)
+								}
+							}
+						}
+					}
+				}
+
+				if err := tx.Commit(); err != nil {
+					log.Printf("Commit billing transaction failed: %v", err)
+					appliedThisCall = false
+					appliedAmountUSD = 0
+				}
 			}
-			// 异步更新余额缓存
-			s.billingCacheService.QueueDeductBalance(user.ID, cost.ActualCost)
+		} else {
+			// Fallback (non-atomic): still re-apply when entry exists but isn't marked applied.
+			inserted, err := s.usageLogRepo.CreateBillingUsageEntry(ctx, entry)
+			if err != nil {
+				log.Printf("Create billing usage entry failed: %v", err)
+			} else if inserted || !entry.Applied {
+				if isSubscriptionBilling {
+					if err := s.userSubRepo.IncrementUsage(ctx, subscription.ID, subscriptionCostUSD); err != nil {
+						log.Printf("Increment subscription usage failed: %v", err)
+					} else if err := s.usageLogRepo.MarkBillingUsageEntryApplied(ctx, entry.ID); err != nil {
+						log.Printf("Mark billing usage entry applied failed: %v", err)
+					} else {
+						appliedThisCall = true
+						appliedAmountUSD = subscriptionCostUSD
+					}
+				} else {
+					if err := s.userRepo.DeductBalance(ctx, user.ID, cost.ActualCost); err != nil {
+						log.Printf("Deduct balance failed: %v", err)
+					} else if err := s.usageLogRepo.MarkBillingUsageEntryApplied(ctx, entry.ID); err != nil {
+						log.Printf("Mark billing usage entry applied failed: %v", err)
+					} else {
+						appliedThisCall = true
+						appliedAmountUSD = cost.ActualCost
+					}
+				}
+			}
+		}
+
+		if appliedThisCall {
+			if isSubscriptionBilling {
+				finalizeReservation(appliedAmountUSD)
+				if apiKey.GroupID != nil {
+					s.billingCacheService.QueueUpdateSubscriptionUsage(user.ID, *apiKey.GroupID, appliedAmountUSD)
+				}
+			} else {
+				s.billingCacheService.QueueDeductBalance(user.ID, appliedAmountUSD)
+			}
+
+			inviterUserID := int64(0)
+			if user != nil && user.InvitedByUserID != nil {
+				inviterUserID = *user.InvitedByUserID
+			}
+			applyReferralCommissionBestEffort(ctx, s.entClient, &s.referralRateCache, s.billingCacheService, usageLog.ID, inviterUserID, user.ID, appliedAmountUSD)
 		}
 	}
 
@@ -3667,21 +4053,47 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 		return err
 	}
 
-	// 检测 thinking block 签名错误（400）并重试一次（过滤 thinking blocks）
-	if resp.StatusCode == 400 && s.isThinkingBlockSignatureError(respBody) {
-		log.Printf("Account %d: detected thinking block signature error on count_tokens, retrying with filtered thinking blocks", account.ID)
+	// 400: 尝试修复工具历史（orphaned tool_result）以及 thinking signature 问题，各自最多重试一次。
+	if resp.StatusCode == 400 {
+		// 1) Orphaned tool_result: retry once with cleaned tool blocks.
+		if s.fixOrphanedToolResultsEnabled(ctx) {
+			if isOrphanErr, _ := detectOrphanedToolResultError(respBody); isOrphanErr {
+				cleanedBody := FilterOrphanedToolResults(body)
+				if !bytes.Equal(cleanedBody, body) {
+					log.Printf("Account %d: detected orphaned tool_result error on count_tokens, retrying with cleaned tool_result blocks", account.ID)
+					retryReq, buildErr := s.buildCountTokensRequest(ctx, c, account, cleanedBody, token, tokenType, reqModel)
+					if buildErr == nil {
+						retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
+						if retryErr == nil {
+							resp = retryResp
+							respBody, err = io.ReadAll(resp.Body)
+							_ = resp.Body.Close()
+							if err != nil {
+								s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to read response")
+								return err
+							}
+						}
+					}
+				}
+			}
+		}
 
-		filteredBody := FilterThinkingBlocksForRetry(body)
-		retryReq, buildErr := s.buildCountTokensRequest(ctx, c, account, filteredBody, token, tokenType, reqModel)
-		if buildErr == nil {
-			retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
-			if retryErr == nil {
-				resp = retryResp
-				respBody, err = io.ReadAll(resp.Body)
-				_ = resp.Body.Close()
-				if err != nil {
-					s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to read response")
-					return err
+		// 2) Thinking signature error: retry once with thinking blocks filtered.
+		if resp.StatusCode == 400 && s.isThinkingBlockSignatureError(respBody) {
+			log.Printf("Account %d: detected thinking block signature error on count_tokens, retrying with filtered thinking blocks", account.ID)
+
+			filteredBody := FilterThinkingBlocksForRetry(body)
+			retryReq, buildErr := s.buildCountTokensRequest(ctx, c, account, filteredBody, token, tokenType, reqModel)
+			if buildErr == nil {
+				retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
+				if retryErr == nil {
+					resp = retryResp
+					respBody, err = io.ReadAll(resp.Body)
+					_ = resp.Body.Close()
+					if err != nil {
+						s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Failed to read response")
+						return err
+					}
 				}
 			}
 		}
@@ -3751,9 +4163,15 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		}
 	}
 
+	metadataUserID := ""
+	if len(body) > 0 {
+		metadataUserID = gjson.GetBytes(body, "metadata.user_id").String()
+	}
+	applyClaudeCompat := s.shouldApplyClaudeCodeCompat(c.GetHeader("User-Agent"), metadataUserID)
+
 	// OAuth 账号：应用统一指纹和重写 userID
 	// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
-	if account.IsOAuth() && s.identityService != nil {
+	if account.IsOAuth() && s.identityService != nil && applyClaudeCompat {
 		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 		if err == nil {
 			accountUUID := account.GetExtraString("account_uuid")
@@ -3763,6 +4181,11 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 				}
 			}
 		}
+	}
+
+	// Proactive cleanup: remove orphaned tool_result blocks before forwarding.
+	if s.fixOrphanedToolResultsEnabled(ctx) {
+		body = FilterOrphanedToolResults(body)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
@@ -3788,7 +4211,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 
 	// OAuth 账号：应用指纹到请求头
-	if account.IsOAuth() && s.identityService != nil {
+	if account.IsOAuth() && s.identityService != nil && applyClaudeCompat {
 		fp, _ := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 		if fp != nil {
 			s.identityService.ApplyFingerprint(req, fp)
@@ -3901,4 +4324,34 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	}
 
 	return models
+}
+
+func removeCacheControlFromMessagesTail(data map[string]any) bool {
+	messages, ok := data["messages"].([]any)
+	if !ok {
+		return false
+	}
+
+	for i := len(messages) - 1; i >= 0; i-- {
+		msgMap, ok := messages[i].(map[string]any)
+		if !ok {
+			continue
+		}
+		content, ok := msgMap["content"].([]any)
+		if !ok {
+			continue
+		}
+		for j := len(content) - 1; j >= 0; j-- {
+			if m, ok := content[j].(map[string]any); ok {
+				if blockType, _ := m["type"].(string); blockType == "thinking" {
+					continue
+				}
+				if _, has := m["cache_control"]; has {
+					delete(m, "cache_control")
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

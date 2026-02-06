@@ -5,6 +5,8 @@ package repository
 import (
 	"context"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -263,6 +265,124 @@ func (s *BillingCacheSuite) TestSubscriptionCache() {
 				require.Error(s.T(), err, "expected error for missing status field")
 				require.NotErrorIs(s.T(), err, redis.Nil, "expected parsing error, not redis.Nil")
 				require.Equal(s.T(), "invalid cache: missing status", err.Error())
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			rdb := testRedis(s.T())
+			cache := NewBillingCache(rdb)
+			ctx := context.Background()
+
+			tt.fn(ctx, rdb, cache)
+		})
+	}
+}
+
+func (s *BillingCacheSuite) TestSubscriptionUsageReservation() {
+	tests := []struct {
+		name string
+		fn   func(ctx context.Context, rdb *redis.Client, cache service.BillingCache)
+	}{
+		{
+			name: "reserve_missing_key_returns_0",
+			fn: func(ctx context.Context, rdb *redis.Client, cache service.BillingCache) {
+				userID := int64(200)
+				groupID := int64(300)
+				subKey := fmt.Sprintf("%s%d:%d", billingSubKeyPrefix, userID, groupID)
+
+				dailyLimit := 10.0
+				code, err := cache.ReserveSubscriptionUsage(ctx, userID, groupID, 1.0, &dailyLimit, nil, nil)
+				require.NoError(s.T(), err)
+				require.Equal(s.T(), 0, code)
+
+				exists, err := rdb.Exists(ctx, subKey).Result()
+				require.NoError(s.T(), err)
+				require.Equal(s.T(), int64(0), exists)
+			},
+		},
+		{
+			name: "reserve_then_finalize_reconciles_reserved_and_actual",
+			fn: func(ctx context.Context, rdb *redis.Client, cache service.BillingCache) {
+				userID := int64(201)
+				groupID := int64(301)
+
+				data := &service.SubscriptionCacheData{
+					Status:       "active",
+					ExpiresAt:    time.Now().Add(1 * time.Hour),
+					DailyUsage:   0.6,
+					WeeklyUsage:  0.1,
+					MonthlyUsage: 0.2,
+					Version:      1,
+				}
+				require.NoError(s.T(), cache.SetSubscriptionCache(ctx, userID, groupID, data))
+
+				dailyLimit := 1.0
+				code, err := cache.ReserveSubscriptionUsage(ctx, userID, groupID, 0.4, &dailyLimit, nil, nil)
+				require.NoError(s.T(), err)
+				require.Equal(s.T(), 1, code)
+
+				got1, err := cache.GetSubscriptionCache(ctx, userID, groupID)
+				require.NoError(s.T(), err)
+				require.InEpsilon(s.T(), 0.4, got1.ReservedUsage, 0.00001)
+				require.InEpsilon(s.T(), 0.6, got1.DailyUsage, 0.00001)
+
+				require.NoError(s.T(), cache.FinalizeSubscriptionUsage(ctx, userID, groupID, 0.4, 0.25))
+
+				got2, err := cache.GetSubscriptionCache(ctx, userID, groupID)
+				require.NoError(s.T(), err)
+				require.InDelta(s.T(), 0.0, got2.ReservedUsage, 0.00001)
+				require.InEpsilon(s.T(), 0.85, got2.DailyUsage, 0.00001)
+				require.InEpsilon(s.T(), 0.35, got2.WeeklyUsage, 0.00001)
+				require.InEpsilon(s.T(), 0.45, got2.MonthlyUsage, 0.00001)
+			},
+		},
+		{
+			name: "concurrent_reservations_enforced_by_atomic_script",
+			fn: func(ctx context.Context, rdb *redis.Client, cache service.BillingCache) {
+				userID := int64(202)
+				groupID := int64(302)
+
+				data := &service.SubscriptionCacheData{
+					Status:    "active",
+					ExpiresAt: time.Now().Add(1 * time.Hour),
+					Version:   1,
+				}
+				require.NoError(s.T(), cache.SetSubscriptionCache(ctx, userID, groupID, data))
+
+				dailyLimit := 1.0
+				const goroutines = 10
+				const reserveEach = 0.3
+
+				start := make(chan struct{})
+				var okCount int64
+				var wg sync.WaitGroup
+				wg.Add(goroutines)
+				for i := 0; i < goroutines; i++ {
+					go func() {
+						defer wg.Done()
+						<-start
+						code, err := cache.ReserveSubscriptionUsage(ctx, userID, groupID, reserveEach, &dailyLimit, nil, nil)
+						if err == nil && code == 1 {
+							atomic.AddInt64(&okCount, 1)
+						}
+					}()
+				}
+				close(start)
+				wg.Wait()
+
+				// With limit=1.0 and reserveEach=0.3, only 3 can pass (0.9 <= 1.0), the 4th would exceed (1.2).
+				require.Equal(s.T(), int64(3), atomic.LoadInt64(&okCount))
+
+				got, err := cache.GetSubscriptionCache(ctx, userID, groupID)
+				require.NoError(s.T(), err)
+				require.InEpsilon(s.T(), 0.9, got.ReservedUsage, 0.00001)
+
+				require.NoError(s.T(), cache.FinalizeSubscriptionUsage(ctx, userID, groupID, 0.9, 0))
+				got2, err := cache.GetSubscriptionCache(ctx, userID, groupID)
+				require.NoError(s.T(), err)
+				require.InDelta(s.T(), 0.0, got2.ReservedUsage, 0.00001)
 			},
 		},
 	}

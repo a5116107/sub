@@ -24,6 +24,8 @@ const (
 	FieldRequestID = "request_id"
 	// FieldModel holds the string denoting the model field in the database.
 	FieldModel = "model"
+	// FieldBilledModel holds the string denoting the billed_model field in the database.
+	FieldBilledModel = "billed_model"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
@@ -131,6 +133,7 @@ var Columns = []string{
 	FieldAccountID,
 	FieldRequestID,
 	FieldModel,
+	FieldBilledModel,
 	FieldGroupID,
 	FieldSubscriptionID,
 	FieldInputTokens,
@@ -173,6 +176,8 @@ var (
 	RequestIDValidator func(string) error
 	// ModelValidator is a validator for the "model" field. It is called by the builders before save.
 	ModelValidator func(string) error
+	// BilledModelValidator is a validator for the "billed_model" field. It is called by the builders before save.
+	BilledModelValidator func(string) error
 	// DefaultInputTokens holds the default value on creation for the "input_tokens" field.
 	DefaultInputTokens int
 	// DefaultOutputTokens holds the default value on creation for the "output_tokens" field.
@@ -246,6 +251,11 @@ func ByRequestID(opts ...sql.OrderTermOption) OrderOption {
 // ByModel orders the results by the model field.
 func ByModel(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldModel, opts...).ToFunc()
+}
+
+// ByBilledModel orders the results by the billed_model field.
+func ByBilledModel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBilledModel, opts...).ToFunc()
 }
 
 // ByGroupID orders the results by the group_id field.

@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -9,6 +11,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -28,12 +31,20 @@ func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 }
 
 func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) error {
+	if key.GroupID == nil || *key.GroupID <= 0 {
+		return fmt.Errorf("create api key: missing group_id")
+	}
 	builder := r.client.APIKey.Create().
 		SetUserID(key.UserID).
 		SetKey(key.Key).
 		SetName(key.Name).
+		SetGroupID(*key.GroupID).
 		SetStatus(key.Status).
-		SetNillableGroupID(key.GroupID)
+		SetAllowBalance(key.AllowBalance).
+		SetAllowSubscription(key.AllowSubscription).
+		SetSubscriptionStrict(key.SubscriptionStrict).
+		SetNillableExpiresAt(key.ExpiresAt).
+		SetNillableQuotaLimitUsd(key.QuotaLimitUSD)
 
 	if len(key.IPWhitelist) > 0 {
 		builder.SetIPWhitelist(key.IPWhitelist)
@@ -110,6 +121,12 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldStatus,
 			apikey.FieldIPWhitelist,
 			apikey.FieldIPBlacklist,
+			apikey.FieldAllowBalance,
+			apikey.FieldAllowSubscription,
+			apikey.FieldSubscriptionStrict,
+			apikey.FieldExpiresAt,
+			apikey.FieldQuotaLimitUsd,
+			apikey.FieldQuotaUsedUsd,
 		).
 		WithUser(func(q *dbent.UserQuery) {
 			q.Select(
@@ -119,18 +136,23 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				user.FieldBalance,
 				user.FieldConcurrency,
 			)
+			q.WithUserAllowedGroups(func(q *dbent.UserAllowedGroupQuery) {
+				q.Select(userallowedgroup.FieldGroupID)
+			})
 		}).
 		WithGroup(func(q *dbent.GroupQuery) {
 			q.Select(
 				group.FieldID,
 				group.FieldName,
 				group.FieldPlatform,
+				group.FieldIsExclusive,
 				group.FieldStatus,
 				group.FieldSubscriptionType,
 				group.FieldRateMultiplier,
 				group.FieldDailyLimitUsd,
 				group.FieldWeeklyLimitUsd,
 				group.FieldMonthlyLimitUsd,
+				group.FieldUserConcurrency,
 				group.FieldImagePrice1k,
 				group.FieldImagePrice2k,
 				group.FieldImagePrice4k,
@@ -161,12 +183,16 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		Where(apikey.IDEQ(key.ID), apikey.DeletedAtIsNil()).
 		SetName(key.Name).
 		SetStatus(key.Status).
+		SetAllowBalance(key.AllowBalance).
+		SetAllowSubscription(key.AllowSubscription).
+		SetSubscriptionStrict(key.SubscriptionStrict).
+		SetNillableExpiresAt(key.ExpiresAt).
+		SetNillableQuotaLimitUsd(key.QuotaLimitUSD).
 		SetUpdatedAt(now)
-	if key.GroupID != nil {
-		builder.SetGroupID(*key.GroupID)
-	} else {
-		builder.ClearGroupID()
+	if key.GroupID == nil || *key.GroupID <= 0 {
+		return fmt.Errorf("update api key: missing group_id")
 	}
+	builder.SetGroupID(*key.GroupID)
 
 	// IP 限制字段
 	if len(key.IPWhitelist) > 0 {
@@ -267,7 +293,8 @@ func (r *apiKeyRepository) CountByUserID(ctx context.Context, userID int64) (int
 }
 
 func (r *apiKeyRepository) ExistsByKey(ctx context.Context, key string) (bool, error) {
-	count, err := r.activeQuery().Where(apikey.KeyEQ(key)).Count(ctx)
+	// ExistsByKey should reflect DB uniqueness, including soft-deleted records.
+	count, err := r.client.APIKey.Query().Where(apikey.KeyEQ(key)).Count(ctx)
 	return count > 0, err
 }
 
@@ -320,18 +347,14 @@ func (r *apiKeyRepository) SearchAPIKeys(ctx context.Context, userID int64, keyw
 	return outKeys, nil
 }
 
-// ClearGroupIDByGroupID 将指定分组的所有 API Key 的 group_id 设为 nil
-func (r *apiKeyRepository) ClearGroupIDByGroupID(ctx context.Context, groupID int64) (int64, error) {
-	n, err := r.client.APIKey.Update().
-		Where(apikey.GroupIDEQ(groupID), apikey.DeletedAtIsNil()).
-		ClearGroupID().
-		Save(ctx)
-	return int64(n), err
-}
-
 // CountByGroupID 获取分组的 API Key 数量
 func (r *apiKeyRepository) CountByGroupID(ctx context.Context, groupID int64) (int64, error) {
 	count, err := r.activeQuery().Where(apikey.GroupIDEQ(groupID)).Count(ctx)
+	return int64(count), err
+}
+
+func (r *apiKeyRepository) CountActiveByGroupID(ctx context.Context, groupID int64) (int64, error) {
+	count, err := r.activeQuery().Where(apikey.GroupIDEQ(groupID), apikey.StatusEQ(service.StatusActive)).Count(ctx)
 	return int64(count), err
 }
 
@@ -361,6 +384,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 	if m == nil {
 		return nil
 	}
+	gid := m.GroupID
 	out := &service.APIKey{
 		ID:          m.ID,
 		UserID:      m.UserID,
@@ -371,7 +395,13 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		IPBlacklist: m.IPBlacklist,
 		CreatedAt:   m.CreatedAt,
 		UpdatedAt:   m.UpdatedAt,
-		GroupID:     m.GroupID,
+		GroupID:     &gid,
+		AllowBalance:      m.AllowBalance,
+		AllowSubscription: m.AllowSubscription,
+		SubscriptionStrict: m.SubscriptionStrict,
+		ExpiresAt:         m.ExpiresAt,
+		QuotaLimitUSD:     m.QuotaLimitUsd,
+		QuotaUsedUSD:      m.QuotaUsedUsd,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
@@ -386,7 +416,7 @@ func userEntityToService(u *dbent.User) *service.User {
 	if u == nil {
 		return nil
 	}
-	return &service.User{
+	out := &service.User{
 		ID:                  u.ID,
 		Email:               u.Email,
 		Username:            u.Username,
@@ -396,12 +426,26 @@ func userEntityToService(u *dbent.User) *service.User {
 		Balance:             u.Balance,
 		Concurrency:         u.Concurrency,
 		Status:              u.Status,
+		InviteCode:          u.InviteCode,
+		InvitedByUserID:     u.InvitedByUserID,
+		InvitedAt:           u.InvitedAt,
 		TotpSecretEncrypted: u.TotpSecretEncrypted,
 		TotpEnabled:         u.TotpEnabled,
 		TotpEnabledAt:       u.TotpEnabledAt,
 		CreatedAt:           u.CreatedAt,
 		UpdatedAt:           u.UpdatedAt,
 	}
+	if len(u.Edges.UserAllowedGroups) > 0 {
+		ids := make([]int64, 0, len(u.Edges.UserAllowedGroups))
+		for _, rel := range u.Edges.UserAllowedGroups {
+			if rel != nil {
+				ids = append(ids, rel.GroupID)
+			}
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		out.AllowedGroups = ids
+	}
+	return out
 }
 
 func groupEntityToService(g *dbent.Group) *service.Group {
@@ -421,6 +465,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		DailyLimitUSD:       g.DailyLimitUsd,
 		WeeklyLimitUSD:      g.WeeklyLimitUsd,
 		MonthlyLimitUSD:     g.MonthlyLimitUsd,
+		UserConcurrency:     g.UserConcurrency,
 		ImagePrice1K:        g.ImagePrice1k,
 		ImagePrice2K:        g.ImagePrice2k,
 		ImagePrice4K:        g.ImagePrice4k,

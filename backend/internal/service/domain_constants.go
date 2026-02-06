@@ -1,66 +1,71 @@
 package service
 
+import "github.com/Wei-Shaw/sub2api/internal/domain"
+
 // Status constants
 const (
-	StatusActive   = "active"
-	StatusDisabled = "disabled"
-	StatusError    = "error"
-	StatusUnused   = "unused"
-	StatusUsed     = "used"
-	StatusExpired  = "expired"
+	StatusActive   = domain.StatusActive
+	StatusDisabled = domain.StatusDisabled
+	StatusError    = domain.StatusError
+	StatusUnused   = domain.StatusUnused
+	StatusUsed     = domain.StatusUsed
+	StatusExpired  = domain.StatusExpired
 )
 
 // Role constants
 const (
-	RoleAdmin = "admin"
-	RoleUser  = "user"
+	RoleAdmin = domain.RoleAdmin
+	RoleUser  = domain.RoleUser
 )
 
 // Platform constants
 const (
-	PlatformAnthropic   = "anthropic"
-	PlatformOpenAI      = "openai"
-	PlatformGemini      = "gemini"
-	PlatformAntigravity = "antigravity"
+	PlatformAnthropic   = domain.PlatformAnthropic
+	PlatformOpenAI      = domain.PlatformOpenAI
+	PlatformGemini      = domain.PlatformGemini
+	PlatformQwen        = domain.PlatformQwen
+	PlatformIFlow       = domain.PlatformIFlow
+	PlatformAntigravity = domain.PlatformAntigravity
 )
 
 // Account type constants
 const (
-	AccountTypeOAuth      = "oauth"       // OAuth类型账号（full scope: profile + inference）
-	AccountTypeSetupToken = "setup-token" // Setup Token类型账号（inference only scope）
-	AccountTypeAPIKey     = "apikey"      // API Key类型账号
+	AccountTypeOAuth      = domain.AccountTypeOAuth      // OAuth类型账号（full scope: profile + inference）
+	AccountTypeSetupToken = domain.AccountTypeSetupToken // Setup Token类型账号（inference only scope）
+	AccountTypeAPIKey     = domain.AccountTypeAPIKey     // API Key类型账号
 )
 
 // Redeem type constants
 const (
-	RedeemTypeBalance      = "balance"
-	RedeemTypeConcurrency  = "concurrency"
-	RedeemTypeSubscription = "subscription"
+	RedeemTypeBalance      = domain.RedeemTypeBalance
+	RedeemTypeConcurrency  = domain.RedeemTypeConcurrency
+	RedeemTypeSubscription = domain.RedeemTypeSubscription
 )
 
 // PromoCode status constants
 const (
-	PromoCodeStatusActive   = "active"
-	PromoCodeStatusDisabled = "disabled"
+	PromoCodeStatusActive   = domain.PromoCodeStatusActive
+	PromoCodeStatusDisabled = domain.PromoCodeStatusDisabled
 )
 
 // Admin adjustment type constants
 const (
-	AdjustmentTypeAdminBalance     = "admin_balance"     // 管理员调整余额
-	AdjustmentTypeAdminConcurrency = "admin_concurrency" // 管理员调整并发数
+	AdjustmentTypeAdminBalance     = domain.AdjustmentTypeAdminBalance     // 管理员调整余额
+	AdjustmentTypeAdminConcurrency = domain.AdjustmentTypeAdminConcurrency // 管理员调整并发数
+	AdjustmentTypePaymentBalance   = domain.AdjustmentTypePaymentBalance   // 支付充值（第三方回调入账）
 )
 
 // Group subscription type constants
 const (
-	SubscriptionTypeStandard     = "standard"     // 标准计费模式（按余额扣费）
-	SubscriptionTypeSubscription = "subscription" // 订阅模式（按限额控制）
+	SubscriptionTypeStandard     = domain.SubscriptionTypeStandard     // 标准计费模式（按余额扣费）
+	SubscriptionTypeSubscription = domain.SubscriptionTypeSubscription // 订阅模式（按限额控制）
 )
 
 // Subscription status constants
 const (
-	SubscriptionStatusActive    = "active"
-	SubscriptionStatusExpired   = "expired"
-	SubscriptionStatusSuspended = "suspended"
+	SubscriptionStatusActive    = domain.SubscriptionStatusActive
+	SubscriptionStatusExpired   = domain.SubscriptionStatusExpired
+	SubscriptionStatusSuspended = domain.SubscriptionStatusSuspended
 )
 
 // LinuxDoConnectSyntheticEmailDomain 是 LinuxDo Connect 用户的合成邮箱后缀（RFC 保留域名）。
@@ -73,6 +78,11 @@ const (
 	SettingKeyEmailVerifyEnabled   = "email_verify_enabled"   // 是否开启邮件验证
 	SettingKeyPromoCodeEnabled     = "promo_code_enabled"     // 是否启用优惠码功能
 	SettingKeyPasswordResetEnabled = "password_reset_enabled" // 是否启用忘记密码功能（需要先开启邮件验证）
+
+	// 邀请/返利设置
+	SettingKeyReferralInviterBonus   = "referral_inviter_bonus"   // 邀请人注册奖励余额
+	SettingKeyReferralInviteeBonus   = "referral_invitee_bonus"   // 被邀请人注册奖励余额
+	SettingKeyReferralCommissionRate = "referral_commission_rate" // 返利比例（0-1，按实际扣费额）
 
 	// 邮件服务设置
 	SettingKeySMTPHost     = "smtp_host"      // SMTP服务器地址
@@ -105,6 +115,9 @@ const (
 	SettingKeyContactInfo                 = "contact_info"                  // 客服联系方式
 	SettingKeyDocURL                      = "doc_url"                       // 文档链接
 	SettingKeyHomeContent                 = "home_content"                  // 首页内容（支持 Markdown/HTML，或 URL 作为 iframe src）
+	SettingKeyLandingPricingConfig        = "landing_pricing_config"        // Landing 页定价配置（JSON）
+	SettingKeyLandingPricingEnabled       = "landing_pricing_enabled"       // 是否启用 Landing / Pricing（订阅套餐展示）
+	SettingKeySubscriptionsEnabled        = "subscriptions_enabled"         // 是否启用订阅功能（用户/管理端订阅相关入口与 API）
 	SettingKeyHideCcsImportButton         = "hide_ccs_import_button"        // 是否隐藏 API Keys 页面的导入 CCS 按钮
 	SettingKeyPurchaseSubscriptionEnabled = "purchase_subscription_enabled" // 是否展示“购买订阅”页面入口
 	SettingKeyPurchaseSubscriptionURL     = "purchase_subscription_url"     // “购买订阅”页面 URL（作为 iframe src）
@@ -129,6 +142,9 @@ const (
 	// Request identity patch (Claude -> Gemini systemInstruction injection)
 	SettingKeyEnableIdentityPatch = "enable_identity_patch"
 	SettingKeyIdentityPatchPrompt = "identity_patch_prompt"
+
+	// Gateway runtime toggles
+	SettingKeyGatewayFixOrphanedToolResults = "gateway_fix_orphaned_tool_results"
 
 	// =========================
 	// Ops Monitoring (vNext)
@@ -161,6 +177,23 @@ const (
 
 	// SettingKeyStreamTimeoutSettings stores JSON config for stream timeout handling.
 	SettingKeyStreamTimeoutSettings = "stream_timeout_settings"
+
+	// =========================
+	// Docs Pages (Markdown)
+	// =========================
+
+	// Docs index (JSON, versioned). Stores page metadata (slug/title/order/format/public/etc).
+	SettingKeyDocsIndexV1 = "docs_index_v1"
+
+	// Public docs pages are stored as Markdown strings.
+	SettingKeyDocsOverviewZh       = "docs_overview_zh"
+	SettingKeyDocsOverviewEn       = "docs_overview_en"
+	SettingKeyDocsQuickstartZh     = "docs_quickstart_zh"
+	SettingKeyDocsQuickstartEn     = "docs_quickstart_en"
+	SettingKeyDocsCompatibilityZh  = "docs_compatibility_zh"
+	SettingKeyDocsCompatibilityEn  = "docs_compatibility_en"
+	SettingKeyDocsFAQZh            = "docs_faq_zh"
+	SettingKeyDocsFAQEn            = "docs_faq_en"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).

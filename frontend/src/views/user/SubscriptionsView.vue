@@ -8,6 +8,21 @@
         ></div>
       </div>
 
+      <!-- Feature Disabled -->
+      <div v-else-if="!subscriptionsEnabled" class="card p-12 text-center">
+        <div
+          class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
+        >
+          <Icon name="creditCard" size="xl" class="text-gray-400" />
+        </div>
+        <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+          {{ t('userSubscriptions.disabled') }}
+        </h3>
+        <p class="text-gray-500 dark:text-dark-400">
+          {{ t('userSubscriptions.disabledDesc') }}
+        </p>
+      </div>
+
       <!-- Empty State -->
       <div v-else-if="subscriptions.length === 0" class="card p-12 text-center">
         <div
@@ -235,7 +250,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import subscriptionsAPI from '@/api/subscriptions'
@@ -249,6 +264,7 @@ const appStore = useAppStore()
 
 const subscriptions = ref<UserSubscription[]>([])
 const loading = ref(true)
+const subscriptionsEnabled = computed(() => appStore.cachedPublicSettings?.subscriptions_enabled ?? true)
 
 async function loadSubscriptions() {
   try {
@@ -336,7 +352,16 @@ function formatResetTime(windowStart: string | null, windowHours: number): strin
   return `${minutes}m`
 }
 
-onMounted(() => {
-  loadSubscriptions()
-})
+watch(
+  subscriptionsEnabled,
+  (enabled) => {
+    if (!enabled) {
+      subscriptions.value = []
+      loading.value = false
+      return
+    }
+    loadSubscriptions()
+  },
+  { immediate: true }
+)
 </script>

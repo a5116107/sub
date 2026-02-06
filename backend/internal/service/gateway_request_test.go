@@ -296,3 +296,71 @@ func TestFilterSignatureSensitiveBlocksForRetry_DowngradesTools(t *testing.T) {
 	require.Contains(t, content0["text"], "tool_use")
 	require.Contains(t, content1["text"], "tool_result")
 }
+
+func TestFilterOrphanedToolResults_RemovesOrphans(t *testing.T) {
+	input := []byte(`{
+		"messages":[
+			{"role":"assistant","content":[
+				{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}},
+				{"type":"tool_result","tool_use_id":"t1","content":"ok","is_error":false},
+				{"type":"tool_result","tool_use_id":"t2","content":"orphan","is_error":false}
+			]}
+		]
+	}`)
+
+	out := FilterOrphanedToolResults(input)
+
+	var req map[string]any
+	require.NoError(t, json.Unmarshal(out, &req))
+	msgs, ok := req["messages"].([]any)
+	require.True(t, ok)
+	require.Len(t, msgs, 1)
+
+	msg0, ok := msgs[0].(map[string]any)
+	require.True(t, ok)
+	content, ok := msg0["content"].([]any)
+	require.True(t, ok)
+	require.Len(t, content, 2)
+
+	// Ensure the orphaned tool_result(t2) is removed while valid ones remain.
+	for _, b := range content {
+		bm, ok := b.(map[string]any)
+		require.True(t, ok)
+		if bm["type"] == "tool_result" {
+			require.NotEqual(t, "t2", bm["tool_use_id"])
+		}
+	}
+}
+
+func TestFilterOrphanedToolResults_NoChangeWhenNoOrphans(t *testing.T) {
+	input := `{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}},{"type":"tool_result","tool_use_id":"t1","content":"ok","is_error":false}]}]}`
+	out := FilterOrphanedToolResults([]byte(input))
+	// Ensure we don't rewrite JSON when no cleanup is needed.
+	require.Equal(t, input, string(out))
+}
+
+func TestFilterOrphanedToolResults_EmptyContentGetsPlaceholder(t *testing.T) {
+	input := []byte(`{
+		"messages":[
+			{"role":"assistant","content":[{"type":"tool_result","tool_use_id":"missing","content":"ok","is_error":false}]}
+		]
+	}`)
+
+	out := FilterOrphanedToolResults(input)
+
+	var req map[string]any
+	require.NoError(t, json.Unmarshal(out, &req))
+	msgs, ok := req["messages"].([]any)
+	require.True(t, ok)
+	require.Len(t, msgs, 1)
+
+	msg0, ok := msgs[0].(map[string]any)
+	require.True(t, ok)
+	content, ok := msg0["content"].([]any)
+	require.True(t, ok)
+	require.Len(t, content, 1)
+	content0, ok := content[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "text", content0["type"])
+	require.NotEmpty(t, content0["text"])
+}

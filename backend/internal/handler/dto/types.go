@@ -10,6 +10,7 @@ type User struct {
 	Balance       float64   `json:"balance"`
 	Concurrency   int       `json:"concurrency"`
 	Status        string    `json:"status"`
+	InviteCode    *string   `json:"invite_code,omitempty"`
 	AllowedGroups []int64   `json:"allowed_groups"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
@@ -35,6 +36,12 @@ type APIKey struct {
 	Status      string    `json:"status"`
 	IPWhitelist []string  `json:"ip_whitelist"`
 	IPBlacklist []string  `json:"ip_blacklist"`
+	AllowBalance      bool       `json:"allow_balance"`
+	AllowSubscription bool       `json:"allow_subscription"`
+	SubscriptionStrict bool      `json:"subscription_strict"`
+	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	QuotaLimitUSD     *float64   `json:"quota_limit_usd,omitempty"`
+	QuotaUsedUSD      float64    `json:"quota_used_usd"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 
@@ -55,6 +62,7 @@ type Group struct {
 	DailyLimitUSD    *float64 `json:"daily_limit_usd"`
 	WeeklyLimitUSD   *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD  *float64 `json:"monthly_limit_usd"`
+	UserConcurrency  int      `json:"user_concurrency"`
 
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	ImagePrice1K *float64 `json:"image_price_1k"`
@@ -212,12 +220,13 @@ type AdminRedeemCode struct {
 
 // UsageLog 是普通用户接口使用的 usage log DTO（不包含管理员字段）。
 type UsageLog struct {
-	ID        int64  `json:"id"`
-	UserID    int64  `json:"user_id"`
-	APIKeyID  int64  `json:"api_key_id"`
-	AccountID int64  `json:"account_id"`
-	RequestID string `json:"request_id"`
-	Model     string `json:"model"`
+	ID          int64   `json:"id"`
+	UserID      int64   `json:"user_id"`
+	APIKeyID    int64   `json:"api_key_id"`
+	AccountID   int64   `json:"account_id"`
+	RequestID   string  `json:"request_id"`
+	Model       string  `json:"model"`
+	BilledModel *string `json:"billed_model,omitempty"`
 
 	GroupID        *int64 `json:"group_id"`
 	SubscriptionID *int64 `json:"subscription_id"`

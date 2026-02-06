@@ -158,6 +158,15 @@ func (s *stubAdminService) GetGroupAPIKeys(ctx context.Context, groupID int64, p
 	return s.apiKeys, int64(len(s.apiKeys)), nil
 }
 
+func (s *stubAdminService) GetGroupStats(ctx context.Context, groupID int64) (map[string]any, error) {
+	return map[string]any{
+		"total_api_keys":  1,
+		"active_api_keys": 1,
+		"total_requests":  10,
+		"total_cost":      0.1234,
+	}, nil
+}
+
 func (s *stubAdminService) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string) ([]service.Account, int64, error) {
 	return s.accounts, int64(len(s.accounts)), nil
 }
@@ -288,6 +297,21 @@ func (s *stubAdminService) BatchDeleteRedeemCodes(ctx context.Context, ids []int
 func (s *stubAdminService) ExpireRedeemCode(ctx context.Context, id int64) (*service.RedeemCode, error) {
 	code := service.RedeemCode{ID: id, Code: "R-TEST", Status: service.StatusUsed}
 	return &code, nil
+}
+
+func (s *stubAdminService) GetRedeemCodeStats(ctx context.Context) (map[string]any, error) {
+	return map[string]any{
+		"total_codes":             1,
+		"active_codes":            1,
+		"used_codes":              0,
+		"expired_codes":           0,
+		"total_value_distributed": 10.0,
+		"by_type": map[string]int64{
+			service.RedeemTypeBalance:      1,
+			service.RedeemTypeConcurrency:  0,
+			service.RedeemTypeSubscription: 0,
+		},
+	}, nil
 }
 
 // Ensure stub implements interface.

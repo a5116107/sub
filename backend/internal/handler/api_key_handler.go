@@ -3,6 +3,7 @@ package handler
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -27,20 +28,32 @@ func NewAPIKeyHandler(apiKeyService *service.APIKeyService) *APIKeyHandler {
 
 // CreateAPIKeyRequest represents the create API key request payload
 type CreateAPIKeyRequest struct {
-	Name        string   `json:"name" binding:"required"`
-	GroupID     *int64   `json:"group_id"`     // nullable
-	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
+	Name              string     `json:"name" binding:"required"`
+	GroupID           int64      `json:"group_id" binding:"required"`
+	CustomKey         *string    `json:"custom_key"`   // 可选的自定义key
+	IPWhitelist       []string   `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist       []string   `json:"ip_blacklist"` // IP 黑名单
+	AllowBalance      *bool      `json:"allow_balance"`
+	AllowSubscription *bool      `json:"allow_subscription"`
+	SubscriptionStrict *bool     `json:"subscription_strict"`
+	ExpiresAt         *time.Time `json:"expires_at"`
+	QuotaLimitUSD     *float64   `json:"quota_limit_usd"`
 }
 
 // UpdateAPIKeyRequest represents the update API key request payload
 type UpdateAPIKeyRequest struct {
-	Name        string   `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	Status      string   `json:"status" binding:"omitempty,oneof=active inactive"`
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
+	Name              string     `json:"name"`
+	GroupID           *int64     `json:"group_id"`
+	Status            string     `json:"status" binding:"omitempty,oneof=active inactive"`
+	IPWhitelist       []string   `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist       []string   `json:"ip_blacklist"` // IP 黑名单
+	AllowBalance      *bool      `json:"allow_balance"`
+	AllowSubscription *bool      `json:"allow_subscription"`
+	SubscriptionStrict *bool     `json:"subscription_strict"`
+	ExpiresAt         *time.Time `json:"expires_at"`
+	ClearExpiresAt    bool       `json:"clear_expires_at"`
+	QuotaLimitUSD     *float64   `json:"quota_limit_usd"`
+	ClearQuotaLimitUSD bool      `json:"clear_quota_limit_usd"`
 }
 
 // List handles listing user's API keys with pagination
@@ -115,10 +128,15 @@ func (h *APIKeyHandler) Create(c *gin.Context) {
 
 	svcReq := service.CreateAPIKeyRequest{
 		Name:        req.Name,
-		GroupID:     req.GroupID,
+		GroupID:     &req.GroupID,
 		CustomKey:   req.CustomKey,
 		IPWhitelist: req.IPWhitelist,
 		IPBlacklist: req.IPBlacklist,
+		AllowBalance:      req.AllowBalance,
+		AllowSubscription: req.AllowSubscription,
+		SubscriptionStrict: req.SubscriptionStrict,
+		ExpiresAt:         req.ExpiresAt,
+		QuotaLimitUSD:     req.QuotaLimitUSD,
 	}
 	key, err := h.apiKeyService.Create(c.Request.Context(), subject.UserID, svcReq)
 	if err != nil {
@@ -153,6 +171,13 @@ func (h *APIKeyHandler) Update(c *gin.Context) {
 	svcReq := service.UpdateAPIKeyRequest{
 		IPWhitelist: req.IPWhitelist,
 		IPBlacklist: req.IPBlacklist,
+		AllowBalance:      req.AllowBalance,
+		AllowSubscription: req.AllowSubscription,
+		SubscriptionStrict: req.SubscriptionStrict,
+		ExpiresAt:         req.ExpiresAt,
+		ClearExpiresAt:    req.ClearExpiresAt,
+		QuotaLimitUSD:     req.QuotaLimitUSD,
+		ClearQuotaLimitUSD: req.ClearQuotaLimitUSD,
 	}
 	if req.Name != "" {
 		svcReq.Name = &req.Name

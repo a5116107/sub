@@ -527,10 +527,7 @@ func (_q *APIKeyQuery) loadGroup(ctx context.Context, query *GroupQuery, nodes [
 	ids := make([]int64, 0, len(nodes))
 	nodeids := make(map[int64][]*APIKey)
 	for i := range nodes {
-		if nodes[i].GroupID == nil {
-			continue
-		}
-		fk := *nodes[i].GroupID
+		fk := nodes[i].GroupID
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}

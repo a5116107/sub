@@ -20,7 +20,7 @@
 
       <!-- Grid Pattern -->
       <div
-        class="absolute inset-0 bg-[linear-gradient(rgba(20,184,166,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"
+        class="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"
       ></div>
     </div>
 
@@ -28,11 +28,15 @@
     <div class="relative z-10 w-full max-w-md">
       <!-- Logo/Brand -->
       <div class="mb-8 text-center">
-        <!-- Custom Logo or Default Logo -->
-        <div
-          class="mb-4 inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-primary-500/30"
-        >
-          <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+        <!-- Custom Logo or Default Logo with glow effect -->
+        <div class="logo-container relative mb-4 inline-block">
+          <!-- Glow background -->
+          <div class="logo-glow absolute inset-0 rounded-2xl bg-primary-400/30 blur-xl"></div>
+          <div
+            class="relative inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white dark:bg-dark-800 shadow-lg shadow-primary-500/30 ring-1 ring-primary-200/50 dark:ring-primary-700/30"
+          >
+            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+          </div>
         </div>
         <h1 class="text-gradient mb-2 text-3xl font-bold">
           {{ siteName }}
@@ -86,5 +90,29 @@ onMounted(async () => {
 <style scoped>
 .text-gradient {
   @apply bg-gradient-to-r from-primary-600 to-primary-500 bg-clip-text text-transparent;
+}
+
+/* Logo glow animation */
+.logo-glow {
+  animation: logoGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes logoGlow {
+  0% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.5;
+    transform: scale(1.1);
+  }
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .logo-glow {
+    animation: none;
+    opacity: 0.4;
+  }
 }
 </style>

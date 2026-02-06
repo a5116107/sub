@@ -15,7 +15,7 @@
   <!-- Default Home Page -->
   <div
     v-else
-    class="relative flex min-h-screen flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
+    class="relative flex min-h-screen flex-col overflow-hidden"
   >
     <!-- Background Decorations -->
     <div class="pointer-events-none absolute inset-0 overflow-hidden">
@@ -31,115 +31,165 @@
       <div
         class="absolute bottom-1/4 right-1/4 h-64 w-64 rounded-full bg-primary-400/10 blur-3xl"
       ></div>
+      <div class="absolute right-1/3 top-2/3 h-72 w-72 rounded-full bg-gold-500/8 blur-3xl"></div>
       <div
-        class="absolute inset-0 bg-[linear-gradient(rgba(20,184,166,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"
+        class="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"
       ></div>
     </div>
 
     <!-- Header -->
-    <header class="relative z-20 px-6 py-4">
-      <nav class="mx-auto flex max-w-6xl items-center justify-between">
-        <!-- Logo -->
-        <div class="flex items-center">
-          <div class="h-10 w-10 overflow-hidden rounded-xl shadow-md">
+    <header class="relative z-20 px-6 pt-6">
+      <nav
+        class="neo-surface neo-border-animated mx-auto flex max-w-7xl items-center justify-between rounded-full px-4 py-3 shadow-glass-sm"
+      >
+        <!-- Brand -->
+        <div class="flex items-center gap-3">
+          <div class="h-10 w-10 overflow-hidden rounded-xl shadow-glow">
             <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+          </div>
+          <div class="hidden flex-col leading-tight sm:flex">
+            <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ siteName }}</span>
+            <span class="text-xs text-gray-500 dark:text-dark-400">{{ t('home.nav.enterprise') }}</span>
           </div>
         </div>
 
-        <!-- Nav Actions -->
-        <div class="flex items-center gap-3">
-          <!-- Language Switcher -->
-          <LocaleSwitcher />
-
-          <!-- Doc Link -->
+        <!-- Nav -->
+        <div class="hidden items-center gap-1 sm:flex">
           <a
-            v-if="docUrl"
+            href="#features"
+            class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100/70 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-900/50 dark:hover:text-white"
+          >
+            {{ t('home.nav.features') }}
+          </a>
+          <a
+            href="#providers"
+            class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100/70 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-900/50 dark:hover:text-white"
+          >
+            {{ t('home.nav.providers') }}
+          </a>
+          <a
+            v-if="landingPricingEnabled"
+            href="#pricing"
+            class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100/70 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-900/50 dark:hover:text-white"
+          >
+            {{ t('home.pricing.nav') }}
+          </a>
+
+          <router-link
+            v-if="docUrl && docUrlIsInternal"
+            :to="docUrl"
+            class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100/70 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-900/50 dark:hover:text-white"
+          >
+            {{ t('home.docs') }}
+          </router-link>
+          <a
+            v-else-if="docUrl"
             :href="docUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100/70 hover:text-gray-900 dark:text-dark-300 dark:hover:bg-dark-900/50 dark:hover:text-white"
+          >
+            {{ t('home.docs') }}
+          </a>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-2">
+          <LocaleSwitcher />
+
+          <router-link
+            v-if="docUrl && docUrlIsInternal"
+            :to="docUrl"
+            class="btn btn-ghost btn-icon"
+            :title="t('home.viewDocs')"
+          >
+            <Icon name="book" size="md" />
+          </router-link>
+          <a
+            v-else-if="docUrl"
+            :href="docUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn btn-ghost btn-icon"
             :title="t('home.viewDocs')"
           >
             <Icon name="book" size="md" />
           </a>
 
-          <!-- Theme Toggle -->
           <button
             @click="toggleTheme"
-            class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="btn btn-ghost btn-icon"
             :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
           >
             <Icon v-if="isDark" name="sun" size="md" />
             <Icon v-else name="moon" size="md" />
           </button>
 
-          <!-- Login / Dashboard Button -->
-          <router-link
-            v-if="isAuthenticated"
-            :to="dashboardPath"
-            class="inline-flex items-center gap-1.5 rounded-full bg-gray-900 py-1 pl-1 pr-2.5 transition-colors hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700"
-          >
+          <router-link v-if="isAuthenticated" :to="dashboardPath" class="btn btn-secondary btn-sm">
             <span
-              class="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-[10px] font-semibold text-white"
+              class="flex h-5 w-5 items-center justify-center rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 text-[10px] font-semibold text-white"
             >
               {{ userInitial }}
             </span>
-            <span class="text-xs font-medium text-white">{{ t('home.dashboard') }}</span>
-            <svg
-              class="h-3 w-3 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25"
-              />
-            </svg>
+            <span class="hidden sm:inline">{{ t('home.dashboard') }}</span>
+            <Icon name="arrowRight" size="sm" :stroke-width="2" class="hidden sm:inline" />
           </router-link>
-          <router-link
-            v-else
-            to="/login"
-            class="inline-flex items-center rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700"
-          >
-            {{ t('home.login') }}
-          </router-link>
+          <template v-else>
+            <router-link to="/login" class="btn btn-secondary btn-sm">{{ t('home.login') }}</router-link>
+            <router-link to="/register" class="btn btn-primary btn-sm">{{ t('home.getStarted') }}</router-link>
+          </template>
         </div>
       </nav>
     </header>
 
     <!-- Main Content -->
-    <main class="relative z-10 flex-1 px-6 py-16">
-      <div class="mx-auto max-w-6xl">
-        <!-- Hero Section - Left/Right Layout -->
-        <div class="mb-12 flex flex-col items-center justify-between gap-12 lg:flex-row lg:gap-16">
+    <main class="relative z-10 flex-1 px-6 py-14 md:py-20">
+      <div class="mx-auto max-w-7xl">
+        <!-- Hero (NeoGraphite) -->
+        <div class="mb-14">
+          <div class="neo-panel neo-border-animated px-6 py-8 md:px-10 md:py-10">
+            <div class="grid gap-10 lg:grid-cols-12 lg:gap-12">
           <!-- Left: Text Content -->
-          <div class="flex-1 text-center lg:text-left">
-            <h1
-              class="mb-4 text-4xl font-bold text-gray-900 dark:text-white md:text-5xl lg:text-6xl"
+          <div class="lg:col-span-6">
+            <div
+              class="mb-5 inline-flex flex-wrap items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-white/80"
             >
-              {{ siteName }}
+              <span class="h-1.5 w-1.5 rounded-full bg-primary-400 shadow-glow"></span>
+              {{ t('home.nav.enterprise') }}
+              <span class="hidden opacity-70 sm:inline">·</span>
+              <span class="hidden sm:inline">{{ t('home.tags.realtimeBilling') }}</span>
+            </div>
+
+            <h1 class="mb-4 text-4xl font-bold tracking-tight text-white md:text-5xl lg:text-6xl">
+              <span class="bg-gradient-to-r from-primary-400 via-primary-500 to-primary-700 bg-clip-text text-transparent">
+                {{ siteName }}
+              </span>
             </h1>
-            <p class="mb-8 text-lg text-gray-600 dark:text-dark-300 md:text-xl">
+            <p class="mb-8 text-lg text-white/70 md:text-xl">
               {{ siteSubtitle }}
             </p>
 
-            <!-- CTA Button -->
-            <div>
+            <!-- CTA -->
+            <div class="flex flex-col items-center justify-center gap-3 sm:flex-row lg:justify-start">
               <router-link
-                :to="isAuthenticated ? dashboardPath : '/login'"
-                class="btn btn-primary px-8 py-3 text-base shadow-lg shadow-primary-500/30"
+                :to="isAuthenticated ? dashboardPath : '/register'"
+                class="btn btn-primary btn-lg w-full px-8 sm:w-auto"
               >
                 {{ isAuthenticated ? t('home.goToDashboard') : t('home.getStarted') }}
                 <Icon name="arrowRight" size="md" class="ml-2" :stroke-width="2" />
               </router-link>
+              <a
+                v-if="landingPricingEnabled"
+                href="#pricing"
+                class="btn btn-secondary btn-lg w-full px-8 sm:w-auto"
+              >
+                {{ t('home.pricing.nav') }}
+              </a>
             </div>
           </div>
 
           <!-- Right: Terminal Animation -->
-          <div class="flex flex-1 justify-center lg:justify-end">
+          <div class="lg:col-span-6 lg:pl-2">
             <div class="terminal-container">
               <div class="terminal-window">
                 <!-- Window header -->
@@ -172,22 +222,34 @@
                   </div>
                 </div>
               </div>
+              <div class="mt-4 flex items-center justify-between gap-3 px-1 text-xs text-white/60">
+                <span class="hidden sm:inline">{{ t('home.tags.subscriptionToApi') }} · /v1/messages</span>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/80 transition-colors hover:bg-white/10"
+                  @click="copyHeroSnippet"
+                >
+                  <Icon name="clipboard" size="sm" />
+                  <span class="hidden sm:inline">{{ t('common.copyToClipboard') }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
             </div>
           </div>
         </div>
 
+        <section id="features" class="mb-16">
         <!-- Feature Tags - Centered -->
-        <div class="mb-12 flex flex-wrap items-center justify-center gap-4 md:gap-6">
-          <div
-            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200/50 bg-white/80 px-5 py-2.5 shadow-sm backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/80"
-          >
+        <div class="mb-10 flex flex-wrap items-center justify-center gap-3 md:gap-4">
+          <div class="neo-surface inline-flex items-center gap-2.5 rounded-full px-5 py-2.5 shadow-glass-sm">
             <Icon name="swap" size="sm" class="text-primary-500" />
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{
               t('home.tags.subscriptionToApi')
             }}</span>
           </div>
           <div
-            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200/50 bg-white/80 px-5 py-2.5 shadow-sm backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/80"
+            class="neo-surface inline-flex items-center gap-2.5 rounded-full px-5 py-2.5 shadow-glass-sm"
           >
             <Icon name="shield" size="sm" class="text-primary-500" />
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{
@@ -195,7 +257,7 @@
             }}</span>
           </div>
           <div
-            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200/50 bg-white/80 px-5 py-2.5 shadow-sm backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/80"
+            class="neo-surface inline-flex items-center gap-2.5 rounded-full px-5 py-2.5 shadow-glass-sm"
           >
             <Icon name="chart" size="sm" class="text-primary-500" />
             <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{
@@ -205,11 +267,9 @@
         </div>
 
         <!-- Features Grid -->
-        <div class="mb-12 grid gap-6 md:grid-cols-3">
+        <div class="grid gap-6 md:grid-cols-3">
           <!-- Feature 1: Unified Gateway -->
-          <div
-            class="group rounded-2xl border border-gray-200/50 bg-white/60 p-6 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-primary-500/10 dark:border-dark-700/50 dark:bg-dark-800/60"
-          >
+          <div class="card card-hover group p-6">
             <div
               class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30 transition-transform group-hover:scale-110"
             >
@@ -224,9 +284,7 @@
           </div>
 
           <!-- Feature 2: Account Pool -->
-          <div
-            class="group rounded-2xl border border-gray-200/50 bg-white/60 p-6 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-primary-500/10 dark:border-dark-700/50 dark:bg-dark-800/60"
-          >
+          <div class="card card-hover group p-6">
             <div
               class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30 transition-transform group-hover:scale-110"
             >
@@ -253,9 +311,7 @@
           </div>
 
           <!-- Feature 3: Billing & Quota -->
-          <div
-            class="group rounded-2xl border border-gray-200/50 bg-white/60 p-6 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-primary-500/10 dark:border-dark-700/50 dark:bg-dark-800/60"
-          >
+          <div class="card card-hover group p-6">
             <div
               class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg shadow-purple-500/30 transition-transform group-hover:scale-110"
             >
@@ -281,7 +337,9 @@
             </p>
           </div>
         </div>
+        </section>
 
+        <section id="providers" class="mb-16">
         <!-- Supported Providers -->
         <div class="mb-8 text-center">
           <h2 class="mb-3 text-2xl font-bold text-gray-900 dark:text-white">
@@ -295,7 +353,7 @@
         <div class="mb-16 flex flex-wrap items-center justify-center gap-4">
           <!-- Claude - Supported -->
           <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
+            class="neo-surface flex items-center gap-2 rounded-xl px-5 py-3 ring-1 ring-primary-500/20"
           >
             <div
               class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-orange-400 to-orange-500"
@@ -310,7 +368,7 @@
           </div>
           <!-- GPT - Supported -->
           <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
+            class="neo-surface flex items-center gap-2 rounded-xl px-5 py-3 ring-1 ring-primary-500/20"
           >
             <div
               class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-green-600"
@@ -325,7 +383,7 @@
           </div>
           <!-- Gemini - Supported -->
           <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
+            class="neo-surface flex items-center gap-2 rounded-xl px-5 py-3 ring-1 ring-primary-500/20"
           >
             <div
               class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600"
@@ -340,7 +398,7 @@
           </div>
           <!-- Antigravity - Supported -->
           <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
+            class="neo-surface flex items-center gap-2 rounded-xl px-5 py-3 ring-1 ring-primary-500/20"
           >
             <div
               class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-rose-500 to-pink-600"
@@ -355,7 +413,7 @@
           </div>
           <!-- More - Coming Soon -->
           <div
-            class="flex items-center gap-2 rounded-xl border border-gray-200/50 bg-white/40 px-5 py-3 opacity-60 backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/40"
+            class="neo-surface flex items-center gap-2 rounded-xl px-5 py-3 opacity-70"
           >
             <div
               class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-gray-500 to-gray-600"
@@ -369,6 +427,172 @@
             >
           </div>
         </div>
+        </section>
+
+        <!-- Pricing -->
+        <section v-if="landingPricingEnabled" id="pricing" class="scroll-mt-24">
+          <div class="mb-8 text-center">
+            <h2 class="mb-3 text-2xl font-bold text-gray-900 dark:text-white">
+              {{ pricingConfigTitle }}
+            </h2>
+            <p v-if="pricingConfigSubtitle" class="text-sm text-gray-600 dark:text-dark-400">
+              {{ pricingConfigSubtitle }}
+            </p>
+          </div>
+
+          <!-- Tabs -->
+          <div class="mb-8 flex flex-col items-center justify-center gap-4">
+            <div class="tabs">
+              <button
+                type="button"
+                class="tab"
+                :class="{ 'tab-active': pricingTab === 'subscription' }"
+                @click="pricingTab = 'subscription'"
+              >
+                {{ pricing.subscription.title }}
+              </button>
+              <button
+                type="button"
+                class="tab"
+                :class="{ 'tab-active': pricingTab === 'payg' }"
+                @click="pricingTab = 'payg'"
+              >
+                {{ pricing.payg.title }}
+              </button>
+            </div>
+
+            <!-- Period toggle (subscription only) -->
+            <div v-if="pricingTab === 'subscription'" class="tabs">
+              <button
+                v-for="p in subscriptionPeriods"
+                :key="p.key"
+                type="button"
+                class="tab"
+                :class="{ 'tab-active': pricingPeriod === p.key }"
+                @click="pricingPeriod = p.key"
+              >
+                {{ p.label }}
+              </button>
+            </div>
+            <p
+              v-if="pricingTab === 'subscription' && pricingPeriod === 'custom'"
+              class="text-center text-xs text-gray-500 dark:text-dark-400"
+            >
+              {{ t('home.pricing.customHint') }}
+            </p>
+          </div>
+
+          <!-- Subscription plans -->
+          <div v-if="pricingTab === 'subscription'" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div
+              v-for="plan in visibleSubscriptionPlans"
+              :key="plan.id"
+              class="card card-hover p-6"
+              :class="
+                plan.id === 'enterprise'
+                  ? 'ring-1 ring-gold-500/25 neo-border-animated'
+                  : plan.highlighted
+                    ? 'ring-1 ring-primary-500/30 shadow-glow neo-border-animated'
+                    : ''
+              "
+            >
+              <div class="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                      {{ plan.name }}
+                    </h3>
+                    <span
+                      v-if="plan.badge"
+                      class="badge"
+                      :class="
+                        plan.id === 'enterprise'
+                          ? 'badge-gold'
+                          : plan.highlighted
+                            ? 'badge-primary'
+                            : 'badge-gray'
+                      "
+                    >
+                      {{ plan.badge }}
+                    </span>
+                  </div>
+                  <p v-if="plan.description" class="mt-1 text-sm text-gray-600 dark:text-dark-400">
+                    {{ plan.description }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="mb-5">
+                <div class="flex items-baseline gap-2">
+                  <p class="text-3xl font-bold text-gray-900 dark:text-white">
+                    {{
+                      plan.price.custom
+                        ? plan.price.custom
+                        : formatCny(
+                            pricingPeriod === 'week' ? plan.price.week || 0 : plan.price.month || 0
+                          )
+                    }}
+                  </p>
+                  <span
+                    v-if="!plan.price.custom && pricingPeriod !== 'custom'"
+                    class="text-sm text-gray-500 dark:text-dark-400"
+                  >
+                    /{{ periodLabel(pricingPeriod) }}
+                  </span>
+                </div>
+                <p v-if="plan.highlighted" class="mt-2 text-xs text-primary-600 dark:text-primary-400">
+                  {{ t('home.tags.realtimeBilling') }} · {{ t('home.features.balanceQuota') }}
+                </p>
+              </div>
+
+              <PricingPlanPerks :plan="plan" :groups="pricingGroups" :period="pricingPeriod" class="mb-6" />
+
+              <router-link
+                :to="planCtaTo(plan.id, pricingPeriod)"
+                class="btn w-full"
+                :class="plan.id === 'enterprise' ? 'btn-premium' : 'btn-primary'"
+              >
+                {{ isAuthenticated ? t('home.pricing.goToPurchase') : t('home.getStarted') }}
+                <Icon name="arrowRight" size="sm" class="ml-1.5" :stroke-width="2" />
+              </router-link>
+            </div>
+          </div>
+
+          <!-- Pay-as-you-go -->
+          <div v-else class="mx-auto max-w-3xl">
+            <div
+              class="card neo-border-animated p-8"
+            >
+              <p v-if="pricing.payg.subtitle" class="text-sm text-gray-600 dark:text-dark-400">
+                {{ pricing.payg.subtitle }}
+              </p>
+              <ul class="mt-6 space-y-2 text-sm text-gray-700 dark:text-dark-200">
+                <li v-for="(f, idx) in pricing.payg.features" :key="idx" class="flex items-start gap-2">
+                  <Icon name="check" size="sm" class="mt-0.5 text-primary-500" :stroke-width="2" />
+                  <span>{{ f }}</span>
+                </li>
+              </ul>
+
+              <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+                <router-link :to="paygCtaTo" class="btn btn-primary flex-1">
+                  {{ pricing.payg.cta_label || t('dashboard.addBalanceWithCode') }}
+                  <Icon name="arrowRight" size="sm" class="ml-1.5" :stroke-width="2" />
+                </router-link>
+                <router-link v-if="isAuthenticated" to="/redeem" class="btn btn-secondary flex-1">
+                  {{ t('dashboard.addBalanceWithCode') }}
+                </router-link>
+              </div>
+
+              <p v-if="pricing.payg.note" class="mt-4 text-xs text-gray-500 dark:text-dark-400">
+                {{ pricing.payg.note }}
+              </p>
+            </div>
+
+            <p v-if="pricing.note" class="mt-6 text-center text-xs text-gray-500 dark:text-dark-400">
+              {{ pricing.note }}
+            </p>
+          </div>
+        </section>
       </div>
     </main>
 
@@ -405,11 +629,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import PricingPlanPerks from '@/components/pricing/PricingPlanPerks.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { useClipboard } from '@/composables/useClipboard'
+import {
+  formatCny,
+  parseLandingPricingConfig,
+  type PricingTab,
+  type PricingPeriod
+} from '@/utils/landingPricing'
 
 const { t } = useI18n()
 
@@ -421,7 +653,14 @@ const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appS
 const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform')
 const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
+const docUrlIsInternal = computed(() => docUrl.value.startsWith('/'))
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
+const landingPricingEnabled = computed(() => appStore.cachedPublicSettings?.landing_pricing_enabled ?? true)
+const pricingParseResult = computed(() =>
+  parseLandingPricingConfig(appStore.cachedPublicSettings?.landing_pricing_config || '')
+)
+const pricing = computed(() => pricingParseResult.value.config)
+const pricingGroups = computed(() => appStore.cachedPublicSettings?.landing_pricing_groups || [])
 
 // Check if homeContent is a URL (for iframe display)
 const isHomeContentUrl = computed(() => {
@@ -447,6 +686,91 @@ const userInitial = computed(() => {
 
 // Current year for footer
 const currentYear = computed(() => new Date().getFullYear())
+
+type DisplayPeriod = PricingPeriod
+
+const pricingTab = ref<PricingTab>('subscription')
+const pricingPeriod = ref<DisplayPeriod>('month')
+const pricingUiInitialized = ref(false)
+
+const { copyToClipboard } = useClipboard()
+
+const heroSnippet = computed(() => {
+  const base = typeof window !== 'undefined' ? window.location.origin : 'https://your-domain.com'
+  return [
+    `curl -X POST ${base}/v1/messages \\`,
+    '  -H \"Authorization: Bearer $SUB2API_KEY\" \\',
+    '  -H \"Content-Type: application/json\" \\',
+    '  -d \"{\\\"model\\\":\\\"claude-3-5-haiku-latest\\\",\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]}\"'
+  ].join('\n')
+})
+
+async function copyHeroSnippet() {
+  await copyToClipboard(heroSnippet.value, t('common.copiedToClipboard'))
+}
+
+watch(
+  pricing,
+  (cfg) => {
+    if (pricingUiInitialized.value) return
+    pricingTab.value = cfg.default_tab
+    pricingPeriod.value =
+      cfg.subscription.default_period === 'week'
+        ? 'week'
+        : cfg.subscription.default_period === 'custom'
+          ? 'custom'
+          : 'month'
+    pricingUiInitialized.value = true
+  },
+  { immediate: true }
+)
+
+const subscriptionPeriods = computed(() => {
+  const periods = pricing.value.subscription.periods
+  const hasCustomPlan = pricing.value.subscription.plans.some((p) => !!p.price.custom)
+  return hasCustomPlan ? periods : periods.filter((p) => p.key !== 'custom')
+})
+
+const visibleSubscriptionPlans = computed(() => {
+  const plans = pricing.value.subscription.plans
+  if (pricingPeriod.value !== 'custom') return plans
+  const customPlans = plans.filter((p) => !!p.price.custom)
+  return customPlans.length ? customPlans : plans
+})
+
+const pricingConfigTitle = computed(() =>
+  pricingTab.value === 'subscription' ? pricing.value.subscription.title : pricing.value.payg.title
+)
+
+const pricingConfigSubtitle = computed(() =>
+  pricingTab.value === 'subscription' ? pricing.value.subscription.subtitle : pricing.value.payg.subtitle
+)
+
+function periodLabel(key: DisplayPeriod): string {
+  const found = pricing.value.subscription.periods.find((p) => p.key === key)
+  return found?.label || key
+}
+
+function purchaseQueryString(params: Record<string, string>): string {
+  const sp = new URLSearchParams(params)
+  return `/purchase?${sp.toString()}`
+}
+
+function planCtaTo(planId: string, period: DisplayPeriod) {
+  const redirect = purchaseQueryString({ tab: 'subscription', plan: planId, period })
+  if (!isAuthenticated.value) {
+    return { path: '/register', query: { redirect } }
+  }
+  return { path: '/purchase', query: { tab: 'subscription', plan: planId, period } }
+}
+
+const paygCtaTo = computed(() => {
+  const redirect = purchaseQueryString({ tab: 'payg' })
+  if (!isAuthenticated.value) {
+    return { path: '/register', query: { redirect } }
+  }
+  return { path: '/purchase', query: { tab: 'payg' } }
+})
 
 // Toggle theme
 function toggleTheme() {
@@ -490,11 +814,13 @@ onMounted(() => {
 /* Terminal Window */
 .terminal-window {
   width: 420px;
-  background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+  max-width: 100%;
+  background: linear-gradient(145deg, rgba(2, 6, 23, 0.92) 0%, #0f172a 55%, rgba(2, 6, 23, 0.94) 100%);
   border-radius: 14px;
   box-shadow:
     0 25px 50px -12px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(34, 211, 238, 0.18),
+    0 0 34px rgba(34, 211, 238, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
   overflow: hidden;
   transform: perspective(1000px) rotateX(2deg) rotateY(-2deg);
@@ -596,7 +922,7 @@ onMounted(() => {
   color: #a78bfa;
 }
 .code-url {
-  color: #14b8a6;
+  color: #22d3ee;
 }
 .code-comment {
   color: #64748b;
@@ -634,11 +960,11 @@ onMounted(() => {
 }
 
 /* Dark mode adjustments */
-:deep(.dark) .terminal-window {
+:global(.dark) .terminal-window {
   box-shadow:
     0 25px 50px -12px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(20, 184, 166, 0.2),
-    0 0 40px rgba(20, 184, 166, 0.1),
+    0 0 0 1px rgba(34, 211, 238, 0.22),
+    0 0 40px rgba(34, 211, 238, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 </style>

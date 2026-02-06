@@ -114,7 +114,8 @@ export default defineConfig(({ mode }) => {
           target: backendUrl,
           changeOrigin: true
         },
-        '/setup': {
+        // 注意：前端也有 /setup 路由（Setup Wizard 页面），所以这里只代理 /setup/* 的 API
+        '/setup/': {
           target: backendUrl,
           changeOrigin: true
         }

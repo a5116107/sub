@@ -113,6 +113,25 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 	return out, nil
 }
 
+func (r *userRepository) GetByInviteCode(ctx context.Context, inviteCode string) (*service.User, error) {
+	m, err := r.client.User.Query().
+		Where(dbuser.InviteCodeEqualFold(inviteCode)).
+		Only(ctx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+
+	out := userEntityToService(m)
+	groups, err := r.loadAllowedGroups(ctx, []int64{m.ID})
+	if err != nil {
+		return nil, err
+	}
+	if v, ok := groups[m.ID]; ok {
+		out.AllowedGroups = v
+	}
+	return out, nil
+}
+
 func (r *userRepository) Update(ctx context.Context, userIn *service.User) error {
 	if userIn == nil {
 		return nil
@@ -358,6 +377,37 @@ func (r *userRepository) UpdateConcurrency(ctx context.Context, id int64, amount
 		return service.ErrUserNotFound
 	}
 	return nil
+}
+
+func (r *userRepository) SetInviteCodeIfEmpty(ctx context.Context, userID int64, inviteCode string) (bool, error) {
+	client := clientFromContext(ctx, r.client)
+	n, err := client.User.Update().
+		Where(
+			dbuser.IDEQ(userID),
+			dbuser.InviteCodeIsNil(),
+		).
+		SetInviteCode(inviteCode).
+		Save(ctx)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+func (r *userRepository) SetInvitedByIfEmpty(ctx context.Context, userID int64, inviterUserID int64, invitedAt time.Time) (bool, error) {
+	client := clientFromContext(ctx, r.client)
+	n, err := client.User.Update().
+		Where(
+			dbuser.IDEQ(userID),
+			dbuser.InvitedByUserIDIsNil(),
+		).
+		SetInvitedByUserID(inviterUserID).
+		SetInvitedAt(invitedAt).
+		Save(ctx)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {

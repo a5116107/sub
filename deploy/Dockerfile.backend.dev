@@ -1,0 +1,24 @@
+# =============================================================================
+# Sub2API Backend Dev Image
+# - Runs backend from source (go run)
+# - Used by deploy/docker-compose.dev.yml
+# =============================================================================
+
+FROM golang:1.25.6-alpine
+
+ARG GOPROXY=https://goproxy.cn,direct
+ARG GOSUMDB=sum.golang.google.cn
+
+ENV GOPROXY=${GOPROXY}
+ENV GOSUMDB=${GOSUMDB}
+
+RUN apk add --no-cache git ca-certificates tzdata curl
+
+WORKDIR /app/backend
+
+# Pre-download deps for faster startup (cached by Docker layer)
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+CMD ["sh", "-c", "go run ./cmd/server"]
+

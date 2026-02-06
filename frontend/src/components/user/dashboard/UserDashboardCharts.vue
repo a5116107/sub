@@ -41,7 +41,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="model in models" :key="model.model" class="border-t border-gray-100 dark:border-gray-700">
+                <tr v-for="model in models" :key="model.model" class="border-t border-gray-100 dark:border-dark-700">
                   <td class="max-w-[100px] truncate py-1.5 font-medium text-gray-900 dark:text-white" :title="model.model">{{ model.model }}</td>
                   <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">{{ formatNumber(model.requests) }}</td>
                   <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">{{ formatTokens(model.total_tokens) }}</td>
@@ -85,11 +85,34 @@ const props = defineProps<{ loading: boolean, startDate: string, endDate: string
 defineEmits(['update:startDate', 'update:endDate', 'update:granularity', 'dateRangeChange', 'granularityChange'])
 const { t } = useI18n()
 
+const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
+
+const chartColors = computed(() => ({
+  text: isDarkMode.value ? '#e5e7eb' : '#374151',
+  grid: isDarkMode.value ? 'rgba(71, 85, 105, 0.35)' : '#e5e7eb',
+  primary: '#22d3ee',
+  primaryDeep: '#0891b2',
+  gold: '#f59e0b',
+  goldDeep: '#d97706',
+  emerald: '#10b981',
+  violet: '#8b5cf6',
+  rose: '#ec4899'
+}))
+
 const modelData = computed(() => !props.models?.length ? null : {
   labels: props.models.map((m: ModelStat) => m.model),
   datasets: [{
     data: props.models.map((m: ModelStat) => m.total_tokens),
-    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
+    backgroundColor: [
+      chartColors.value.primary,
+      chartColors.value.gold,
+      chartColors.value.emerald,
+      chartColors.value.violet,
+      chartColors.value.rose,
+      chartColors.value.primaryDeep,
+      chartColors.value.goldDeep,
+      '#84cc16'
+    ]
   }]
 })
 
@@ -99,23 +122,23 @@ const trendData = computed(() => !props.trend?.length ? null : {
     {
       label: t('dashboard.input'),
       data: props.trend.map((d: TrendDataPoint) => d.input_tokens),
-      borderColor: '#3b82f6',
-      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      borderColor: chartColors.value.primary,
+      backgroundColor: `${chartColors.value.primary}20`,
       tension: 0.3,
       fill: true
     },
     {
       label: t('dashboard.output'),
       data: props.trend.map((d: TrendDataPoint) => d.output_tokens),
-      borderColor: '#10b981',
-      backgroundColor: 'rgba(16, 185, 129, 0.1)',
+      borderColor: chartColors.value.gold,
+      backgroundColor: `${chartColors.value.gold}20`,
       tension: 0.3,
       fill: true
     }
   ]
 })
 
-const doughnutOptions = {
+const doughnutOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
@@ -126,13 +149,29 @@ const doughnutOptions = {
       }
     }
   }
-}
+}))
 
-const lineOptions = {
+const lineOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  interaction: {
+    intersect: false,
+    mode: 'index' as const
+  },
   plugins: {
-    legend: { display: true, position: 'top' as const },
+    legend: {
+      display: true,
+      position: 'top' as const,
+      labels: {
+        color: chartColors.value.text,
+        usePointStyle: true,
+        pointStyle: 'circle',
+        padding: 12,
+        font: {
+          size: 11
+        }
+      }
+    },
     tooltip: {
       callbacks: {
         label: (context: any) => `${context.dataset.label}: ${formatTokens(context.parsed.y)} tokens`
@@ -140,12 +179,19 @@ const lineOptions = {
     }
   },
   scales: {
+    x: {
+      grid: { color: chartColors.value.grid },
+      ticks: { color: chartColors.value.text, font: { size: 10 } }
+    },
     y: {
       beginAtZero: true,
+      grid: { color: chartColors.value.grid },
       ticks: {
+        color: chartColors.value.text,
+        font: { size: 10 },
         callback: (value: any) => formatTokens(value)
       }
     }
   }
-}
+}))
 </script>

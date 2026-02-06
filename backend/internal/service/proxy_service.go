@@ -53,13 +53,15 @@ type UpdateProxyRequest struct {
 
 // ProxyService 代理管理服务
 type ProxyService struct {
-	proxyRepo ProxyRepository
+	proxyRepo   ProxyRepository
+	proxyProber ProxyExitInfoProber
 }
 
 // NewProxyService 创建代理服务实例
-func NewProxyService(proxyRepo ProxyRepository) *ProxyService {
+func NewProxyService(proxyRepo ProxyRepository, proxyProber ProxyExitInfoProber) *ProxyService {
 	return &ProxyService{
-		proxyRepo: proxyRepo,
+		proxyRepo:   proxyRepo,
+		proxyProber: proxyProber,
 	}
 }
 
@@ -175,9 +177,14 @@ func (s *ProxyService) TestConnection(ctx context.Context, id int64) error {
 		return fmt.Errorf("get proxy: %w", err)
 	}
 
-	// TODO: 实现代理连接测试逻辑
-	// 可以尝试通过代理发送测试请求
-	_ = proxy
+	if s.proxyProber == nil {
+		return fmt.Errorf("proxy prober not configured")
+	}
+
+	_, _, err = s.proxyProber.ProbeProxy(ctx, proxy.URL())
+	if err != nil {
+		return fmt.Errorf("probe proxy: %w", err)
+	}
 
 	return nil
 }

@@ -90,6 +90,10 @@ func (s *GeminiOAuthService) GetOAuthConfig() *GeminiOAuthCapabilities {
 	}
 }
 
+func (s *GeminiOAuthService) GetConfig() *config.Config {
+	return s.cfg
+}
+
 type GeminiAuthURLResult struct {
 	AuthURL   string `json:"auth_url"`
 	SessionID string `json:"session_id"`

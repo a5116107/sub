@@ -84,6 +84,131 @@ func FilterThinkingBlocks(body []byte) []byte {
 	return filterThinkingBlocksInternal(body, false)
 }
 
+// FilterOrphanedToolResults removes invalid tool_result blocks that reference non-existent tool_use ids.
+//
+// Why:
+//   - Some clients (or intermediate transformations) can produce message histories that contain orphaned
+//     tool_result blocks. Upstreams (e.g. Claude Messages API) will reject such payloads with 400.
+//
+// Strategy:
+//   - Collect all tool_use.id values across all messages.
+//   - Remove any tool_result blocks whose tool_use_id is not in that set.
+//   - Ensure no message ends up with empty content.
+//
+// Fail-safe: If parsing fails or no changes are needed, return the original body.
+func FilterOrphanedToolResults(body []byte) []byte {
+	// Fast path: only run when we see tool_result blocks.
+	// Use a broad substring check to avoid missing formatting variants (e.g. `"type" : "tool_result"`).
+	if !bytes.Contains(body, []byte(`"tool_result"`)) {
+		return body
+	}
+
+	var req map[string]any
+	if err := json.Unmarshal(body, &req); err != nil {
+		return body
+	}
+
+	messages, ok := req["messages"].([]any)
+	if !ok {
+		return body
+	}
+
+	// Phase 1: collect all tool_use ids.
+	validToolUseIDs := make(map[string]struct{})
+	for _, msg := range messages {
+		msgMap, ok := msg.(map[string]any)
+		if !ok {
+			continue
+		}
+		content, ok := msgMap["content"].([]any)
+		if !ok {
+			continue
+		}
+		for _, block := range content {
+			blockMap, ok := block.(map[string]any)
+			if !ok {
+				continue
+			}
+			blockType, _ := blockMap["type"].(string)
+			if blockType != "tool_use" {
+				continue
+			}
+			if id, _ := blockMap["id"].(string); id != "" {
+				validToolUseIDs[id] = struct{}{}
+			}
+		}
+	}
+
+	// Phase 2: remove orphaned tool_result blocks.
+	modified := false
+	newMessages := make([]any, 0, len(messages))
+
+	for _, msg := range messages {
+		msgMap, ok := msg.(map[string]any)
+		if !ok {
+			newMessages = append(newMessages, msg)
+			continue
+		}
+
+		role, _ := msgMap["role"].(string)
+		content, ok := msgMap["content"].([]any)
+		if !ok {
+			newMessages = append(newMessages, msg)
+			continue
+		}
+
+		newContent := make([]any, 0, len(content))
+		modifiedThisMsg := false
+
+		for _, block := range content {
+			blockMap, ok := block.(map[string]any)
+			if !ok {
+				newContent = append(newContent, block)
+				continue
+			}
+			blockType, _ := blockMap["type"].(string)
+			if blockType == "tool_result" {
+				toolUseID, _ := blockMap["tool_use_id"].(string)
+				if toolUseID != "" {
+					if _, exists := validToolUseIDs[toolUseID]; !exists {
+						modifiedThisMsg = true
+						continue
+					}
+				}
+			}
+			newContent = append(newContent, block)
+		}
+
+		if modifiedThisMsg {
+			modified = true
+			if len(newContent) == 0 {
+				placeholder := "(content removed)"
+				if role == "assistant" {
+					placeholder = "(assistant content removed)"
+				}
+				newContent = append(newContent, map[string]any{
+					"type": "text",
+					"text": placeholder,
+				})
+			}
+			msgMap["content"] = newContent
+		}
+
+		newMessages = append(newMessages, msgMap)
+	}
+
+	if !modified {
+		return body
+	}
+
+	req["messages"] = newMessages
+	newBody, err := json.Marshal(req)
+	if err != nil {
+		return body
+	}
+	return newBody
+}
+
 // FilterThinkingBlocksForRetry strips thinking-related constructs for retry scenarios.
 //
 // Why:
