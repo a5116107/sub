@@ -36,6 +36,10 @@ const (
 	geminiRetryMaxDelay  = 16 * time.Second
 )
 
+// Gemini tool calling requires `thoughtSignature` in parts that include `functionCall`.
+// Many clients don't send it; inject a known dummy signature to satisfy validator.
+const geminiDummyThoughtSignature = "skip_thought_signature_validator"
+
 type GeminiMessagesCompatService struct {
 	accountRepo               AccountRepository
 	groupRepo                 GroupRepository
@@ -530,6 +534,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 	if err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
+	geminiReq = ensureGeminiFunctionCallThoughtSignatures(geminiReq)
 	originalClaudeBody := body
 
 	proxyURL := ""
@@ -979,6 +984,8 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	if len(body) == 0 {
 		return nil, s.writeGoogleError(c, http.StatusBadRequest, "Request body is empty")
 	}
+	// Ensure functionCall parts contain thoughtSignature to avoid INVALID_ARGUMENT on some upstreams.
+	body = ensureGeminiFunctionCallThoughtSignatures(body)
 
 	// 过滤掉 parts 为空的消息（Gemini API 不接受空 parts）
 	if filteredBody, err := filterEmptyPartsFromGeminiRequest(body); err == nil {
@@ -2678,6 +2685,59 @@ func nextGeminiDailyResetUnix() *int64 {
 	return &ts
 }
 
+func ensureGeminiFunctionCallThoughtSignatures(body []byte) []byte {
+	if !bytes.Contains(body, []byte(`"functionCall"`)) {
+		return body
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return body
+	}
+
+	contentsAny, ok := payload["contents"].([]any)
+	if !ok || len(contentsAny) == 0 {
+		return body
+	}
+
+	modified := false
+	for _, content := range contentsAny {
+		contentMap, ok := content.(map[string]any)
+		if !ok {
+			continue
+		}
+		partsAny, ok := contentMap["parts"].([]any)
+		if !ok || len(partsAny) == 0 {
+			continue
+		}
+		for _, part := range partsAny {
+			partMap, ok := part.(map[string]any)
+			if !ok || partMap == nil {
+				continue
+			}
+			fc, ok := partMap["functionCall"].(map[string]any)
+			if !ok || fc == nil {
+				continue
+			}
+			signature, _ := partMap["thoughtSignature"].(string)
+			if strings.TrimSpace(signature) == "" {
+				partMap["thoughtSignature"] = geminiDummyThoughtSignature
+				modified = true
+			}
+		}
+	}
+
+	if !modified {
+		return body
+	}
+
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return body
+	}
+	return b
+}
+
 func extractGeminiFinishReason(geminiResp map[string]any) string {
 	if candidates, ok := geminiResp["candidates"].([]any); ok && len(candidates) > 0 {
 		if cand, ok := candidates[0].(map[string]any); ok {
@@ -2877,7 +2937,13 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 					if strings.TrimSpace(id) != "" && strings.TrimSpace(name) != "" {
 						toolUseIDToName[id] = name
 					}
+					signature, _ := bm["signature"].(string)
+					signature = strings.TrimSpace(signature)
+					if signature == "" {
+						signature = geminiDummyThoughtSignature
+					}
 					parts = append(parts, map[string]any{
+						"thoughtSignature": signature,
 						"functionCall": map[string]any{
 							"name": name,
 							"args": bm["input"],
