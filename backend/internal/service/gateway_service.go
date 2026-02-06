@@ -21,7 +21,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"unicode"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -138,37 +137,6 @@ var (
 	sseDataRe            = regexp.MustCompile(`^data:\s*`)
 	sessionIDRegex       = regexp.MustCompile(`session_([a-f0-9-]{36})`)
 	claudeCliUserAgentRe = regexp.MustCompile(`^claude-cli/\d+\.\d+\.\d+`)
-	toolPrefixRe         = regexp.MustCompile(`(?i)^(?:oc_|mcp_)`)
-	toolNameBoundaryRe   = regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	toolNameCamelRe      = regexp.MustCompile(`([a-z0-9])([A-Z])`)
-
-	claudeToolNameOverrides = map[string]string{
-		"bash":      "Bash",
-		"read":      "Read",
-		"edit":      "Edit",
-		"write":     "Write",
-		"task":      "Task",
-		"glob":      "Glob",
-		"grep":      "Grep",
-		"webfetch":  "WebFetch",
-		"websearch": "WebSearch",
-		"todowrite": "TodoWrite",
-		"question":  "AskUserQuestion",
-	}
-
-	openCodeToolOverrides = map[string]string{
-		"Bash":            "bash",
-		"Read":            "read",
-		"Edit":            "edit",
-		"Write":           "write",
-		"Task":            "task",
-		"Glob":            "glob",
-		"Grep":            "grep",
-		"WebFetch":        "webfetch",
-		"WebSearch":       "websearch",
-		"TodoWrite":       "todowrite",
-		"AskUserQuestion": "question",
-	}
 
 	// claudeCodePromptPrefixes 用于检测 Claude Code 系统提示词的前缀列表
 	// 支持多种变体：标准版、Agent SDK 版、Explore Agent 版、Compact 版等
@@ -546,241 +514,141 @@ func (s *GatewayService) replaceModelInBody(body []byte, newModel string) []byte
 	return newBody
 }
 
-func stripToolPrefix(name string) string {
-	return toolPrefixRe.ReplaceAllString(name, "")
+type claudeOAuthNormalizeOptions struct {
+	injectMetadata          bool
+	metadataUserID          string
+	stripSystemCacheControl bool
 }
 
-func toSnakeCase(input string) string {
-	if input == "" {
-		return input
+// sanitizeSystemText rewrites only the fixed OpenCode identity sentence (if present).
+// We intentionally avoid broad keyword replacement in system prompts to prevent
+// accidentally changing user-provided instructions.
+func sanitizeSystemText(text string) string {
+	if text == "" {
+		return text
 	}
-	s := toolNameCamelRe.ReplaceAllString(input, "${1}_${2}")
-	s = toolNameBoundaryRe.ReplaceAllString(s, "_")
-	s = strings.Trim(s, "_")
-	return strings.ToLower(s)
+	text = strings.ReplaceAll(
+		text,
+		"You are OpenCode, the best coding agent on the planet.",
+		strings.TrimSpace(claudeCodeSystemPrompt),
+	)
+	return text
 }
 
-func toPascalCase(input string) string {
-	if input == "" {
-		return input
+func stripCacheControlFromSystemBlocks(system any) bool {
+	blocks, ok := system.([]any)
+	if !ok {
+		return false
 	}
-	s := toolNameCamelRe.ReplaceAllString(input, "${1} ${2}")
-	s = toolNameBoundaryRe.ReplaceAllString(s, " ")
-	parts := strings.Fields(strings.ToLower(s))
-	if len(parts) == 0 {
-		return input
-	}
-	for idx, part := range parts {
-		runes := []rune(part)
-		runes[0] = unicode.ToUpper(runes[0])
-		parts[idx] = string(runes)
-	}
-	return strings.Join(parts, "")
-}
-
-func normalizeToolNameForClaude(name string, cache map[string]string) string {
-	if name == "" {
-		return name
-	}
-	stripped := stripToolPrefix(name)
-	if mapped, ok := claudeToolNameOverrides[strings.ToLower(stripped)]; ok {
-		if cache != nil && mapped != name {
-			cache[mapped] = name
+	changed := false
+	for _, item := range blocks {
+		block, ok := item.(map[string]any)
+		if !ok {
+			continue
 		}
-		return mapped
-	}
-	mapped := toPascalCase(stripped)
-	if cache != nil && mapped != name {
-		cache[mapped] = name
-	}
-	return mapped
-}
-
-func normalizeToolNameForOpenCode(name string, cache map[string]string) string {
-	if name == "" {
-		return name
-	}
-	if cache != nil {
-		if mapped, ok := cache[name]; ok {
-			return mapped
+		if _, exists := block["cache_control"]; !exists {
+			continue
 		}
+		delete(block, "cache_control")
+		changed = true
 	}
-	if mapped, ok := openCodeToolOverrides[name]; ok {
-		return mapped
-	}
-	return toSnakeCase(name)
+	return changed
 }
 
-func normalizeClaudeOAuthRequestBody(body []byte, modelID string) ([]byte, string, map[string]string) {
+func normalizeClaudeOAuthRequestBody(body []byte, modelID string, opts claudeOAuthNormalizeOptions) ([]byte, string) {
 	if len(body) == 0 {
-		return body, modelID, nil
+		return body, modelID
 	}
 
 	var req map[string]any
 	if err := json.Unmarshal(body, &req); err != nil {
-		return body, modelID, nil
+		return body, modelID
 	}
 
-	toolNameMap := make(map[string]string)
-	changed := false
+	modified := false
 
-	rewriteToolName := func(name string) string {
-		return normalizeToolNameForClaude(name, toolNameMap)
-	}
-
-	if tools, ok := req["tools"].([]any); ok {
-		for _, tool := range tools {
-			toolMap, ok := tool.(map[string]any)
-			if !ok {
-				continue
+	if system, ok := req["system"]; ok {
+		switch v := system.(type) {
+		case string:
+			sanitized := sanitizeSystemText(v)
+			if sanitized != v {
+				req["system"] = sanitized
+				modified = true
 			}
-			name, ok := toolMap["name"].(string)
-			if !ok || name == "" {
-				continue
-			}
-			mapped := rewriteToolName(name)
-			if mapped != name {
-				toolMap["name"] = mapped
-				changed = true
-			}
-		}
-	}
-
-	if messages, ok := req["messages"].([]any); ok {
-		for _, message := range messages {
-			messageMap, ok := message.(map[string]any)
-			if !ok {
-				continue
-			}
-			content, ok := messageMap["content"].([]any)
-			if !ok {
-				continue
-			}
-			for _, block := range content {
-				blockMap, ok := block.(map[string]any)
+		case []any:
+			for _, item := range v {
+				block, ok := item.(map[string]any)
 				if !ok {
 					continue
 				}
-				blockType, _ := blockMap["type"].(string)
-				if blockType != "tool_use" {
+				if blockType, _ := block["type"].(string); blockType != "text" {
 					continue
 				}
-				name, _ := blockMap["name"].(string)
-				if name == "" {
+				text, ok := block["text"].(string)
+				if !ok || text == "" {
 					continue
 				}
-				mapped := rewriteToolName(name)
-				if mapped != name {
-					blockMap["name"] = mapped
-					changed = true
+				sanitized := sanitizeSystemText(text)
+				if sanitized != text {
+					block["text"] = sanitized
+					modified = true
 				}
 			}
 		}
 	}
 
-	if toolChoice, ok := req["tool_choice"].(map[string]any); ok {
-		if name, ok := toolChoice["name"].(string); ok && name != "" {
-			mapped := rewriteToolName(name)
-			if mapped != name {
-				toolChoice["name"] = mapped
-				changed = true
+	if rawModel, ok := req["model"].(string); ok {
+		normalized := claude.NormalizeModelID(rawModel)
+		if normalized != rawModel {
+			req["model"] = normalized
+			modelID = normalized
+			modified = true
+		}
+	}
+
+	if _, exists := req["tools"]; !exists {
+		req["tools"] = []any{}
+		modified = true
+	}
+
+	if opts.stripSystemCacheControl {
+		if system, ok := req["system"]; ok {
+			if stripCacheControlFromSystemBlocks(system) {
+				modified = true
 			}
 		}
 	}
 
-	normalizedModel := claude.NormalizeModelID(modelID)
-	if normalizedModel != "" && normalizedModel != modelID {
-		req["model"] = normalizedModel
-		modelID = normalizedModel
-		changed = true
+	if opts.injectMetadata && opts.metadataUserID != "" {
+		metadata, ok := req["metadata"].(map[string]any)
+		if !ok {
+			metadata = map[string]any{}
+			req["metadata"] = metadata
+		}
+		if existing, ok := metadata["user_id"].(string); !ok || existing == "" {
+			metadata["user_id"] = opts.metadataUserID
+			modified = true
+		}
 	}
 
-	if !changed {
-		if len(toolNameMap) == 0 {
-			return body, modelID, nil
-		}
-		return body, modelID, toolNameMap
+	if _, hasTemp := req["temperature"]; hasTemp {
+		delete(req, "temperature")
+		modified = true
+	}
+	if _, hasChoice := req["tool_choice"]; hasChoice {
+		delete(req, "tool_choice")
+		modified = true
+	}
+
+	if !modified {
+		return body, modelID
 	}
 
 	newBody, err := json.Marshal(req)
 	if err != nil {
-		return body, modelID, toolNameMap
+		return body, modelID
 	}
-	return newBody, modelID, toolNameMap
-}
-
-func rewriteToolNamesInValue(value any, toolNameMap map[string]string) bool {
-	switch v := value.(type) {
-	case map[string]any:
-		changed := false
-		if blockType, _ := v["type"].(string); blockType == "tool_use" {
-			if name, ok := v["name"].(string); ok {
-				mapped := normalizeToolNameForOpenCode(name, toolNameMap)
-				if mapped != name {
-					v["name"] = mapped
-					changed = true
-				}
-			}
-		}
-		for _, item := range v {
-			if rewriteToolNamesInValue(item, toolNameMap) {
-				changed = true
-			}
-		}
-		return changed
-	case []any:
-		changed := false
-		for _, item := range v {
-			if rewriteToolNamesInValue(item, toolNameMap) {
-				changed = true
-			}
-		}
-		return changed
-	default:
-		return false
-	}
-}
-
-func replaceToolNamesInText(text string, toolNameMap map[string]string) string {
-	if text == "" || len(toolNameMap) == 0 {
-		return text
-	}
-	output := text
-	for mapped, original := range toolNameMap {
-		if mapped == "" || original == "" || mapped == original {
-			continue
-		}
-		output = strings.ReplaceAll(output, "\"name\":\""+mapped+"\"", "\"name\":\""+original+"\"")
-		output = strings.ReplaceAll(output, "\\\"name\\\":\\\""+mapped+"\\\"", "\\\"name\\\":\\\""+original+"\\\"")
-	}
-	return output
-}
-
-func (s *GatewayService) replaceToolNamesInSSELine(line string, toolNameMap map[string]string) string {
-	if !sseDataRe.MatchString(line) {
-		return line
-	}
-	data := sseDataRe.ReplaceAllString(line, "")
-	if data == "" || data == "[DONE]" {
-		return line
-	}
-
-	var event map[string]any
-	if err := json.Unmarshal([]byte(data), &event); err != nil {
-		replaced := replaceToolNamesInText(data, toolNameMap)
-		if replaced == data {
-			return line
-		}
-		return "data: " + replaced
-	}
-	if !rewriteToolNamesInValue(event, toolNameMap) {
-		return line
-	}
-	newData, err := json.Marshal(event)
-	if err != nil {
-		return line
-	}
-	return "data: " + string(newData)
+	return newBody, modelID
 }
 
 // SelectAccount 选择账号（粘性会话+优先级）
@@ -2674,7 +2542,6 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	reqModel := parsed.Model
 	reqStream := parsed.Stream
 	originalModel := reqModel
-	var toolNameMap map[string]string
 
 	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, parsed.MetadataUserID)
 
@@ -2687,7 +2554,16 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		body = injectClaudeCodePrompt(body, parsed.System)
 	}
 	if account.IsOAuth() && applyClaudeCompat {
-		body, reqModel, toolNameMap = normalizeClaudeOAuthRequestBody(body, reqModel)
+		normalizeOpts := claudeOAuthNormalizeOptions{stripSystemCacheControl: true}
+		if s.identityService != nil {
+			if fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header); err == nil && fp != nil {
+				if metadataUserID := s.buildOAuthMetadataUserID(parsed, account, fp); metadataUserID != "" {
+					normalizeOpts.injectMetadata = true
+					normalizeOpts.metadataUserID = metadataUserID
+				}
+			}
+		}
+		body, reqModel = normalizeClaudeOAuthRequestBody(body, reqModel, normalizeOpts)
 	}
 
 	// 强制执行 cache_control 块数量限制（最多 4 个）
@@ -3177,7 +3053,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	var firstTokenMs *int
 	var clientDisconnect bool
 	if reqStream {
-		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, reqModel, toolNameMap, account.IsOAuth() && applyClaudeCompat)
+		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, reqModel, account.IsOAuth() && applyClaudeCompat)
 		if err != nil {
 			if err.Error() == "have error in stream" {
 				return nil, &UpstreamFailoverError{
@@ -3190,7 +3066,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		firstTokenMs = streamResult.firstTokenMs
 		clientDisconnect = streamResult.clientDisconnect
 	} else {
-		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, reqModel, toolNameMap, account.IsOAuth() && applyClaudeCompat)
+		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, reqModel)
 		if err != nil {
 			return nil, err
 		}
@@ -3874,7 +3750,7 @@ type streamingResult struct {
 	clientDisconnect bool // 客户端是否在流式传输过程中断开
 }
 
-func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel string, toolNameMap map[string]string, mimicClaudeCode bool) (*streamingResult, error) {
+func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel string, mimicClaudeCode bool) (*streamingResult, error) {
 	// 更新5h窗口状态
 	s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 
@@ -4013,9 +3889,6 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 				if needModelReplace {
 					line = s.replaceModelInSSELine(line, mappedModel, originalModel)
 				}
-				if mimicClaudeCode && len(toolNameMap) > 0 {
-					line = s.replaceToolNamesInSSELine(line, toolNameMap)
-				}
 			}
 
 			// 写入客户端（统一处理 data 行和非 data 行）
@@ -4151,7 +4024,7 @@ func (s *GatewayService) parseSSEUsage(data string, usage *ClaudeUsage) {
 	}
 }
 
-func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string, toolNameMap map[string]string, mimicClaudeCode bool) (*ClaudeUsage, error) {
+func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*ClaudeUsage, error) {
 	// 更新5h窗口状态
 	s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 
@@ -4180,9 +4053,6 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 	// 如果有模型映射，替换响应中的model字段
 	if originalModel != mappedModel {
 		body = s.replaceModelInResponseBody(body, mappedModel, originalModel)
-	}
-	if mimicClaudeCode && len(toolNameMap) > 0 {
-		body = s.replaceToolNamesInResponseBody(body, toolNameMap)
 	}
 
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.cfg.Security.ResponseHeaders)
@@ -4218,29 +4088,6 @@ func (s *GatewayService) replaceModelInResponseBody(body []byte, fromModel, toMo
 		return body
 	}
 
-	return newBody
-}
-
-func (s *GatewayService) replaceToolNamesInResponseBody(body []byte, toolNameMap map[string]string) []byte {
-	if len(body) == 0 || len(toolNameMap) == 0 {
-		return body
-	}
-
-	var resp map[string]any
-	if err := json.Unmarshal(body, &resp); err != nil {
-		replaced := replaceToolNamesInText(string(body), toolNameMap)
-		if replaced == string(body) {
-			return body
-		}
-		return []byte(replaced)
-	}
-	if !rewriteToolNamesInValue(resp, toolNameMap) {
-		return body
-	}
-	newBody, err := json.Marshal(resp)
-	if err != nil {
-		return body
-	}
 	return newBody
 }
 
@@ -4662,7 +4509,8 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, parsed.MetadataUserID)
 
 	if account.IsOAuth() && applyClaudeCompat {
-		body, reqModel, _ = normalizeClaudeOAuthRequestBody(body, reqModel)
+		normalizeOpts := claudeOAuthNormalizeOptions{stripSystemCacheControl: true}
+		body, reqModel = normalizeClaudeOAuthRequestBody(body, reqModel, normalizeOpts)
 	}
 
 	// Antigravity 账户不支持 count_tokens 转发，直接返回空值
