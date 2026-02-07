@@ -2436,7 +2436,6 @@ func (s *AntigravityGatewayService) handleClaudeStreamToNonStreaming(c *gin.Cont
 			// 保留最后一个有 parts 的响应，并收集所有 parts
 			if parts := extractGeminiParts(parsed); len(parts) > 0 {
 				lastWithParts = parsed
-
 				// 收集所有 parts（text、thinking、functionCall、inlineData 等）
 				collectedParts = append(collectedParts, parts...)
 			}
@@ -2465,9 +2464,22 @@ returnResponse:
 	if len(collectedParts) > 0 {
 		finalResponse = mergeCollectedPartsToResponse(finalResponse, collectedParts)
 	}
+	geminiPayload := finalResponse
+	if _, ok := finalResponse["response"]; !ok {
+		wrapped := map[string]any{
+			"response": finalResponse,
+		}
+		if respID, ok := finalResponse["responseId"]; ok {
+			wrapped["responseId"] = respID
+		}
+		if modelVersion, ok := finalResponse["modelVersion"]; ok {
+			wrapped["modelVersion"] = modelVersion
+		}
+		geminiPayload = wrapped
+	}
 
 	// 序列化为 JSON（Gemini 格式）
-	geminiBody, err := json.Marshal(finalResponse)
+	geminiBody, err := json.Marshal(geminiPayload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal gemini response: %w", err)
 	}
