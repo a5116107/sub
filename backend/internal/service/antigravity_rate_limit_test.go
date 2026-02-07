@@ -225,6 +225,52 @@ func TestAccountIsSchedulableForModel_AntigravityRateLimits(t *testing.T) {
 	require.True(t, account.IsSchedulableForModel("gemini-3-flash"))
 }
 
+func TestAccountGetAntigravityScopeRateLimits_ReturnsActiveScopes(t *testing.T) {
+	now := time.Now()
+	future := now.Add(5 * time.Minute)
+	past := now.Add(-1 * time.Minute)
+
+	account := &Account{
+		ID:          2,
+		Name:        "acc-scope",
+		Platform:    PlatformAntigravity,
+		Status:      StatusActive,
+		Schedulable: true,
+		Extra: map[string]any{
+			antigravityQuotaScopesKey: map[string]any{
+				"claude": map[string]any{
+					"rate_limit_reset_at": future.Format(time.RFC3339),
+				},
+				"gemini_text": map[string]any{
+					"rate_limit_reset_at": past.Format(time.RFC3339),
+				},
+				"gemini_image": map[string]any{
+					"rate_limit_reset_at": "invalid",
+				},
+			},
+		},
+	}
+
+	limits := account.GetAntigravityScopeRateLimits()
+	require.NotNil(t, limits)
+	require.Contains(t, limits, "claude")
+	require.Greater(t, limits["claude"], int64(0))
+	require.NotContains(t, limits, "gemini_text")
+	require.NotContains(t, limits, "gemini_image")
+}
+
+func TestAccountGetAntigravityScopeRateLimits_NonAntigravityReturnsNil(t *testing.T) {
+	account := &Account{
+		ID:          3,
+		Name:        "acc-openai",
+		Platform:    PlatformOpenAI,
+		Status:      StatusActive,
+		Schedulable: true,
+	}
+
+	require.Nil(t, account.GetAntigravityScopeRateLimits())
+}
+
 func buildGeminiRateLimitBody(delay string) []byte {
 	return []byte(fmt.Sprintf(`{"error":{"message":"too many requests","details":[{"metadata":{"quotaResetDelay":%q}}]}}`, delay))
 }
