@@ -200,6 +200,27 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
+			name: "GET /api/v1/groups/rates",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.userRepo.SetUserGroupRates(1, map[int64]float64{
+					10: 1.25,
+					20: 0.8,
+				})
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/groups/rates",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": {
+					"10": 1.25,
+					"20": 0.8
+				}
+			}`,
+		},
+		{
 			name: "GET /api/v1/subscriptions",
 			setup: func(t *testing.T, deps *contractDeps) {
 				t.Helper()
@@ -638,6 +659,7 @@ func TestAPIContracts(t *testing.T) {
 type contractDeps struct {
 	now         time.Time
 	router      http.Handler
+	userRepo    *stubUserRepo
 	apiKeyRepo  *stubApiKeyRepo
 	groupRepo   *stubGroupRepo
 	userSubRepo *stubUserSubscriptionRepo
@@ -652,6 +674,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	now := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 
 	userRepo := &stubUserRepo{
+		userGroupRates: map[int64]map[int64]float64{},
 		users: map[int64]*service.User{
 			1: {
 				ID:            1,
@@ -750,6 +773,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Keys.GET("/keys", apiKeyHandler.List)
 	v1Keys.POST("/keys", apiKeyHandler.Create)
 	v1Keys.GET("/groups/available", apiKeyHandler.GetAvailableGroups)
+	v1Keys.GET("/groups/rates", apiKeyHandler.GetUserGroupRates)
 
 	v1Usage := v1.Group("")
 	v1Usage.Use(jwtAuth)
@@ -773,6 +797,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	return &contractDeps{
 		now:         now,
 		router:      r,
+		userRepo:    userRepo,
 		apiKeyRepo:  apiKeyRepo,
 		groupRepo:   groupRepo,
 		userSubRepo: userSubRepo,
@@ -802,7 +827,8 @@ func doRequest(t *testing.T, router http.Handler, method, path, body string, hea
 func ptr[T any](v T) *T { return &v }
 
 type stubUserRepo struct {
-	users map[int64]*service.User
+	users          map[int64]*service.User
+	userGroupRates map[int64]map[int64]float64
 }
 
 func (r *stubUserRepo) Create(ctx context.Context, user *service.User) error {
@@ -816,6 +842,73 @@ func (r *stubUserRepo) GetByID(ctx context.Context, id int64) (*service.User, er
 	}
 	clone := *user
 	return &clone, nil
+}
+
+func (r *stubUserRepo) SetUserGroupRates(userID int64, rates map[int64]float64) {
+	if r.userGroupRates == nil {
+		r.userGroupRates = make(map[int64]map[int64]float64)
+	}
+	if rates == nil {
+		delete(r.userGroupRates, userID)
+		return
+	}
+	clone := make(map[int64]float64, len(rates))
+	for groupID, rate := range rates {
+		clone[groupID] = rate
+	}
+	r.userGroupRates[userID] = clone
+}
+
+func (r *stubUserRepo) GetUserGroupRates(ctx context.Context, userID int64) (map[int64]float64, error) {
+	rates, ok := r.userGroupRates[userID]
+	if !ok {
+		return map[int64]float64{}, nil
+	}
+	clone := make(map[int64]float64, len(rates))
+	for groupID, rate := range rates {
+		clone[groupID] = rate
+	}
+	return clone, nil
+}
+
+func (r *stubUserRepo) GetUserGroupRate(ctx context.Context, userID, groupID int64) (*float64, error) {
+	rates, ok := r.userGroupRates[userID]
+	if !ok {
+		return nil, nil
+	}
+	rate, ok := rates[groupID]
+	if !ok {
+		return nil, nil
+	}
+	result := rate
+	return &result, nil
+}
+
+func (r *stubUserRepo) SyncUserGroupRates(ctx context.Context, userID int64, rates map[int64]*float64) error {
+	if rates == nil {
+		return nil
+	}
+	if len(rates) == 0 {
+		delete(r.userGroupRates, userID)
+		return nil
+	}
+	if r.userGroupRates == nil {
+		r.userGroupRates = make(map[int64]map[int64]float64)
+	}
+	if _, ok := r.userGroupRates[userID]; !ok {
+		r.userGroupRates[userID] = make(map[int64]float64)
+	}
+	for groupID, rate := range rates {
+		if rate == nil {
+			delete(r.userGroupRates[userID], groupID)
+			continue
+		}
+		r.userGroupRates[userID][groupID] = *rate
+	}
+	if len(r.userGroupRates[userID]) == 0 {
+		delete(r.userGroupRates, userID)
+	}
+	return nil
 }
 
 func (r *stubUserRepo) GetByEmail(ctx context.Context, email string) (*service.User, error) {

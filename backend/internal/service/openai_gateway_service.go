@@ -177,6 +177,7 @@ type OpenAIGatewayService struct {
 	accountRepo         AccountRepository
 	usageLogRepo        UsageLogRepository
 	userRepo            UserRepository
+	userGroupRateRepo   UserGroupRateRepository
 	userSubRepo         UserSubscriptionRepository
 	entClient           *dbent.Client
 	cache               GatewayCache
@@ -217,6 +218,7 @@ func NewOpenAIGatewayService(
 		accountRepo:         accountRepo,
 		usageLogRepo:        usageLogRepo,
 		userRepo:            userRepo,
+		userGroupRateRepo:   resolveUserGroupRateRepository(userRepo),
 		userSubRepo:         userSubRepo,
 		entClient:           entClient,
 		cache:               cache,
@@ -2060,6 +2062,14 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	multiplier := s.cfg.Default.RateMultiplier
 	if apiKey.GroupID != nil && apiKey.Group != nil {
 		multiplier = apiKey.Group.RateMultiplier
+		if s.userGroupRateRepo != nil && user != nil {
+			userRate, err := s.userGroupRateRepo.GetUserGroupRate(ctx, user.ID, *apiKey.GroupID)
+			if err != nil {
+				log.Printf("failed to load user group rate override: user_id=%d group_id=%d err=%v", user.ID, *apiKey.GroupID, err)
+			} else if userRate != nil {
+				multiplier = *userRate
+			}
+		}
 	}
 
 	// Determine billing type

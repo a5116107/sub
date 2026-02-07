@@ -90,6 +90,7 @@ type UpdateUserInput struct {
 	Password      string
 	Username      *string
 	Notes         *string
+	GroupRates    map[int64]*float64
 	Balance       *float64 // 使用指针区分"未提供"和"设置为0"
 	Concurrency   *int     // 使用指针区分"未提供"和"设置为0"
 	Status        string
@@ -283,6 +284,7 @@ type ProxyExitInfoProber interface {
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
 	userRepo              UserRepository
+	userGroupRateRepo     UserGroupRateRepository
 	groupRepo             GroupRepository
 	accountRepo           AccountRepository
 	proxyRepo             ProxyRepository
@@ -321,6 +323,7 @@ func NewAdminService(
 ) AdminService {
 	return &adminServiceImpl{
 		userRepo:              userRepo,
+		userGroupRateRepo:     resolveUserGroupRateRepository(userRepo),
 		groupRepo:             groupRepo,
 		accountRepo:           accountRepo,
 		proxyRepo:             proxyRepo,
@@ -346,11 +349,33 @@ func (s *adminServiceImpl) ListUsers(ctx context.Context, page, pageSize int, fi
 	if err != nil {
 		return nil, 0, err
 	}
+	if s.userGroupRateRepo != nil && len(users) > 0 {
+		for i := range users {
+			rates, err := s.userGroupRateRepo.GetUserGroupRates(ctx, users[i].ID)
+			if err != nil {
+				log.Printf("failed to load user group rates: user_id=%d err=%v", users[i].ID, err)
+				continue
+			}
+			users[i].GroupRates = rates
+		}
+	}
 	return users, result.Total, nil
 }
 
 func (s *adminServiceImpl) GetUser(ctx context.Context, id int64) (*User, error) {
-	return s.userRepo.GetByID(ctx, id)
+	user, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if s.userGroupRateRepo != nil {
+		rates, err := s.userGroupRateRepo.GetUserGroupRates(ctx, id)
+		if err != nil {
+			log.Printf("failed to load user group rates: user_id=%d err=%v", id, err)
+		} else {
+			user.GroupRates = rates
+		}
+	}
+	return user, nil
 }
 
 func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInput) (*User, error) {
@@ -421,6 +446,11 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
+	}
+	if input.GroupRates != nil && s.userGroupRateRepo != nil {
+		if err := s.userGroupRateRepo.SyncUserGroupRates(ctx, user.ID, input.GroupRates); err != nil {
+			log.Printf("failed to sync user group rates: user_id=%d err=%v", user.ID, err)
+		}
 	}
 	if s.authCacheInvalidator != nil {
 		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || input.AllowedGroups != nil {

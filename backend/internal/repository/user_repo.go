@@ -509,6 +509,88 @@ func (r *userRepository) syncUserAllowedGroupsWithClient(ctx context.Context, cl
 	return nil
 }
 
+func (r *userRepository) GetUserGroupRates(ctx context.Context, userID int64) (map[int64]float64, error) {
+	result := make(map[int64]float64)
+	rows, err := r.sql.QueryContext(ctx, `SELECT group_id, rate_multiplier FROM user_group_rate_multipliers WHERE user_id = $1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var groupID int64
+		var rate float64
+		if err := rows.Scan(&groupID, &rate); err != nil {
+			return nil, err
+		}
+		result[groupID] = rate
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *userRepository) GetUserGroupRate(ctx context.Context, userID, groupID int64) (*float64, error) {
+	var rate float64
+	err := scanSingleRow(
+		ctx,
+		r.sql,
+		`SELECT rate_multiplier FROM user_group_rate_multipliers WHERE user_id = $1 AND group_id = $2`,
+		[]any{userID, groupID},
+		&rate,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &rate, nil
+}
+
+func (r *userRepository) SyncUserGroupRates(ctx context.Context, userID int64, rates map[int64]*float64) error {
+	if rates == nil {
+		return nil
+	}
+	if len(rates) == 0 {
+		_, err := r.sql.ExecContext(ctx, `DELETE FROM user_group_rate_multipliers WHERE user_id = $1`, userID)
+		return err
+	}
+
+	now := time.Now()
+	for groupID, rate := range rates {
+		if groupID <= 0 {
+			continue
+		}
+		if rate == nil {
+			if _, err := r.sql.ExecContext(
+				ctx,
+				`DELETE FROM user_group_rate_multipliers WHERE user_id = $1 AND group_id = $2`,
+				userID,
+				groupID,
+			); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := r.sql.ExecContext(
+			ctx,
+			`INSERT INTO user_group_rate_multipliers (user_id, group_id, rate_multiplier, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $4)
+			 ON CONFLICT (user_id, group_id) DO UPDATE SET rate_multiplier = $3, updated_at = $4`,
+			userID,
+			groupID,
+			*rate,
+			now,
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func applyUserEntityToService(dst *service.User, src *dbent.User) {
 	if dst == nil || src == nil {
 		return

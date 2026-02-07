@@ -282,6 +282,7 @@ type GatewayService struct {
 	groupRepo           GroupRepository
 	usageLogRepo        UsageLogRepository
 	userRepo            UserRepository
+	userGroupRateRepo   UserGroupRateRepository
 	userSubRepo         UserSubscriptionRepository
 	entClient           *dbent.Client
 	cache               GatewayCache
@@ -327,6 +328,7 @@ func NewGatewayService(
 		groupRepo:           groupRepo,
 		usageLogRepo:        usageLogRepo,
 		userRepo:            userRepo,
+		userGroupRateRepo:   resolveUserGroupRateRepository(userRepo),
 		userSubRepo:         userSubRepo,
 		entClient:           entClient,
 		cache:               cache,
@@ -4165,6 +4167,14 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 	multiplier := s.cfg.Default.RateMultiplier
 	if apiKey.GroupID != nil && apiKey.Group != nil {
 		multiplier = apiKey.Group.RateMultiplier
+		if s.userGroupRateRepo != nil && user != nil {
+			userRate, err := s.userGroupRateRepo.GetUserGroupRate(ctx, user.ID, *apiKey.GroupID)
+			if err != nil {
+				log.Printf("failed to load user group rate override: user_id=%d group_id=%d err=%v", user.ID, *apiKey.GroupID, err)
+			} else if userRate != nil {
+				multiplier = *userRate
+			}
+		}
 	}
 
 	// 判断计费方式：订阅模式 vs 余额模式

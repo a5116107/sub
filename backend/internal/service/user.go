@@ -17,7 +17,10 @@ type User struct {
 	Concurrency   int
 	Status        string
 	AllowedGroups []int64
-	TokenVersion  int64 // Incremented on password change to invalidate existing tokens
+	// GroupRates stores user-specific group multiplier overrides.
+	// Key: group_id, Value: rate_multiplier.
+	GroupRates   map[int64]float64
+	TokenVersion int64 // Incremented on password change to invalidate existing tokens
 
 	// Referral / invite system
 	InviteCode      *string
