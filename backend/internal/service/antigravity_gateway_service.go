@@ -37,6 +37,7 @@ const (
 	antigravityMaxRetriesGeminiImageEnv = "GATEWAY_ANTIGRAVITY_MAX_RETRIES_GEMINI_IMAGE"
 	antigravityScopeRateLimitEnv        = "GATEWAY_ANTIGRAVITY_429_SCOPE_LIMIT"
 	antigravityBillingModelEnv          = "GATEWAY_ANTIGRAVITY_BILL_WITH_MAPPED_MODEL"
+	antigravityFallbackSecondsEnv       = "GATEWAY_ANTIGRAVITY_FALLBACK_COOLDOWN_SECONDS"
 )
 
 // antigravityRetryLoopParams 重试循环的参数
@@ -1600,6 +1601,18 @@ func antigravityUseMappedModelForBilling() bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
+func antigravityFallbackCooldownSeconds() (time.Duration, bool) {
+	raw := strings.TrimSpace(os.Getenv(antigravityFallbackSecondsEnv))
+	if raw == "" {
+		return 0, false
+	}
+	seconds, err := strconv.Atoi(raw)
+	if err != nil || seconds <= 0 {
+		return 0, false
+	}
+	return time.Duration(seconds) * time.Second, true
+}
+
 func antigravityMaxRetries() int {
 	raw := strings.TrimSpace(os.Getenv(antigravityMaxRetriesEnv))
 	if raw == "" {
@@ -1647,6 +1660,9 @@ func (s *AntigravityGatewayService) handleUpstreamError(ctx context.Context, pre
 				fallbackSeconds = s.settingService.cfg.Gateway.AntigravityFallbackCooldownMinutes * 60
 			}
 			defaultDur := time.Duration(fallbackSeconds) * time.Second
+			if override, ok := antigravityFallbackCooldownSeconds(); ok {
+				defaultDur = override
+			}
 			ra := time.Now().Add(defaultDur)
 			if useScopeLimit {
 				log.Printf("%s status=429 rate_limited scope=%s reset_in=%v (fallback)", prefix, quotaScope, defaultDur)

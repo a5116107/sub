@@ -196,6 +196,29 @@ func TestAntigravityHandleUpstreamError_FallbackCooldownRespectsConfigMinutes(t 
 	require.WithinDuration(t, now.Add(2*time.Minute), call.resetAt, 3*time.Second)
 }
 
+func TestAntigravityHandleUpstreamError_FallbackCooldownRespectsSecondsEnv(t *testing.T) {
+	t.Setenv(antigravityScopeRateLimitEnv, "false")
+	t.Setenv(antigravityFallbackSecondsEnv, "7")
+	repo := &stubAntigravityAccountRepo{}
+	cfg := &config.Config{}
+	cfg.Gateway.AntigravityFallbackCooldownMinutes = 5
+	svc := &AntigravityGatewayService{
+		accountRepo:    repo,
+		settingService: &SettingService{cfg: cfg},
+	}
+	account := &Account{ID: 13, Name: "acc-13", Platform: PlatformAntigravity}
+
+	body := []byte(`{"error":{"message":"Resource has been exhausted"}}`)
+	now := time.Now()
+	svc.handleUpstreamError(context.Background(), "[test]", account, http.StatusTooManyRequests, http.Header{}, body, AntigravityQuotaScopeClaude)
+
+	require.Len(t, repo.rateCalls, 1)
+	require.Empty(t, repo.scopeCalls)
+	call := repo.rateCalls[0]
+	require.Equal(t, account.ID, call.accountID)
+	require.WithinDuration(t, now.Add(7*time.Second), call.resetAt, 3*time.Second)
+}
+
 func TestAccountIsSchedulableForModel_AntigravityRateLimits(t *testing.T) {
 	now := time.Now()
 	future := now.Add(10 * time.Minute)
