@@ -54,17 +54,7 @@
         </div>
       </div>
 
-      <!-- Token Usage Trend Chart -->
-      <div class="card relative overflow-hidden p-4">
-        <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/50 backdrop-blur-sm dark:bg-dark-800/50">
-          <LoadingSpinner size="md" />
-        </div>
-        <h3 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">{{ t('dashboard.tokenUsageTrend') }}</h3>
-        <div class="h-48">
-          <Line v-if="trendData" :data="trendData" :options="lineOptions" />
-          <div v-else class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400">{{ t('dashboard.noDataAvailable') }}</div>
-        </div>
-      </div>
+      <TokenUsageTrend :trend-data="trend" :loading="loading" />
     </div>
   </div>
 </template>
@@ -75,7 +65,8 @@ import { useI18n } from 'vue-i18n'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
-import { Line, Doughnut } from 'vue-chartjs'
+import { Doughnut } from 'vue-chartjs'
+import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import type { TrendDataPoint, ModelStat } from '@/types'
 import { formatCostFixed as formatCost, formatNumberLocaleString as formatNumber, formatTokensK as formatTokens } from '@/utils/format'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js'
@@ -116,28 +107,6 @@ const modelData = computed(() => !props.models?.length ? null : {
   }]
 })
 
-const trendData = computed(() => !props.trend?.length ? null : {
-  labels: props.trend.map((d: TrendDataPoint) => d.date),
-  datasets: [
-    {
-      label: t('dashboard.input'),
-      data: props.trend.map((d: TrendDataPoint) => d.input_tokens),
-      borderColor: chartColors.value.primary,
-      backgroundColor: `${chartColors.value.primary}20`,
-      tension: 0.3,
-      fill: true
-    },
-    {
-      label: t('dashboard.output'),
-      data: props.trend.map((d: TrendDataPoint) => d.output_tokens),
-      borderColor: chartColors.value.gold,
-      backgroundColor: `${chartColors.value.gold}20`,
-      tension: 0.3,
-      fill: true
-    }
-  ]
-})
-
 const doughnutOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
@@ -151,47 +120,4 @@ const doughnutOptions = computed(() => ({
   }
 }))
 
-const lineOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: {
-    intersect: false,
-    mode: 'index' as const
-  },
-  plugins: {
-    legend: {
-      display: true,
-      position: 'top' as const,
-      labels: {
-        color: chartColors.value.text,
-        usePointStyle: true,
-        pointStyle: 'circle',
-        padding: 12,
-        font: {
-          size: 11
-        }
-      }
-    },
-    tooltip: {
-      callbacks: {
-        label: (context: any) => `${context.dataset.label}: ${formatTokens(context.parsed.y)} tokens`
-      }
-    }
-  },
-  scales: {
-    x: {
-      grid: { color: chartColors.value.grid },
-      ticks: { color: chartColors.value.text, font: { size: 10 } }
-    },
-    y: {
-      beginAtZero: true,
-      grid: { color: chartColors.value.grid },
-      ticks: {
-        color: chartColors.value.text,
-        font: { size: 10 },
-        callback: (value: any) => formatTokens(value)
-      }
-    }
-  }
-}))
 </script>
