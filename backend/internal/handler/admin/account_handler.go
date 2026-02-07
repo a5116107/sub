@@ -135,6 +135,13 @@ type BulkUpdateAccountsRequest struct {
 	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
+// AccountLookupRequest is used to find accounts by credential identity.
+type AccountLookupRequest struct {
+	Platform     string   `json:"platform" binding:"required"`
+	Emails       []string `json:"emails" binding:"required,min=1"`
+	IdentityType string   `json:"identity_type"`
+}
+
 // AccountWithConcurrency extends Account with real-time concurrency info
 type AccountWithConcurrency struct {
 	*dto.Account
@@ -260,6 +267,112 @@ func (h *AccountHandler) List(c *gin.Context) {
 	}
 
 	response.Paginated(c, result, total, page, pageSize)
+}
+
+// Lookup finds accounts by credential identity (currently supports credential_email).
+// POST /api/v1/admin/accounts/lookup
+func (h *AccountHandler) Lookup(c *gin.Context) {
+	var req AccountLookupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	identityType := strings.TrimSpace(req.IdentityType)
+	if identityType == "" {
+		identityType = "credential_email"
+	}
+	if identityType != "credential_email" {
+		response.BadRequest(c, "Unsupported identity_type")
+		return
+	}
+
+	platform := strings.TrimSpace(req.Platform)
+	if platform == "" {
+		response.BadRequest(c, "Platform is required")
+		return
+	}
+
+	normalizedEmails := make([]string, 0, len(req.Emails))
+	seen := make(map[string]struct{}, len(req.Emails))
+	for _, email := range req.Emails {
+		cleaned := strings.ToLower(strings.TrimSpace(email))
+		if cleaned == "" {
+			continue
+		}
+		if _, ok := seen[cleaned]; ok {
+			continue
+		}
+		seen[cleaned] = struct{}{}
+		normalizedEmails = append(normalizedEmails, cleaned)
+	}
+	if len(normalizedEmails) == 0 {
+		response.BadRequest(c, "Emails is required")
+		return
+	}
+
+	const pageSize = 200
+	page := 1
+	total := int64(0)
+	allAccounts := make([]service.Account, 0)
+	for {
+		accounts, count, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, "", "", "")
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if total == 0 {
+			total = count
+		}
+		if len(accounts) == 0 {
+			break
+		}
+		allAccounts = append(allAccounts, accounts...)
+		if int64(page*pageSize) >= total {
+			break
+		}
+		page++
+	}
+
+	lookupSet := make(map[string]struct{}, len(normalizedEmails))
+	for _, email := range normalizedEmails {
+		lookupSet[email] = struct{}{}
+	}
+
+	matchedMap := make(map[string]service.Account)
+	for _, account := range allAccounts {
+		email := strings.ToLower(strings.TrimSpace(account.GetCredential("email")))
+		if email == "" {
+			continue
+		}
+		if _, needed := lookupSet[email]; !needed {
+			continue
+		}
+		if _, exists := matchedMap[email]; exists {
+			continue
+		}
+		matchedMap[email] = account
+	}
+
+	matched := make([]gin.H, 0, len(matchedMap))
+	missing := make([]string, 0)
+	for _, email := range normalizedEmails {
+		if account, ok := matchedMap[email]; ok {
+			matched = append(matched, gin.H{
+				"email":      email,
+				"account_id": account.ID,
+				"platform":   account.Platform,
+				"name":       account.Name,
+			})
+		} else {
+			missing = append(missing, email)
+		}
+	}
+
+	response.Success(c, gin.H{
+		"matched": matched,
+		"missing": missing,
+	})
 }
 
 // GetByID handles getting an account by ID
