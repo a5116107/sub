@@ -49,7 +49,7 @@
           </div>
         </div>
       </div>
-      <UsageFilters v-model="filters" v-model:startDate="startDate" v-model:endDate="endDate" :exporting="exporting" @change="applyFilters" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel" />
+      <UsageFilters v-model="filters" v-model:startDate="startDate" v-model:endDate="endDate" :exporting="exporting" @change="applyFilters" @refresh="refreshData" @reset="resetFilters" @cleanup="openCleanupDialog" @export="exportToExcel" />
       <UsageTable :data="usageLogs" :loading="loading" />
       <Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" />
     </div>
@@ -165,6 +165,7 @@ const loadChartData = async () => {
   } catch (error) { if(!isRequestCanceled(error)) console.error('Failed to load chart data:', error) } finally { if(chartsAbortController === c) chartsLoading.value = false }
 }
 const applyFilters = () => { pagination.page = 1; loadLogs(); loadStats(); if (!chartsCollapsed.value) loadChartData() }
+const refreshData = () => { loadLogs(); loadStats(); if (!chartsCollapsed.value) loadChartData() }
 const resetFilters = () => { startDate.value = formatLD(weekAgo); endDate.value = formatLD(now); filters.value = { start_date: startDate.value, end_date: endDate.value, billing_type: null }; granularity.value = 'day'; applyFilters() }
 const handlePageChange = (p: number) => { pagination.page = p; loadLogs() }
 const handlePageSizeChange = (s: number) => { pagination.page_size = s; pagination.page = 1; loadLogs() }
