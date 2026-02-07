@@ -3124,11 +3124,12 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	if len(body) > 0 {
 		metadataUserID = gjson.GetBytes(body, "metadata.user_id").String()
 	}
+	reqStream := gjson.GetBytes(body, "stream").Bool()
 	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, metadataUserID)
 
 	// OAuth账号：应用统一指纹
 	var fingerprint *Fingerprint
-	if account.IsOAuth() && s.identityService != nil && applyClaudeCompat {
+	if account.IsOAuth() && s.identityService != nil {
 		// 1. 获取或创建指纹（包含随机生成的ClientID）
 		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 		if err != nil {
@@ -3140,7 +3141,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 			if metadataUserID == "" {
 				parsed := &ParsedRequest{
 					Model:          modelID,
-					Stream:         gjson.GetBytes(body, "stream").Bool(),
+					Stream:         reqStream,
 					MetadataUserID: "",
 				}
 				if generatedUserID := s.buildOAuthMetadataUserID(parsed, account, fp); generatedUserID != "" {
@@ -3201,11 +3202,14 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	if req.Header.Get("anthropic-version") == "" {
 		req.Header.Set("anthropic-version", "2023-06-01")
 	}
+	if tokenType == "oauth" {
+		applyClaudeOAuthHeaderDefaults(req, reqStream)
+	}
 
 	// 处理anthropic-beta header（OAuth账号需要特殊处理）
 	if tokenType == "oauth" {
 		if applyClaudeCompat {
-			applyClaudeCodeMimicHeaders(req, gjson.GetBytes(body, "stream").Bool())
+			applyClaudeCodeMimicHeaders(req, reqStream)
 
 			incomingBeta := req.Header.Get("anthropic-beta")
 			requiredBetas := []string{claude.BetaOAuth, claude.BetaInterleavedThinking}
@@ -4783,7 +4787,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 
 	// OAuth 账号：应用统一指纹和重写 userID
 	// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
-	if account.IsOAuth() && s.identityService != nil && applyClaudeCompat {
+	if account.IsOAuth() && s.identityService != nil {
 		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 		if err == nil {
 			if metadataUserID == "" {
@@ -4837,7 +4841,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 
 	// OAuth 账号：应用指纹到请求头
-	if account.IsOAuth() && s.identityService != nil && applyClaudeCompat {
+	if account.IsOAuth() && s.identityService != nil {
 		fp, _ := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 		if fp != nil {
 			s.identityService.ApplyFingerprint(req, fp)
@@ -4850,6 +4854,9 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 	if req.Header.Get("anthropic-version") == "" {
 		req.Header.Set("anthropic-version", "2023-06-01")
+	}
+	if tokenType == "oauth" {
+		applyClaudeOAuthHeaderDefaults(req, false)
 	}
 
 	// OAuth 账号：处理 anthropic-beta header
