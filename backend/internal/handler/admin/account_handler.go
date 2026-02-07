@@ -311,41 +311,16 @@ func (h *AccountHandler) Lookup(c *gin.Context) {
 		return
 	}
 
-	const pageSize = 200
-	page := 1
-	total := int64(0)
-	allAccounts := make([]service.Account, 0)
-	for {
-		accounts, count, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, "", "", "")
-		if err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
-		if total == 0 {
-			total = count
-		}
-		if len(accounts) == 0 {
-			break
-		}
-		allAccounts = append(allAccounts, accounts...)
-		if int64(page*pageSize) >= total {
-			break
-		}
-		page++
+	accounts, err := h.adminService.LookupAccountsByCredentialEmail(c.Request.Context(), platform, normalizedEmails)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
 	}
 
-	lookupSet := make(map[string]struct{}, len(normalizedEmails))
-	for _, email := range normalizedEmails {
-		lookupSet[email] = struct{}{}
-	}
-
-	matchedMap := make(map[string]service.Account)
-	for _, account := range allAccounts {
+	matchedMap := make(map[string]service.Account, len(accounts))
+	for _, account := range accounts {
 		email := strings.ToLower(strings.TrimSpace(account.GetCredential("email")))
 		if email == "" {
-			continue
-		}
-		if _, needed := lookupSet[email]; !needed {
 			continue
 		}
 		if _, exists := matchedMap[email]; exists {

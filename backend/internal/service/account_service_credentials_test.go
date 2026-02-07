@@ -62,6 +62,9 @@ func (m *accountRepoForCredentialsTest) ListActive(ctx context.Context) ([]Accou
 func (m *accountRepoForCredentialsTest) ListByPlatform(ctx context.Context, platform string) ([]Account, error) {
 	return nil, nil
 }
+func (m *accountRepoForCredentialsTest) ListByPlatformAndCredentialEmails(ctx context.Context, platform string, emails []string) ([]Account, error) {
+	return nil, nil
+}
 func (m *accountRepoForCredentialsTest) UpdateLastUsed(ctx context.Context, id int64) error {
 	return nil
 }
