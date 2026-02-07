@@ -593,6 +593,21 @@ func TestValidateConfigErrors(t *testing.T) {
 			wantErr: "jwt.expire_hour must be <= 168",
 		},
 		{
+			name:    "jwt access token expire minutes positive",
+			mutate:  func(c *Config) { c.JWT.AccessTokenExpireMinutes = 0 },
+			wantErr: "jwt.access_token_expire_minutes must be positive",
+		},
+		{
+			name:    "jwt refresh token expire days positive",
+			mutate:  func(c *Config) { c.JWT.RefreshTokenExpireDays = 0 },
+			wantErr: "jwt.refresh_token_expire_days must be positive",
+		},
+		{
+			name:    "jwt refresh window non negative",
+			mutate:  func(c *Config) { c.JWT.RefreshWindowMinutes = -1 },
+			wantErr: "jwt.refresh_window_minutes must be non-negative",
+		},
+		{
 			name:    "csp policy required",
 			mutate:  func(c *Config) { c.Security.CSP.Enabled = true; c.Security.CSP.Policy = "" },
 			wantErr: "security.csp.policy",

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -28,6 +29,9 @@ var (
 	ErrTokenExpired        = infraerrors.Unauthorized("TOKEN_EXPIRED", "token has expired")
 	ErrTokenTooLarge       = infraerrors.BadRequest("TOKEN_TOO_LARGE", "token too large")
 	ErrTokenRevoked        = infraerrors.Unauthorized("TOKEN_REVOKED", "token has been revoked")
+	ErrRefreshTokenInvalid = infraerrors.Unauthorized("REFRESH_TOKEN_INVALID", "invalid refresh token")
+	ErrRefreshTokenExpired = infraerrors.Unauthorized("REFRESH_TOKEN_EXPIRED", "refresh token has expired")
+	ErrRefreshTokenReused  = infraerrors.Unauthorized("REFRESH_TOKEN_REUSED", "refresh token has been reused")
 	ErrEmailVerifyRequired = infraerrors.BadRequest("EMAIL_VERIFY_REQUIRED", "email verification is required")
 	ErrRegDisabled         = infraerrors.Forbidden("REGISTRATION_DISABLED", "registration is currently disabled")
 	ErrServiceUnavailable  = infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "service temporarily unavailable")
@@ -35,6 +39,7 @@ var (
 
 // maxTokenLength 限制 token 大小，避免超长 header 触发解析时的异常内存分配。
 const maxTokenLength = 8192
+const refreshTokenPrefix = "rt_"
 
 // JWTClaims JWT载荷数据
 type JWTClaims struct {
@@ -49,6 +54,7 @@ type JWTClaims struct {
 type AuthService struct {
 	userRepo             UserRepository
 	entClient            *dbent.Client
+	refreshTokenCache    RefreshTokenCache
 	cfg                  *config.Config
 	settingService       *SettingService
 	emailService         *EmailService
@@ -62,6 +68,7 @@ type AuthService struct {
 func NewAuthService(
 	userRepo UserRepository,
 	entClient *dbent.Client,
+	refreshTokenCache RefreshTokenCache,
 	cfg *config.Config,
 	settingService *SettingService,
 	emailService *EmailService,
@@ -73,6 +80,7 @@ func NewAuthService(
 	return &AuthService{
 		userRepo:             userRepo,
 		entClient:            entClient,
+		refreshTokenCache:    refreshTokenCache,
 		cfg:                  cfg,
 		settingService:       settingService,
 		emailService:         emailService,
@@ -597,6 +605,24 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 }
 
 // ValidateToken 验证JWT token并返回用户声明
+// LoginOrRegisterOAuthWithTokenPair is used by OAuth/SSO login flows that require refresh tokens.
+func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, email, username string) (*TokenPair, *User, error) {
+	if s.refreshTokenCache == nil {
+		return nil, nil, errors.New("refresh token cache not configured")
+	}
+
+	_, user, err := s.LoginOrRegisterOAuth(ctx, email, username)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tokenPair, err := s.GenerateTokenPair(ctx, user, "")
+	if err != nil {
+		return nil, nil, fmt.Errorf("generate token pair: %w", err)
+	}
+	return tokenPair, user, nil
+}
+
 func (s *AuthService) ValidateToken(tokenString string) (*JWTClaims, error) {
 	// 先做长度校验，尽早拒绝异常超长 token，降低 DoS 风险。
 	if len(tokenString) > maxTokenLength {
@@ -657,7 +683,12 @@ func isReservedEmail(email string) bool {
 // GenerateToken 生成JWT token
 func (s *AuthService) GenerateToken(user *User) (string, error) {
 	now := time.Now()
-	expiresAt := now.Add(time.Duration(s.cfg.JWT.ExpireHour) * time.Hour)
+	var expiresAt time.Time
+	if s.cfg.JWT.AccessTokenExpireMinutes > 0 {
+		expiresAt = now.Add(time.Duration(s.cfg.JWT.AccessTokenExpireMinutes) * time.Minute)
+	} else {
+		expiresAt = now.Add(time.Duration(s.cfg.JWT.ExpireHour) * time.Hour)
+	}
 
 	claims := &JWTClaims{
 		UserID:       user.ID,
@@ -681,6 +712,13 @@ func (s *AuthService) GenerateToken(user *User) (string, error) {
 }
 
 // HashPassword 使用bcrypt加密密码
+func (s *AuthService) GetAccessTokenExpiresIn() int {
+	if s.cfg.JWT.AccessTokenExpireMinutes > 0 {
+		return s.cfg.JWT.AccessTokenExpireMinutes * 60
+	}
+	return s.cfg.JWT.ExpireHour * 3600
+}
+
 func (s *AuthService) HashPassword(password string) (string, error) {
 	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -870,6 +908,155 @@ func (s *AuthService) ResetPassword(ctx context.Context, email, token, newPasswo
 		return ErrServiceUnavailable
 	}
 
+	if err := s.RevokeAllUserSessions(ctx, user.ID); err != nil {
+		log.Printf("[Auth] Failed to revoke refresh tokens for user %d: %v", user.ID, err)
+	}
+
 	log.Printf("[Auth] Password reset successful for user: %s", email)
 	return nil
+}
+
+// TokenPair contains access token and refresh token.
+type TokenPair struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
+}
+
+// GenerateTokenPair generates and stores an access/refresh token pair.
+func (s *AuthService) GenerateTokenPair(ctx context.Context, user *User, familyID string) (*TokenPair, error) {
+	if s.refreshTokenCache == nil {
+		return nil, errors.New("refresh token cache not configured")
+	}
+
+	accessToken, err := s.GenerateToken(user)
+	if err != nil {
+		return nil, fmt.Errorf("generate access token: %w", err)
+	}
+
+	refreshToken, err := s.generateRefreshToken(ctx, user, familyID)
+	if err != nil {
+		return nil, fmt.Errorf("generate refresh token: %w", err)
+	}
+
+	return &TokenPair{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    s.GetAccessTokenExpiresIn(),
+	}, nil
+}
+
+func (s *AuthService) generateRefreshToken(ctx context.Context, user *User, familyID string) (string, error) {
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", fmt.Errorf("generate random bytes: %w", err)
+	}
+	rawToken := refreshTokenPrefix + hex.EncodeToString(tokenBytes)
+	tokenHash := hashToken(rawToken)
+
+	if familyID == "" {
+		familyBytes := make([]byte, 16)
+		if _, err := rand.Read(familyBytes); err != nil {
+			return "", fmt.Errorf("generate family id: %w", err)
+		}
+		familyID = hex.EncodeToString(familyBytes)
+	}
+
+	now := time.Now()
+	ttl := time.Duration(s.cfg.JWT.RefreshTokenExpireDays) * 24 * time.Hour
+	data := &RefreshTokenData{
+		UserID:       user.ID,
+		TokenVersion: user.TokenVersion,
+		FamilyID:     familyID,
+		CreatedAt:    now,
+		ExpiresAt:    now.Add(ttl),
+	}
+
+	if err := s.refreshTokenCache.StoreRefreshToken(ctx, tokenHash, data, ttl); err != nil {
+		return "", fmt.Errorf("store refresh token: %w", err)
+	}
+	if err := s.refreshTokenCache.AddToUserTokenSet(ctx, user.ID, tokenHash, ttl); err != nil {
+		log.Printf("[Auth] Failed to add refresh token to user set: %v", err)
+	}
+	if err := s.refreshTokenCache.AddToFamilyTokenSet(ctx, familyID, tokenHash, ttl); err != nil {
+		log.Printf("[Auth] Failed to add refresh token to family set: %v", err)
+	}
+
+	return rawToken, nil
+}
+
+// RefreshTokenPair rotates refresh token and returns a new token pair.
+func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string) (*TokenPair, error) {
+	if s.refreshTokenCache == nil {
+		return nil, ErrRefreshTokenInvalid
+	}
+	if !strings.HasPrefix(refreshToken, refreshTokenPrefix) {
+		return nil, ErrRefreshTokenInvalid
+	}
+
+	tokenHash := hashToken(refreshToken)
+	data, err := s.refreshTokenCache.GetRefreshToken(ctx, tokenHash)
+	if err != nil {
+		if errors.Is(err, ErrRefreshTokenNotFound) {
+			log.Printf("[Auth] Refresh token not found, possible reuse attack")
+			return nil, ErrRefreshTokenInvalid
+		}
+		log.Printf("[Auth] Error getting refresh token: %v", err)
+		return nil, ErrServiceUnavailable
+	}
+
+	if time.Now().After(data.ExpiresAt) {
+		_ = s.refreshTokenCache.DeleteRefreshToken(ctx, tokenHash)
+		return nil, ErrRefreshTokenExpired
+	}
+
+	user, err := s.userRepo.GetByID(ctx, data.UserID)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			_ = s.refreshTokenCache.DeleteTokenFamily(ctx, data.FamilyID)
+			return nil, ErrRefreshTokenInvalid
+		}
+		log.Printf("[Auth] Database error getting user for token refresh: %v", err)
+		return nil, ErrServiceUnavailable
+	}
+	if !user.IsActive() {
+		_ = s.refreshTokenCache.DeleteUserRefreshTokens(ctx, user.ID)
+		return nil, ErrUserNotActive
+	}
+	if data.TokenVersion != user.TokenVersion {
+		_ = s.refreshTokenCache.DeleteUserRefreshTokens(ctx, user.ID)
+		return nil, ErrTokenRevoked
+	}
+
+	if err := s.refreshTokenCache.DeleteRefreshToken(ctx, tokenHash); err != nil {
+		log.Printf("[Auth] Failed to delete old refresh token: %v", err)
+	}
+
+	return s.GenerateTokenPair(ctx, user, data.FamilyID)
+}
+
+// RevokeRefreshToken revokes a single refresh token.
+func (s *AuthService) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
+	if s.refreshTokenCache == nil {
+		return nil
+	}
+	if !strings.HasPrefix(refreshToken, refreshTokenPrefix) {
+		return ErrRefreshTokenInvalid
+	}
+
+	tokenHash := hashToken(refreshToken)
+	return s.refreshTokenCache.DeleteRefreshToken(ctx, tokenHash)
+}
+
+// RevokeAllUserSessions revokes all refresh-token sessions for a user.
+func (s *AuthService) RevokeAllUserSessions(ctx context.Context, userID int64) error {
+	if s.refreshTokenCache == nil {
+		return nil
+	}
+	return s.refreshTokenCache.DeleteUserRefreshTokens(ctx, userID)
+}
+
+func hashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

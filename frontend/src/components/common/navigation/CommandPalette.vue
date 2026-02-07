@@ -384,9 +384,13 @@ const toggleTheme = () => {
   localStorage.setItem('theme', isDark ? 'dark' : 'light')
 }
 
-const logout = () => {
-  authStore.logout()
-  router.push('/login')
+const logout = async () => {
+  try {
+    await authStore.logout()
+  } catch (error) {
+    console.error('Logout error:', error)
+  }
+  await router.push('/login')
 }
 
 // Open/Close

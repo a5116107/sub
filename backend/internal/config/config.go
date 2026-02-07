@@ -667,8 +667,11 @@ type OpsMetricsCollectorCacheConfig struct {
 }
 
 type JWTConfig struct {
-	Secret     string `mapstructure:"secret"`
-	ExpireHour int    `mapstructure:"expire_hour"`
+	Secret                   string `mapstructure:"secret"`
+	ExpireHour               int    `mapstructure:"expire_hour"`
+	AccessTokenExpireMinutes int    `mapstructure:"access_token_expire_minutes"`
+	RefreshTokenExpireDays   int    `mapstructure:"refresh_token_expire_days"`
+	RefreshWindowMinutes     int    `mapstructure:"refresh_window_minutes"`
 }
 
 // TotpConfig TOTP 双因素认证配置
@@ -1057,6 +1060,9 @@ func setDefaults() {
 	// JWT
 	viper.SetDefault("jwt.secret", "")
 	viper.SetDefault("jwt.expire_hour", 24)
+	viper.SetDefault("jwt.access_token_expire_minutes", 360)
+	viper.SetDefault("jwt.refresh_token_expire_days", 30)
+	viper.SetDefault("jwt.refresh_window_minutes", 2)
 
 	// TOTP
 	viper.SetDefault("totp.encryption_key", "")
@@ -1202,6 +1208,21 @@ func (c *Config) Validate() error {
 	}
 	if c.JWT.ExpireHour > 24 {
 		log.Printf("Warning: jwt.expire_hour is %d hours (> 24). Consider shorter expiration for security.", c.JWT.ExpireHour)
+	}
+	if c.JWT.AccessTokenExpireMinutes <= 0 {
+		return fmt.Errorf("jwt.access_token_expire_minutes must be positive")
+	}
+	if c.JWT.AccessTokenExpireMinutes > 720 {
+		log.Printf("Warning: jwt.access_token_expire_minutes is %d (> 720). Consider shorter expiration for security.", c.JWT.AccessTokenExpireMinutes)
+	}
+	if c.JWT.RefreshTokenExpireDays <= 0 {
+		return fmt.Errorf("jwt.refresh_token_expire_days must be positive")
+	}
+	if c.JWT.RefreshTokenExpireDays > 90 {
+		log.Printf("Warning: jwt.refresh_token_expire_days is %d (> 90). Consider shorter expiration for security.", c.JWT.RefreshTokenExpireDays)
+	}
+	if c.JWT.RefreshWindowMinutes < 0 {
+		return fmt.Errorf("jwt.refresh_window_minutes must be non-negative")
 	}
 	if c.Security.CSP.Enabled && strings.TrimSpace(c.Security.CSP.Policy) == "" {
 		return fmt.Errorf("security.csp.policy is required when CSP is enabled")

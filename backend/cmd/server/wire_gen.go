@@ -47,6 +47,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	settingService := service.NewSettingService(settingRepository, configConfig)
 	redisClient := repository.ProvideRedis(configConfig)
 	emailCache := repository.NewEmailCache(redisClient)
+	refreshTokenCache := repository.NewRefreshTokenCache(redisClient)
 	emailService := service.NewEmailService(settingRepository, emailCache)
 	turnstileVerifier := repository.NewTurnstileVerifier()
 	turnstileService := service.NewTurnstileService(settingService, turnstileVerifier)
@@ -61,7 +62,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	apiKeyService := service.NewAPIKeyService(apiKeyRepository, userRepository, groupRepository, userSubscriptionRepository, apiKeyCache, configConfig)
 	apiKeyAuthCacheInvalidator := service.ProvideAPIKeyAuthCacheInvalidator(apiKeyService)
 	promoService := service.NewPromoService(promoCodeRepository, userRepository, billingCacheService, client, apiKeyAuthCacheInvalidator)
-	authService := service.NewAuthService(userRepository, client, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService, apiKeyAuthCacheInvalidator)
+	authService := service.NewAuthService(userRepository, client, refreshTokenCache, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService, apiKeyAuthCacheInvalidator)
 	userService := service.NewUserService(userRepository, apiKeyAuthCacheInvalidator)
 	secretEncryptor, err := repository.NewAESEncryptor(configConfig)
 	if err != nil {

@@ -3,7 +3,7 @@
  * Base client with interceptors for authentication and error handling
  */
 
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
+import axios, { AxiosInstance, AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import type { ApiResponse } from '@/types'
 import { getLocale } from '@/i18n'
 
@@ -18,6 +18,18 @@ export const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json'
   }
 })
+
+let isRefreshing = false
+let refreshSubscribers: Array<(token: string) => void> = []
+
+function subscribeTokenRefresh(callback: (token: string) => void): void {
+  refreshSubscribers.push(callback)
+}
+
+function onTokenRefreshed(token: string): void {
+  refreshSubscribers.forEach((callback) => callback(token))
+  refreshSubscribers = []
+}
 
 // ==================== Request Interceptor ====================
 
@@ -61,7 +73,7 @@ apiClient.interceptors.request.use(
 // ==================== Response Interceptor ====================
 
 apiClient.interceptors.response.use(
-  (response) => {
+  (response: AxiosResponse) => {
     // Unwrap standard API response format { code, message, data }
     const apiResponse = response.data as ApiResponse<unknown>
     if (apiResponse && typeof apiResponse === 'object' && 'code' in apiResponse) {
@@ -79,12 +91,14 @@ apiClient.interceptors.response.use(
     }
     return response
   },
-  (error: AxiosError<ApiResponse<unknown>>) => {
+  async (error: AxiosError<ApiResponse<unknown>>) => {
     // Request cancellation: keep the original axios cancellation error so callers can ignore it.
     // Otherwise we'd misclassify it as a generic "network error".
     if (error.code === 'ERR_CANCELED' || axios.isCancel(error)) {
       return Promise.reject(error)
     }
+
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
     // Handle common errors
     if (error.response) {
@@ -120,27 +134,106 @@ apiClient.interceptors.response.use(
         })
       }
 
-      // 401: Unauthorized - clear token and redirect to login
-      if (status === 401) {
-        const hasToken = !!localStorage.getItem('auth_token')
-        const url = error.config?.url || ''
+      // 401: try refresh flow first, then clear auth.
+      if (status === 401 && !originalRequest._retry) {
+        const refreshToken = localStorage.getItem('refresh_token')
         const isAuthEndpoint =
           url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/refresh')
+
+        if (refreshToken && !isAuthEndpoint) {
+          if (isRefreshing) {
+            return new Promise((resolve, reject) => {
+              subscribeTokenRefresh((newToken: string) => {
+                if (newToken) {
+                  originalRequest._retry = true
+                  if (originalRequest.headers) {
+                    originalRequest.headers.Authorization = `Bearer ${newToken}`
+                  }
+                  resolve(apiClient(originalRequest))
+                } else {
+                  reject({
+                    status,
+                    code: apiData.code,
+                    message: apiData.message || apiData.detail || error.message
+                  })
+                }
+              })
+            })
+          }
+
+          originalRequest._retry = true
+          isRefreshing = true
+
+          try {
+            const refreshResponse = await axios.post(
+              `${API_BASE_URL}/auth/refresh`,
+              { refresh_token: refreshToken },
+              { headers: { 'Content-Type': 'application/json' } }
+            )
+
+            const refreshData = refreshResponse.data as ApiResponse<{
+              access_token: string
+              refresh_token: string
+              expires_in: number
+            }>
+
+            if (refreshData.code === 0 && refreshData.data) {
+              const { access_token, refresh_token: newRefreshToken, expires_in } = refreshData.data
+
+              localStorage.setItem('auth_token', access_token)
+              localStorage.setItem('refresh_token', newRefreshToken)
+              localStorage.setItem('token_expires_at', String(Date.now() + expires_in * 1000))
+
+              onTokenRefreshed(access_token)
+
+              if (originalRequest.headers) {
+                originalRequest.headers.Authorization = `Bearer ${access_token}`
+              }
+
+              isRefreshing = false
+              return apiClient(originalRequest)
+            }
+
+            throw new Error('Token refresh failed')
+          } catch {
+            onTokenRefreshed('')
+            isRefreshing = false
+
+            localStorage.removeItem('auth_token')
+            localStorage.removeItem('refresh_token')
+            localStorage.removeItem('auth_user')
+            localStorage.removeItem('token_expires_at')
+            sessionStorage.setItem('auth_expired', '1')
+
+            if (!window.location.pathname.includes('/login')) {
+              window.location.href = '/login'
+            }
+
+            return Promise.reject({
+              status: 401,
+              code: 'TOKEN_REFRESH_FAILED',
+              message: 'Session expired. Please log in again.'
+            })
+          }
+        }
+
+        const hasToken = !!localStorage.getItem('auth_token')
         const headers = error.config?.headers as Record<string, unknown> | undefined
         const authHeader = headers?.Authorization ?? headers?.authorization
         const sentAuth =
           typeof authHeader === 'string'
             ? authHeader.trim() !== ''
             : Array.isArray(authHeader)
-            ? authHeader.length > 0
-            : !!authHeader
+              ? authHeader.length > 0
+              : !!authHeader
 
         localStorage.removeItem('auth_token')
+        localStorage.removeItem('refresh_token')
         localStorage.removeItem('auth_user')
+        localStorage.removeItem('token_expires_at')
         if ((hasToken || sentAuth) && !isAuthEndpoint) {
           sessionStorage.setItem('auth_expired', '1')
         }
-        // Only redirect if not already on login page
         if (!window.location.pathname.includes('/login')) {
           window.location.href = '/login'
         }

@@ -71,6 +71,8 @@ onMounted(async () => {
   const params = parseFragmentParams()
 
   const token = params.get('access_token') || ''
+  const refreshToken = params.get('refresh_token') || ''
+  const expiresInStr = params.get('expires_in') || ''
   const redirect = sanitizeRedirectPath(
     params.get('redirect') || (route.query.redirect as string | undefined) || '/dashboard'
   )
@@ -92,6 +94,16 @@ onMounted(async () => {
   }
 
   try {
+    if (refreshToken) {
+      localStorage.setItem('refresh_token', refreshToken)
+    }
+    if (expiresInStr) {
+      const expiresIn = parseInt(expiresInStr, 10)
+      if (!Number.isNaN(expiresIn)) {
+        localStorage.setItem('token_expires_at', String(Date.now() + expiresIn * 1000))
+      }
+    }
+
     await authStore.setToken(token)
     appStore.showSuccess(t('auth.loginSuccess'))
     await router.replace(redirect)
@@ -116,4 +128,3 @@ onMounted(async () => {
   transform: translateY(-8px);
 }
 </style>
-

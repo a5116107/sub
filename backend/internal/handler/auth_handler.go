@@ -67,9 +67,37 @@ type LoginRequest struct {
 
 // AuthResponse 认证响应格式（匹配前端期望）
 type AuthResponse struct {
-	AccessToken string    `json:"access_token"`
-	TokenType   string    `json:"token_type"`
-	User        *dto.User `json:"user"`
+	AccessToken  string    `json:"access_token"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	ExpiresIn    int       `json:"expires_in,omitempty"`
+	TokenType    string    `json:"token_type"`
+	User         *dto.User `json:"user"`
+}
+
+func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
+	tokenPair, err := h.authService.GenerateTokenPair(c.Request.Context(), user, "")
+	if err != nil {
+		slog.Error("failed to generate token pair", "error", err, "user_id", user.ID)
+		token, tokenErr := h.authService.GenerateToken(user)
+		if tokenErr != nil {
+			response.InternalError(c, "Failed to generate token")
+			return
+		}
+		response.Success(c, AuthResponse{
+			AccessToken: token,
+			TokenType:   "Bearer",
+			User:        dto.UserFromService(user),
+		})
+		return
+	}
+
+	response.Success(c, AuthResponse{
+		AccessToken:  tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresIn:    tokenPair.ExpiresIn,
+		TokenType:    "Bearer",
+		User:         dto.UserFromService(user),
+	})
 }
 
 // Register handles user registration
@@ -94,12 +122,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	_ = token
+	_ = token
 
-	response.Success(c, AuthResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
-		User:        dto.UserFromService(user),
-	})
+	h.respondWithTokenPair(c, user)
 }
 
 // SendVerifyCode 发送邮箱验证码
@@ -149,6 +175,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	_ = token
 
 	// Check if TOTP 2FA is enabled for this user
 	if h.totpService != nil && h.settingSvc.IsTotpEnabled(c.Request.Context()) && user.TotpEnabled {
@@ -167,11 +194,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, AuthResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
-		User:        dto.UserFromService(user),
-	})
+	h.respondWithTokenPair(c, user)
 }
 
 // TotpLoginResponse represents the response when 2FA is required
@@ -243,12 +266,9 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		response.InternalError(c, "Failed to generate token")
 		return
 	}
+	_ = token
 
-	response.Success(c, AuthResponse{
-		AccessToken: token,
-		TokenType:   "Bearer",
-		User:        dto.UserFromService(user),
-	})
+	h.respondWithTokenPair(c, user)
 }
 
 // GetCurrentUser handles getting current authenticated user
@@ -458,5 +478,88 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 
 	response.Success(c, ResetPasswordResponse{
 		Message: "Your password has been reset successfully. You can now log in with your new password.",
+	})
+}
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+type RefreshTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
+	TokenType    string `json:"token_type"`
+}
+
+// RefreshToken handles access token refresh.
+// POST /api/v1/auth/refresh
+func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	var req RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	tokenPair, err := h.authService.RefreshTokenPair(c.Request.Context(), req.RefreshToken)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, RefreshTokenResponse{
+		AccessToken:  tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresIn:    tokenPair.ExpiresIn,
+		TokenType:    "Bearer",
+	})
+}
+
+type LogoutRequest struct {
+	RefreshToken string `json:"refresh_token,omitempty"`
+}
+
+type LogoutResponse struct {
+	Message string `json:"message"`
+}
+
+// Logout revokes provided refresh token and returns success.
+// POST /api/v1/auth/logout
+func (h *AuthHandler) Logout(c *gin.Context) {
+	var req LogoutRequest
+	_ = c.ShouldBindJSON(&req)
+
+	if req.RefreshToken != "" {
+		if err := h.authService.RevokeRefreshToken(c.Request.Context(), req.RefreshToken); err != nil {
+			slog.Debug("failed to revoke refresh token", "error", err)
+		}
+	}
+
+	response.Success(c, LogoutResponse{
+		Message: "Logged out successfully",
+	})
+}
+
+type RevokeAllSessionsResponse struct {
+	Message string `json:"message"`
+}
+
+// RevokeAllSessions revokes all sessions for current user.
+// POST /api/v1/auth/revoke-all-sessions
+func (h *AuthHandler) RevokeAllSessions(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	if err := h.authService.RevokeAllUserSessions(c.Request.Context(), subject.UserID); err != nil {
+		slog.Error("failed to revoke all sessions", "user_id", subject.UserID, "error", err)
+		response.InternalError(c, "Failed to revoke sessions")
+		return
+	}
+
+	response.Success(c, RevokeAllSessionsResponse{
+		Message: "All sessions have been revoked. Please log in again.",
 	})
 }
