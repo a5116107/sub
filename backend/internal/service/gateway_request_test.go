@@ -19,6 +19,20 @@ func TestParseGatewayRequest(t *testing.T) {
 	require.Len(t, parsed.Messages, 1)
 }
 
+func TestParseGatewayRequest_MaxTokens(t *testing.T) {
+	body := []byte(`{"model":"claude-haiku-4-5","max_tokens":1}`)
+	parsed, err := ParseGatewayRequest(body)
+	require.NoError(t, err)
+	require.Equal(t, 1, parsed.MaxTokens)
+}
+
+func TestParseGatewayRequest_MaxTokensNonIntegralIgnored(t *testing.T) {
+	body := []byte(`{"model":"claude-haiku-4-5","max_tokens":1.5}`)
+	parsed, err := ParseGatewayRequest(body)
+	require.NoError(t, err)
+	require.Equal(t, 0, parsed.MaxTokens)
+}
+
 func TestParseGatewayRequest_SystemNull(t *testing.T) {
 	body := []byte(`{"model":"claude-3","system":null}`)
 	parsed, err := ParseGatewayRequest(body)
