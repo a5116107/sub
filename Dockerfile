@@ -7,7 +7,7 @@
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.25.6-alpine
+ARG GOLANG_IMAGE=golang:1.25.7-alpine
 ARG ALPINE_IMAGE=alpine:3.20
 ARG PNPM_VERSION=10.10.0
 ARG NPM_REGISTRY=https://registry.npmmirror.com
