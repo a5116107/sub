@@ -1,11 +1,12 @@
 package service
 
 type SystemSettings struct {
-	RegistrationEnabled  bool
-	EmailVerifyEnabled   bool
-	PromoCodeEnabled     bool
-	PasswordResetEnabled bool
-	TotpEnabled          bool // TOTP 双因素认证
+	RegistrationEnabled   bool
+	EmailVerifyEnabled    bool
+	PromoCodeEnabled      bool
+	InvitationCodeEnabled bool
+	PasswordResetEnabled  bool
+	TotpEnabled           bool // TOTP 双因素认证
 
 	ReferralInviterBonus   float64
 	ReferralInviteeBonus   float64
@@ -74,6 +75,7 @@ type PublicSettings struct {
 	RegistrationEnabled         bool
 	EmailVerifyEnabled          bool
 	PromoCodeEnabled            bool
+	InvitationCodeEnabled       bool
 	PasswordResetEnabled        bool
 	TotpEnabled                 bool // TOTP 双因素认证
 	TurnstileEnabled            bool

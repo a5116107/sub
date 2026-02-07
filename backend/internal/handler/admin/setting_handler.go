@@ -72,6 +72,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		RegistrationEnabled:                  settings.RegistrationEnabled,
 		EmailVerifyEnabled:                   settings.EmailVerifyEnabled,
 		PromoCodeEnabled:                     settings.PromoCodeEnabled,
+		InvitationCodeEnabled:                settings.InvitationCodeEnabled,
 		PasswordResetEnabled:                 settings.PasswordResetEnabled,
 		TotpEnabled:                          settings.TotpEnabled,
 		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
@@ -125,11 +126,12 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 // UpdateSettingsRequest 更新设置请求
 type UpdateSettingsRequest struct {
 	// 注册设置
-	RegistrationEnabled  bool `json:"registration_enabled"`
-	EmailVerifyEnabled   bool `json:"email_verify_enabled"`
-	PromoCodeEnabled     bool `json:"promo_code_enabled"`
-	PasswordResetEnabled bool `json:"password_reset_enabled"`
-	TotpEnabled          bool `json:"totp_enabled"` // TOTP 双因素认证
+	RegistrationEnabled   bool  `json:"registration_enabled"`
+	EmailVerifyEnabled    bool  `json:"email_verify_enabled"`
+	PromoCodeEnabled      bool  `json:"promo_code_enabled"`
+	InvitationCodeEnabled *bool `json:"invitation_code_enabled"`
+	PasswordResetEnabled  bool  `json:"password_reset_enabled"`
+	TotpEnabled           bool  `json:"totp_enabled"` // TOTP 双因素认证
 
 	ReferralInviterBonus   float64 `json:"referral_inviter_bonus"`
 	ReferralInviteeBonus   float64 `json:"referral_invitee_bonus"`
@@ -349,9 +351,15 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	settings := &service.SystemSettings{
-		RegistrationEnabled:         req.RegistrationEnabled,
-		EmailVerifyEnabled:          req.EmailVerifyEnabled,
-		PromoCodeEnabled:            req.PromoCodeEnabled,
+		RegistrationEnabled: req.RegistrationEnabled,
+		EmailVerifyEnabled:  req.EmailVerifyEnabled,
+		PromoCodeEnabled:    req.PromoCodeEnabled,
+		InvitationCodeEnabled: func() bool {
+			if req.InvitationCodeEnabled != nil {
+				return *req.InvitationCodeEnabled
+			}
+			return previousSettings.InvitationCodeEnabled
+		}(),
 		PasswordResetEnabled:        req.PasswordResetEnabled,
 		TotpEnabled:                 req.TotpEnabled,
 		ReferralInviterBonus:        req.ReferralInviterBonus,
@@ -443,6 +451,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		RegistrationEnabled:                  updatedSettings.RegistrationEnabled,
 		EmailVerifyEnabled:                   updatedSettings.EmailVerifyEnabled,
 		PromoCodeEnabled:                     updatedSettings.PromoCodeEnabled,
+		InvitationCodeEnabled:                updatedSettings.InvitationCodeEnabled,
 		PasswordResetEnabled:                 updatedSettings.PasswordResetEnabled,
 		TotpEnabled:                          updatedSettings.TotpEnabled,
 		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
@@ -520,6 +529,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.EmailVerifyEnabled != after.EmailVerifyEnabled {
 		changed = append(changed, "email_verify_enabled")
+	}
+	if before.InvitationCodeEnabled != after.InvitationCodeEnabled {
+		changed = append(changed, "invitation_code_enabled")
 	}
 	if before.PasswordResetEnabled != after.PasswordResetEnabled {
 		changed = append(changed, "password_reset_enabled")

@@ -137,6 +137,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyRegistrationEnabled,
 		SettingKeyEmailVerifyEnabled,
 		SettingKeyPromoCodeEnabled,
+		SettingKeyInvitationCodeEnabled,
 		SettingKeyPasswordResetEnabled,
 		SettingKeyTotpEnabled,
 		SettingKeyTurnstileEnabled,
@@ -184,6 +185,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	return &PublicSettings{
 		RegistrationEnabled:         settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:          emailVerifyEnabled,
+		InvitationCodeEnabled:       settings[SettingKeyInvitationCodeEnabled] == "true",
 		PromoCodeEnabled:            settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:        passwordResetEnabled,
 		TotpEnabled:                 settings[SettingKeyTotpEnabled] == "true",
@@ -283,6 +285,7 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyRegistrationEnabled] = strconv.FormatBool(settings.RegistrationEnabled)
 	updates[SettingKeyEmailVerifyEnabled] = strconv.FormatBool(settings.EmailVerifyEnabled)
 	updates[SettingKeyPromoCodeEnabled] = strconv.FormatBool(settings.PromoCodeEnabled)
+	updates[SettingKeyInvitationCodeEnabled] = strconv.FormatBool(settings.InvitationCodeEnabled)
 	updates[SettingKeyPasswordResetEnabled] = strconv.FormatBool(settings.PasswordResetEnabled)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
 
@@ -517,6 +520,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	defaults := map[string]string{
 		SettingKeyRegistrationEnabled:         "true",
 		SettingKeyEmailVerifyEnabled:          "false",
+		SettingKeyInvitationCodeEnabled:       "false",
 		SettingKeyPromoCodeEnabled:            "true", // 默认启用优惠码功能
 		SettingKeySiteName:                    "Sub2API",
 		SettingKeySiteLogo:                    "",
@@ -564,6 +568,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result := &SystemSettings{
 		RegistrationEnabled:          settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:           emailVerifyEnabled,
+		InvitationCodeEnabled:        settings[SettingKeyInvitationCodeEnabled] == "true",
 		PromoCodeEnabled:             settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:         emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
 		TotpEnabled:                  settings[SettingKeyTotpEnabled] == "true",
