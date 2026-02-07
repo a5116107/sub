@@ -3619,6 +3619,32 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 	if shouldDisable {
 		return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: body}
 	}
+	if status, errType, errMsg, matched := applyErrorPassthroughRule(
+		c,
+		account.Platform,
+		resp.StatusCode,
+		body,
+		http.StatusBadGateway,
+		"upstream_error",
+		"Upstream request failed",
+	); matched {
+		c.JSON(status, gin.H{
+			"type": "error",
+			"error": gin.H{
+				"type":    errType,
+				"message": errMsg,
+			},
+		})
+
+		summary := upstreamMsg
+		if summary == "" {
+			summary = errMsg
+		}
+		if summary == "" {
+			return nil, fmt.Errorf("upstream error: %d (passthrough rule matched)", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("upstream error: %d (passthrough rule matched) message=%s", resp.StatusCode, summary)
+	}
 
 	// 记录上游错误响应体摘要便于排障（可选：由配置控制；不回显到客户端）
 	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
@@ -3751,6 +3777,33 @@ func (s *GatewayService) handleRetryExhaustedError(ctx context.Context, resp *ht
 	}
 
 	// 返回统一的重试耗尽错误响应
+	if status, errType, errMsg, matched := applyErrorPassthroughRule(
+		c,
+		account.Platform,
+		resp.StatusCode,
+		respBody,
+		http.StatusBadGateway,
+		"upstream_error",
+		"Upstream request failed after retries",
+	); matched {
+		c.JSON(status, gin.H{
+			"type": "error",
+			"error": gin.H{
+				"type":    errType,
+				"message": errMsg,
+			},
+		})
+
+		summary := upstreamMsg
+		if summary == "" {
+			summary = errMsg
+		}
+		if summary == "" {
+			return nil, fmt.Errorf("upstream error: %d (retries exhausted, passthrough rule matched)", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("upstream error: %d (retries exhausted, passthrough rule matched) message=%s", resp.StatusCode, summary)
+	}
+
 	c.JSON(http.StatusBadGateway, gin.H{
 		"type": "error",
 		"error": gin.H{

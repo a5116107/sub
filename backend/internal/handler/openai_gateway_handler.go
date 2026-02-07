@@ -173,6 +173,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		}
 	}
 
+	if h.errorPassthroughService != nil {
+		service.BindErrorPassthroughService(c, h.errorPassthroughService)
+	}
+
 	// Get subscription info (may be nil)
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 

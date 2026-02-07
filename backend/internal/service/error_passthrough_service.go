@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/model"
 )
@@ -45,8 +46,11 @@ func NewErrorPassthroughService(repo ErrorPassthroughRepository, cache ErrorPass
 	}
 
 	ctx := context.Background()
-	if err := svc.refreshLocalCache(ctx); err != nil {
-		log.Printf("[ErrorPassthroughService] startup cache load failed: %v", err)
+	if err := svc.reloadRulesFromDB(ctx); err != nil {
+		log.Printf("[ErrorPassthroughService] startup db load failed: %v", err)
+		if fallbackErr := svc.refreshLocalCache(ctx); fallbackErr != nil {
+			log.Printf("[ErrorPassthroughService] startup cache fallback failed: %v", fallbackErr)
+		}
 	}
 
 	if cache != nil {
@@ -77,7 +81,9 @@ func (s *ErrorPassthroughService) Create(ctx context.Context, rule *model.ErrorP
 	if err != nil {
 		return nil, err
 	}
-	s.invalidateAndNotify(ctx)
+	refreshCtx, cancel := s.newCacheRefreshContext()
+	defer cancel()
+	s.invalidateAndNotify(refreshCtx)
 	return created, nil
 }
 
@@ -90,7 +96,9 @@ func (s *ErrorPassthroughService) Update(ctx context.Context, rule *model.ErrorP
 	if err != nil {
 		return nil, err
 	}
-	s.invalidateAndNotify(ctx)
+	refreshCtx, cancel := s.newCacheRefreshContext()
+	defer cancel()
+	s.invalidateAndNotify(refreshCtx)
 	return updated, nil
 }
 
@@ -98,7 +106,9 @@ func (s *ErrorPassthroughService) Delete(ctx context.Context, id int64) error {
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}
-	s.invalidateAndNotify(ctx)
+	refreshCtx, cancel := s.newCacheRefreshContext()
+	defer cancel()
+	s.invalidateAndNotify(refreshCtx)
 	return nil
 }
 
@@ -151,6 +161,10 @@ func (s *ErrorPassthroughService) refreshLocalCache(ctx context.Context) error {
 		}
 	}
 
+	return s.reloadRulesFromDB(ctx)
+}
+
+func (s *ErrorPassthroughService) reloadRulesFromDB(ctx context.Context) error {
 	rules, err := s.repo.List(ctx)
 	if err != nil {
 		return err
@@ -181,15 +195,28 @@ func (s *ErrorPassthroughService) setLocalCache(rules []*model.ErrorPassthroughR
 	s.localCacheMu.Unlock()
 }
 
+func (s *ErrorPassthroughService) clearLocalCache() {
+	s.localCacheMu.Lock()
+	s.localCache = nil
+	s.localCacheMu.Unlock()
+}
+
+func (s *ErrorPassthroughService) newCacheRefreshContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), 3*time.Second)
+}
+
 func (s *ErrorPassthroughService) invalidateAndNotify(ctx context.Context) {
 	if s.cache != nil {
 		if err := s.cache.Invalidate(ctx); err != nil {
 			log.Printf("[ErrorPassthroughService] cache invalidate failed: %v", err)
 		}
 	}
-	if err := s.refreshLocalCache(ctx); err != nil {
+
+	if err := s.reloadRulesFromDB(ctx); err != nil {
 		log.Printf("[ErrorPassthroughService] local refresh after write failed: %v", err)
+		s.clearLocalCache()
 	}
+
 	if s.cache != nil {
 		if err := s.cache.NotifyUpdate(ctx); err != nil {
 			log.Printf("[ErrorPassthroughService] cache notify failed: %v", err)

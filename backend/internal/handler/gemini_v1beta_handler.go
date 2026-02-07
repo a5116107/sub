@@ -216,6 +216,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 	// 1) user concurrency slot
 	streamStarted := false
+	if h.errorPassthroughService != nil {
+		service.BindErrorPassthroughService(c, h.errorPassthroughService)
+	}
 	userReleaseFunc, err := geminiConcurrency.AcquireUserSlotWithWait(c, authSubject.UserID, groupID, authSubject.Concurrency, stream, &streamStarted)
 	if err != nil {
 		googleError(c, http.StatusTooManyRequests, err.Error())
