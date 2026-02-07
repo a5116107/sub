@@ -55,6 +55,23 @@ func DefaultTransformOptions() TransformOptions {
 // webSearchFallbackModel web_search 请求使用的降级模型
 const webSearchFallbackModel = "gemini-2.5-flash"
 
+// MaxTokensBudgetPadding is applied when max_tokens must be raised above
+// thinking.budget_tokens for Claude-compatible validation.
+const MaxTokensBudgetPadding = 1000
+
+// Gemini25FlashThinkingBudgetLimit is the max thinking budget allowed for
+// gemini-2.5-flash.
+const Gemini25FlashThinkingBudgetLimit = 24576
+
+// ensureMaxTokensGreaterThanBudget guarantees max_tokens > budget_tokens.
+// Returns the (possibly adjusted) max_tokens and whether adjustment happened.
+func ensureMaxTokensGreaterThanBudget(maxTokens, budgetTokens int) (int, bool) {
+	if budgetTokens > 0 && maxTokens <= budgetTokens {
+		return budgetTokens + MaxTokensBudgetPadding, true
+	}
+	return maxTokens, false
+}
+
 // TransformClaudeToGemini 将 Claude 请求转换为 v1internal Gemini 格式
 func TransformClaudeToGemini(claudeReq *ClaudeRequest, projectID, mappedModel string) ([]byte, error) {
 	return TransformClaudeToGeminiWithOptions(claudeReq, projectID, mappedModel, DefaultTransformOptions())
@@ -527,11 +544,22 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 		}
 		if req.Thinking.BudgetTokens > 0 {
 			budget := req.Thinking.BudgetTokens
-			// gemini-2.5-flash 上限 24576
-			if strings.Contains(req.Model, "gemini-2.5-flash") && budget > 24576 {
-				budget = 24576
+			// gemini-2.5-flash budget upper bound.
+			if strings.Contains(req.Model, "gemini-2.5-flash") && budget > Gemini25FlashThinkingBudgetLimit {
+				budget = Gemini25FlashThinkingBudgetLimit
 			}
 			config.ThinkingConfig.ThinkingBudget = budget
+
+			// Claude API requires max_tokens > thinking.budget_tokens.
+			if adjusted, changed := ensureMaxTokensGreaterThanBudget(config.MaxOutputTokens, budget); changed {
+				log.Printf(
+					"[Antigravity] Auto-adjusted max_tokens from %d to %d (must be > budget_tokens=%d)",
+					config.MaxOutputTokens,
+					adjusted,
+					budget,
+				)
+				config.MaxOutputTokens = adjusted
+			}
 		}
 	}
 

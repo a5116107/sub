@@ -46,6 +46,49 @@ func TestBuildGenerationConfig_MaxOutputTokensLimit(t *testing.T) {
 	}
 }
 
+func TestBuildGenerationConfig_ThinkingBudgetAutoAdjustsMaxTokens(t *testing.T) {
+	t.Run("auto adjust when max_tokens <= budget_tokens", func(t *testing.T) {
+		req := &ClaudeRequest{
+			Model:     "gemini-2.5-pro",
+			MaxTokens: 8000,
+			Thinking: &ThinkingConfig{
+				Type:         "enabled",
+				BudgetTokens: 8000,
+			},
+		}
+
+		cfg := buildGenerationConfig(req)
+		want := 8000 + MaxTokensBudgetPadding
+		if cfg.MaxOutputTokens != want {
+			t.Fatalf("MaxOutputTokens = %d, want %d", cfg.MaxOutputTokens, want)
+		}
+		if cfg.ThinkingConfig == nil || cfg.ThinkingConfig.ThinkingBudget != 8000 {
+			t.Fatalf("ThinkingBudget = %v, want %d", cfg.ThinkingConfig, 8000)
+		}
+	})
+
+	t.Run("clamp flash budget and adjust max_tokens to clamped budget", func(t *testing.T) {
+		req := &ClaudeRequest{
+			Model:     "gemini-2.5-flash",
+			MaxTokens: 1000,
+			Thinking: &ThinkingConfig{
+				Type:         "enabled",
+				BudgetTokens: Gemini25FlashThinkingBudgetLimit + 1000,
+			},
+		}
+
+		cfg := buildGenerationConfig(req)
+		clampedBudget := Gemini25FlashThinkingBudgetLimit
+		wantMax := clampedBudget + MaxTokensBudgetPadding
+		if cfg.ThinkingConfig == nil || cfg.ThinkingConfig.ThinkingBudget != clampedBudget {
+			t.Fatalf("ThinkingBudget = %v, want %d", cfg.ThinkingConfig, clampedBudget)
+		}
+		if cfg.MaxOutputTokens != wantMax {
+			t.Fatalf("MaxOutputTokens = %d, want %d", cfg.MaxOutputTokens, wantMax)
+		}
+	})
+}
+
 // TestBuildParts_ThinkingBlockWithoutSignature 测试thinking block无signature时的处理
 func TestBuildParts_ThinkingBlockWithoutSignature(t *testing.T) {
 	tests := []struct {
