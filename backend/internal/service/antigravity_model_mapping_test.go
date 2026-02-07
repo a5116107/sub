@@ -136,16 +136,16 @@ func TestAntigravityGatewayService_GetMappedModel(t *testing.T) {
 
 		// 3. Gemini 透传
 		{
-			name:           "Gemini透传 - gemini-2.5-flash",
+			name:           "Gemini映射 - gemini-2.5-flash → gemini-3-flash",
 			requestedModel: "gemini-2.5-flash",
 			accountMapping: nil,
-			expected:       "gemini-2.5-flash",
+			expected:       "gemini-3-flash",
 		},
 		{
-			name:           "Gemini透传 - gemini-2.5-pro",
+			name:           "Gemini映射 - gemini-2.5-pro → gemini-3-pro-high",
 			requestedModel: "gemini-2.5-pro",
 			accountMapping: nil,
-			expected:       "gemini-2.5-pro",
+			expected:       "gemini-3-pro-high",
 		},
 		{
 			name:           "Gemini透传 - gemini-future-model",
@@ -166,6 +166,12 @@ func TestAntigravityGatewayService_GetMappedModel(t *testing.T) {
 			requestedModel: "claude-opus-4-5-thinking",
 			accountMapping: nil,
 			expected:       "claude-opus-4-5-thinking",
+		},
+		{
+			name:           "系统映射 - claude-opus-4-6",
+			requestedModel: "claude-opus-4-6",
+			accountMapping: nil,
+			expected:       "claude-opus-4-6-thinking",
 		},
 		{
 			name:           "直接支持 - claude-sonnet-4-5-thinking",
