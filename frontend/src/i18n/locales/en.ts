@@ -2117,6 +2117,8 @@ export default {
       failedToImport: 'Failed to batch import',
       exportData: 'Export Data',
       importData: 'Import Data',
+      exportDataShort: 'Export',
+      importDataShort: 'Import',
       exporting: 'Exporting...',
       importingData: 'Importing data...',
       exportSuccess: 'Data exported successfully',

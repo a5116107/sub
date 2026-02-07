@@ -1401,6 +1401,8 @@ export default {
       syncFailed: '同步失败',
       exportData: '导出数据',
       importData: '导入数据',
+      exportDataShort: '导出',
+      importDataShort: '导入',
       exporting: '导出中...',
       importingData: '导入数据中...',
       exportSuccess: '数据导出成功',

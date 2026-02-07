@@ -3,11 +3,11 @@
     <TablePageLayout>
       <template #filters>
         <!-- Top Toolbar: Left (search + filters) / Right (actions) -->
-        <div class="flex flex-wrap items-start justify-between gap-4">
-          <!-- Left: Fuzzy search + filters (wrap to multiple lines) -->
-          <div class="flex flex-1 flex-wrap items-center gap-3">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <!-- Left: Fuzzy search + filters -->
+          <div class="flex flex-wrap items-center gap-2">
             <!-- Search -->
-            <div class="relative w-full sm:w-64">
+            <div class="relative min-w-0 flex-1 lg:w-48 lg:flex-none">
               <Icon
                 name="search"
                 size="md"
@@ -23,7 +23,7 @@
             </div>
 
             <!-- Filters -->
-            <div class="w-full sm:w-40">
+            <div class="w-28 lg:w-36">
               <Select
                 v-model="filters.protocol"
                 :options="protocolOptions"
@@ -31,7 +31,7 @@
                 @change="loadProxies"
               />
             </div>
-            <div class="w-full sm:w-36">
+            <div class="w-24 lg:w-32">
               <Select
                 v-model="filters.status"
                 :options="statusOptions"
@@ -42,11 +42,11 @@
           </div>
 
           <!-- Right: Actions -->
-          <div class="ml-auto flex flex-wrap items-center justify-end gap-3">
+          <div class="flex flex-wrap items-center gap-2">
             <button
               @click="loadProxies"
               :disabled="loading"
-              class="btn btn-secondary"
+              class="btn btn-secondary btn-sm lg:btn-md"
               :title="t('common.refresh')"
             >
               <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
@@ -54,20 +54,22 @@
             <button
               @click="handleExportData"
               :disabled="exportingData"
-              class="btn btn-secondary"
+              class="btn btn-secondary btn-sm lg:btn-md"
               :title="t('admin.proxies.exportData')"
             >
-              <Icon name="download" size="md" class="mr-2" />
-              {{ exportingData ? t('admin.proxies.exporting') : t('admin.proxies.exportData') }}
+              <Icon name="download" size="md" class="lg:mr-2" />
+              <span class="lg:hidden">{{ t('admin.proxies.exportDataShort') }}</span>
+              <span class="hidden lg:inline">{{ exportingData ? t('admin.proxies.exporting') : t('admin.proxies.exportData') }}</span>
             </button>
             <button
               @click="openImportDataFilePicker"
               :disabled="importingData"
-              class="btn btn-secondary"
+              class="btn btn-secondary btn-sm lg:btn-md"
               :title="t('admin.proxies.importData')"
             >
-              <Icon name="upload" size="md" class="mr-2" />
-              {{ importingData ? t('admin.proxies.importingData') : t('admin.proxies.importData') }}
+              <Icon name="upload" size="md" class="lg:mr-2" />
+              <span class="lg:hidden">{{ t('admin.proxies.importDataShort') }}</span>
+              <span class="hidden lg:inline">{{ importingData ? t('admin.proxies.importingData') : t('admin.proxies.importData') }}</span>
             </button>
             <input
               ref="importDataInput"
@@ -79,24 +81,24 @@
             <button
               @click="handleBatchTest"
               :disabled="batchTesting || loading"
-              class="btn btn-secondary"
+              class="btn btn-secondary btn-sm lg:btn-md"
               :title="t('admin.proxies.testConnection')"
             >
-              <Icon name="play" size="md" class="mr-2" />
-              {{ t('admin.proxies.testConnection') }}
+              <Icon name="play" size="md" class="lg:mr-2" />
+              <span class="hidden lg:inline">{{ t('admin.proxies.testConnection') }}</span>
             </button>
             <button
               @click="openBatchDelete"
               :disabled="selectedCount === 0"
-              class="btn btn-danger"
+              class="btn btn-danger btn-sm lg:btn-md"
               :title="t('admin.proxies.batchDeleteAction')"
             >
-              <Icon name="trash" size="md" class="mr-2" />
-              {{ t('admin.proxies.batchDeleteAction') }}
+              <Icon name="trash" size="md" class="lg:mr-2" />
+              <span class="hidden lg:inline">{{ t('admin.proxies.batchDeleteAction') }}</span>
             </button>
-            <button @click="showCreateModal = true" class="btn btn-primary">
-              <Icon name="plus" size="md" class="mr-2" />
-              {{ t('admin.proxies.createProxy') }}
+            <button @click="showCreateModal = true" class="btn btn-primary btn-sm lg:btn-md">
+              <Icon name="plus" size="md" class="lg:mr-2" />
+              <span class="hidden lg:inline">{{ t('admin.proxies.createProxy') }}</span>
             </button>
           </div>
         </div>
