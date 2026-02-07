@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/stretchr/testify/require"
 )
@@ -154,6 +155,45 @@ func TestAntigravityHandleUpstreamError_UsesAccountLimitWhenScopeDisabled(t *tes
 	call := repo.rateCalls[0]
 	require.Equal(t, account.ID, call.accountID)
 	require.WithinDuration(t, time.Now().Add(2*time.Second), call.resetAt, 2*time.Second)
+}
+
+func TestAntigravityHandleUpstreamError_FallbackCooldownDefaultsTo30Seconds(t *testing.T) {
+	t.Setenv(antigravityScopeRateLimitEnv, "false")
+	repo := &stubAntigravityAccountRepo{}
+	svc := &AntigravityGatewayService{accountRepo: repo}
+	account := &Account{ID: 11, Name: "acc-11", Platform: PlatformAntigravity}
+
+	body := []byte(`{"error":{"message":"Resource has been exhausted"}}`)
+	now := time.Now()
+	svc.handleUpstreamError(context.Background(), "[test]", account, http.StatusTooManyRequests, http.Header{}, body, AntigravityQuotaScopeClaude)
+
+	require.Len(t, repo.rateCalls, 1)
+	require.Empty(t, repo.scopeCalls)
+	call := repo.rateCalls[0]
+	require.Equal(t, account.ID, call.accountID)
+	require.WithinDuration(t, now.Add(30*time.Second), call.resetAt, 3*time.Second)
+}
+
+func TestAntigravityHandleUpstreamError_FallbackCooldownRespectsConfigMinutes(t *testing.T) {
+	t.Setenv(antigravityScopeRateLimitEnv, "false")
+	repo := &stubAntigravityAccountRepo{}
+	cfg := &config.Config{}
+	cfg.Gateway.AntigravityFallbackCooldownMinutes = 2
+	svc := &AntigravityGatewayService{
+		accountRepo:    repo,
+		settingService: &SettingService{cfg: cfg},
+	}
+	account := &Account{ID: 12, Name: "acc-12", Platform: PlatformAntigravity}
+
+	body := []byte(`{"error":{"message":"Resource has been exhausted"}}`)
+	now := time.Now()
+	svc.handleUpstreamError(context.Background(), "[test]", account, http.StatusTooManyRequests, http.Header{}, body, AntigravityQuotaScopeClaude)
+
+	require.Len(t, repo.rateCalls, 1)
+	require.Empty(t, repo.scopeCalls)
+	call := repo.rateCalls[0]
+	require.Equal(t, account.ID, call.accountID)
+	require.WithinDuration(t, now.Add(2*time.Minute), call.resetAt, 3*time.Second)
 }
 
 func TestAccountIsSchedulableForModel_AntigravityRateLimits(t *testing.T) {
