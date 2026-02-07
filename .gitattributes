@@ -7,6 +7,14 @@ backend/migrations/*.sql text eol=lf
 *.mod text eol=lf
 *.sum text eol=lf
 
+# Keep shell and yaml config files stable across platforms.
+*.sh text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Keep Dockerfiles with LF to avoid build-script surprises on Windows.
+Dockerfile text eol=lf
+
 # Keep repo config files line endings stable across platforms.
 .gitattributes text eol=lf
 .gitignore text eol=lf
