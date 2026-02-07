@@ -563,6 +563,10 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 		}
 	}
 
+	if config.MaxOutputTokens > maxLimit {
+		config.MaxOutputTokens = maxLimit
+	}
+
 	// 其他参数
 	if req.Temperature != nil {
 		config.Temperature = req.Temperature
