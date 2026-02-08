@@ -485,6 +485,42 @@ func (s *AccountRepoSuite) TestSetRateLimited() {
 	s.Require().WithinDuration(resetAt, *got.RateLimitResetAt, time.Second)
 }
 
+func (s *AccountRepoSuite) TestSetRateLimited_SyncSchedulerSnapshot() {
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-rl-sync"})
+	cacheRecorder := &schedulerCacheRecorder{}
+	s.repo.schedulerCache = cacheRecorder
+
+	resetAt := time.Now().UTC().Add(10 * time.Minute)
+	s.Require().NoError(s.repo.SetRateLimited(s.ctx, account.ID, resetAt))
+
+	s.Require().Len(cacheRecorder.setAccounts, 1)
+	s.Require().Equal(account.ID, cacheRecorder.setAccounts[0].ID)
+}
+
+func (s *AccountRepoSuite) TestSetAntigravityQuotaScopeLimit_SyncSchedulerSnapshot() {
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-quota-sync"})
+	cacheRecorder := &schedulerCacheRecorder{}
+	s.repo.schedulerCache = cacheRecorder
+
+	resetAt := time.Now().UTC().Add(15 * time.Minute)
+	s.Require().NoError(s.repo.SetAntigravityQuotaScopeLimit(s.ctx, account.ID, service.AntigravityQuotaScopeClaude, resetAt))
+
+	s.Require().Len(cacheRecorder.setAccounts, 1)
+	s.Require().Equal(account.ID, cacheRecorder.setAccounts[0].ID)
+}
+
+func (s *AccountRepoSuite) TestSetModelRateLimit_SyncSchedulerSnapshot() {
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-model-rl-sync"})
+	cacheRecorder := &schedulerCacheRecorder{}
+	s.repo.schedulerCache = cacheRecorder
+
+	resetAt := time.Now().UTC().Add(20 * time.Minute)
+	s.Require().NoError(s.repo.SetModelRateLimit(s.ctx, account.ID, "claude-sonnet", resetAt))
+
+	s.Require().Len(cacheRecorder.setAccounts, 1)
+	s.Require().Equal(account.ID, cacheRecorder.setAccounts[0].ID)
+}
+
 func (s *AccountRepoSuite) TestClearRateLimit() {
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-clear"})
 	until := time.Now().Add(1 * time.Hour)
