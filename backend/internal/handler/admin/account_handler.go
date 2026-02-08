@@ -1270,6 +1270,12 @@ func (h *AccountHandler) SetSchedulable(c *gin.Context) {
 	response.Success(c, dto.AccountFromService(account))
 }
 
+// GetAntigravityDefaultModelMapping returns backend canonical antigravity default model mapping.
+// GET /api/v1/admin/accounts/antigravity/default-model-mapping
+func (h *AccountHandler) GetAntigravityDefaultModelMapping(c *gin.Context) {
+	response.Success(c, service.GetAntigravityDefaultModelMapping())
+}
+
 // GetAvailableModels handles getting available models for an account
 // GET /api/v1/admin/accounts/:id/models
 func (h *AccountHandler) GetAvailableModels(c *gin.Context) {

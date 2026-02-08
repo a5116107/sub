@@ -2081,7 +2081,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
-import { claudeModels, getPresetMappingsByPlatform, getModelsByPlatform, commonErrorCodes, buildModelMappingObject } from '@/composables/useModelWhitelist'
+import { claudeModels, getPresetMappingsByPlatform, getModelsByPlatform, commonErrorCodes, buildModelMappingObject, fetchAntigravityDefaultMappings } from '@/composables/useModelWhitelist'
 import { useAuthStore } from '@/stores/auth'
 import { adminAPI } from '@/api/admin'
 import {
@@ -2419,6 +2419,8 @@ watch(
     // Antigravity only supports OAuth
     if (newPlatform === 'antigravity') {
       accountCategory.value = 'oauth-based'
+      modelRestrictionMode.value = 'mapping'
+      void applyAntigravityDefaultMappings()
     }
     // iFlow only supports API Key onboarding (MVP)
     if (newPlatform === 'iflow') {
@@ -2466,12 +2468,21 @@ const handleSelectGeminiOAuthType = (oauthType: 'code_assist' | 'google_one' | '
   geminiOAuthType.value = oauthType
 }
 
+const applyAntigravityDefaultMappings = async () => {
+  const mappings = await fetchAntigravityDefaultMappings()
+  modelMappings.value = [...mappings]
+}
+
 // Auto-fill related models when switching to whitelist mode or changing platform
 watch(
   [modelRestrictionMode, () => form.platform],
   ([newMode]) => {
     if (newMode === 'whitelist') {
       allowedModels.value = [...getModelsByPlatform(form.platform)]
+      return
+    }
+    if (newMode === 'mapping' && form.platform === 'antigravity' && modelMappings.value.length === 0) {
+      void applyAntigravityDefaultMappings()
     }
   }
 )

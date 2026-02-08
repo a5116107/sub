@@ -326,11 +326,47 @@ var antigravityPrefixMapping = []struct {
 	{"claude-haiku-4-5", "claude-sonnet-4-5"},  // claude-haiku-4-5-xxx → sonnet
 	{"claude-opus-4-6", "claude-opus-4-6-thinking"},
 	{"claude-opus-4-5", "claude-opus-4-5-thinking"},
-	{"claude-opus-4-6", "claude-opus-4-6-thinking"},
 	{"claude-3-haiku", "claude-sonnet-4-5"}, // 旧版 claude-3-haiku-xxx → sonnet
 	{"claude-sonnet-4", "claude-sonnet-4-5"},
 	{"claude-haiku-4", "claude-sonnet-4-5"}, // → sonnet
 	{"claude-opus-4", "claude-opus-4-5-thinking"},
+}
+
+var antigravityDefaultModelMapping = map[string]string{
+	"claude-opus-4-6":            "claude-opus-4-6-thinking",
+	"claude-opus-4-5-thinking":   "claude-opus-4-5-thinking",
+	"claude-opus-4-5-20251101":   "claude-opus-4-5-thinking",
+	"claude-sonnet-4-5":          "claude-sonnet-4-5",
+	"claude-sonnet-4-5-thinking": "claude-sonnet-4-5-thinking",
+	"claude-sonnet-4-5-20250929": "claude-sonnet-4-5",
+	"claude-haiku-4-5":           "claude-sonnet-4-5",
+	"claude-haiku-4-5-20251001":  "claude-sonnet-4-5",
+	"claude-3-5-sonnet-20241022": "claude-sonnet-4-5",
+	"claude-3-5-sonnet-20240620": "claude-sonnet-4-5",
+	"claude-3-haiku-20240307":    "claude-sonnet-4-5",
+	"gemini-3-flash":             "gemini-3-flash",
+	"gemini-3-pro-low":           "gemini-3-pro-low",
+	"gemini-3-pro-high":          "gemini-3-pro-high",
+	"gemini-3-pro-image":         "gemini-3-pro-image",
+	"gemini-3-flash-preview":     "gemini-3-flash",
+	"gemini-3-pro-preview":       "gemini-3-pro-high",
+	"gemini-3-pro-image-preview": "gemini-3-pro-image",
+	"gemini-2.5-flash":           "gemini-3-flash",
+	"gemini-2.5-flash-lite":      "gemini-3-flash",
+	"gemini-2.5-flash-thinking":  "gemini-3-flash",
+	"gemini-2.5-pro":             "gemini-3-pro-high",
+	"gemini-2.5-pro-preview":     "gemini-3-pro-high",
+	"gemini-2.5-pro-exp":         "gemini-3-pro-high",
+	"gpt-oss-120b-medium":        "gpt-oss-120b-medium",
+	"tab_flash_lite_preview":     "tab_flash_lite_preview",
+}
+
+func GetAntigravityDefaultModelMapping() map[string]string {
+	result := make(map[string]string, len(antigravityDefaultModelMapping))
+	for from, to := range antigravityDefaultModelMapping {
+		result[from] = to
+	}
+	return result
 }
 
 // AntigravityGatewayService 处理 Antigravity 平台的 API 转发

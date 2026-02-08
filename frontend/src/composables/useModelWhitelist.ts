@@ -1,3 +1,5 @@
+import { getAntigravityDefaultModelMapping } from '@/api/admin/accounts'
+
 // =====================
 // 模型列表（硬编码，与 new-api 一致）
 // =====================
@@ -237,6 +239,23 @@ const geminiPresetMappings = [
   { label: '2.5 Flash', from: 'gemini-2.5-flash', to: 'gemini-2.5-flash', color: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400' },
   { label: '2.5 Pro', from: 'gemini-2.5-pro', to: 'gemini-2.5-pro', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400' }
 ]
+
+let antigravityDefaultMappingsCache: { from: string; to: string }[] | null = null
+
+export async function fetchAntigravityDefaultMappings(): Promise<{ from: string; to: string }[]> {
+  if (antigravityDefaultMappingsCache) {
+    return antigravityDefaultMappingsCache
+  }
+
+  try {
+    const mapping = await getAntigravityDefaultModelMapping()
+    antigravityDefaultMappingsCache = Object.entries(mapping).map(([from, to]) => ({ from, to }))
+  } catch (error) {
+    console.warn('[useModelWhitelist] failed to fetch antigravity default mappings', error)
+    antigravityDefaultMappingsCache = []
+  }
+  return antigravityDefaultMappingsCache
+}
 
 // =====================
 // 常用错误码

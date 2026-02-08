@@ -368,6 +368,11 @@ export async function getAvailableModels(id: number): Promise<ClaudeModel[]> {
   return data
 }
 
+export async function getAntigravityDefaultModelMapping(): Promise<Record<string, string>> {
+  const { data } = await apiClient.get<Record<string, string>>('/admin/accounts/antigravity/default-model-mapping')
+  return data
+}
+
 export async function syncFromCrs(params: {
   base_url: string
   username: string
@@ -444,6 +449,7 @@ export const accountsAPI = {
   resetTempUnschedulable,
   setSchedulable,
   getAvailableModels,
+  getAntigravityDefaultModelMapping,
   generateAuthUrl,
   exchangeCode,
   batchCreate,
