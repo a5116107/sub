@@ -632,3 +632,10 @@ func extractGeminiCLISessionHash(c *gin.Context, body []byte) string {
 	// 如果没有 privileged-user-id，直接使用 tmp 目录哈希
 	return tmpDirHash
 }
+
+func safeShortPrefix(value string, n int) string {
+	if n <= 0 || len(value) <= n {
+		return value
+	}
+	return value[:n]
+}
