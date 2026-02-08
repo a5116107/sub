@@ -98,7 +98,7 @@
         </div>
 
         <!-- Promo Code Input (Optional) -->
-        <div v-if="promoCodeEnabled">
+        <div v-if="registrationCodeEnabled">
           <label for="promo_code" class="input-label">
             {{ t('auth.promoCodeLabel') }}
             <span class="ml-1 text-xs font-normal text-gray-400 dark:text-dark-500">({{ t('common.optional') }})</span>
@@ -246,10 +246,13 @@ const showPassword = ref<boolean>(false)
 const registrationEnabled = ref<boolean>(true)
 const emailVerifyEnabled = ref<boolean>(false)
 const promoCodeEnabled = ref<boolean>(true)
+const invitationCodeEnabled = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>('Sub2API')
 const linuxdoOAuthEnabled = ref<boolean>(false)
+const registrationCodeEnabled = computed(() => promoCodeEnabled.value || invitationCodeEnabled.value)
+const invitationOnlyMode = computed(() => invitationCodeEnabled.value && !promoCodeEnabled.value)
 
 // Turnstile
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
@@ -285,18 +288,21 @@ onMounted(async () => {
     registrationEnabled.value = settings.registration_enabled
     emailVerifyEnabled.value = settings.email_verify_enabled
     promoCodeEnabled.value = settings.promo_code_enabled
+    invitationCodeEnabled.value = settings.invitation_code_enabled
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     siteName.value = settings.site_name || 'Sub2API'
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
 
     // Read promo code from URL parameter only if promo code is enabled
-    if (promoCodeEnabled.value) {
+    if (registrationCodeEnabled.value) {
       const promoParam = route.query.promo as string
       if (promoParam) {
         formData.promo_code = promoParam
-        // Validate the promo code from URL
-        await validatePromoCodeDebounced(promoParam)
+        // Validate only in promo mode; invitation-only mode is validated by backend on submit.
+        if (!invitationOnlyMode.value) {
+          await validatePromoCodeDebounced(promoParam)
+        }
       }
     }
   } catch (error) {
@@ -324,6 +330,12 @@ function handlePromoCodeInput(): void {
   promoValidation.message = ''
 
   if (!code) {
+    promoValidating.value = false
+    return
+  }
+
+  // 邀请码专用模式由后端校验，前端不走优惠码接口验证
+  if (invitationOnlyMode.value) {
     promoValidating.value = false
     return
   }
@@ -456,7 +468,7 @@ async function handleRegister(): Promise<void> {
   }
 
   // Check promo code validation status
-  if (formData.promo_code.trim()) {
+  if (promoCodeEnabled.value && formData.promo_code.trim()) {
     // If promo code is being validated, wait
     if (promoValidating.value) {
       errorMessage.value = t('auth.promoCodeValidating')
@@ -482,6 +494,7 @@ async function handleRegister(): Promise<void> {
           password: formData.password,
           turnstile_token: turnstileToken.value,
           promo_code: formData.promo_code || undefined,
+          invitation_code: invitationCodeEnabled.value ? formData.promo_code || undefined : undefined,
           redirect: safeRedirect.value || undefined
         })
       )
@@ -500,7 +513,8 @@ async function handleRegister(): Promise<void> {
       email: formData.email,
       password: formData.password,
       turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined,
-      promo_code: formData.promo_code || undefined
+      promo_code: formData.promo_code || undefined,
+      invitation_code: invitationCodeEnabled.value ? formData.promo_code || undefined : undefined
     })
 
     // Show success toast

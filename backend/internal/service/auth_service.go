@@ -33,6 +33,8 @@ var (
 	ErrRefreshTokenExpired = infraerrors.Unauthorized("REFRESH_TOKEN_EXPIRED", "refresh token has expired")
 	ErrRefreshTokenReused  = infraerrors.Unauthorized("REFRESH_TOKEN_REUSED", "refresh token has been reused")
 	ErrEmailVerifyRequired = infraerrors.BadRequest("EMAIL_VERIFY_REQUIRED", "email verification is required")
+	ErrInvitationCodeRequired = infraerrors.BadRequest("INVITATION_CODE_REQUIRED", "invitation code is required")
+	ErrInvitationCodeInvalid  = infraerrors.BadRequest("INVITATION_CODE_INVALID", "invalid or used invitation code")
 	ErrRegDisabled         = infraerrors.Forbidden("REGISTRATION_DISABLED", "registration is currently disabled")
 	ErrServiceUnavailable  = infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "service temporarily unavailable")
 )
@@ -93,11 +95,11 @@ func NewAuthService(
 
 // Register 用户注册，返回token和用户
 func (s *AuthService) Register(ctx context.Context, email, password string) (string, *User, error) {
-	return s.RegisterWithVerification(ctx, email, password, "", "")
+	return s.RegisterWithVerification(ctx, email, password, "", "", "")
 }
 
 // RegisterWithVerification 用户注册（支持邮件验证和优惠码），返回token和用户
-func (s *AuthService) RegisterWithVerification(ctx context.Context, email, password, verifyCode, promoCode string) (string, *User, error) {
+func (s *AuthService) RegisterWithVerification(ctx context.Context, email, password, verifyCode, promoCode, invitationCode string) (string, *User, error) {
 	// 检查是否开放注册（默认关闭：settingService 未配置时不允许注册）
 	if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
 		return "", nil, ErrRegDisabled
@@ -106,6 +108,28 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	// 防止用户注册 LinuxDo OAuth 合成邮箱，避免第三方登录与本地账号发生碰撞。
 	if isReservedEmail(email) {
 		return "", nil, ErrEmailReserved
+	}
+
+	// 邀请码开关开启时：邀请码必填并预校验（兼容旧端通过 promo_code 传邀请码）
+	invitationCandidate := strings.TrimSpace(invitationCode)
+	if s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx) {
+		if invitationCandidate == "" {
+			invitationCandidate = strings.TrimSpace(promoCode)
+		}
+		if invitationCandidate == "" {
+			return "", nil, ErrInvitationCodeRequired
+		}
+		inviter, err := s.userRepo.GetByInviteCode(ctx, invitationCandidate)
+		if err != nil {
+			if errors.Is(err, ErrUserNotFound) {
+				return "", nil, ErrInvitationCodeInvalid
+			}
+			log.Printf("[Auth] Invitation code lookup failed: %v", err)
+			return "", nil, ErrServiceUnavailable
+		}
+		if inviter == nil || !inviter.IsActive() {
+			return "", nil, ErrInvitationCodeInvalid
+		}
 	}
 
 	// 检查是否需要邮件验证
@@ -173,40 +197,38 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		log.Printf("[Auth] Failed to ensure invite code for user %d: %v", user.ID, err)
 	}
 
-	// Apply registration code (promo code or user invite code), best-effort.
-	code := strings.TrimSpace(promoCode)
-	if code != "" && s.settingService != nil && s.settingService.IsPromoCodeEnabled(ctx) {
-		changed := false
+	changed := false
 
-		// 1) Promo codes (admin-managed)
-		if s.promoService != nil {
-			if _, err := s.promoService.ValidatePromoCode(ctx, code); err == nil {
-				if err := s.promoService.ApplyPromoCode(ctx, user.ID, code); err != nil {
-					log.Printf("[Auth] Failed to apply promo code for user %d: %v", user.ID, err)
-				} else {
-					changed = true
-				}
-			} else if !errors.Is(err, ErrPromoCodeNotFound) {
-				// If this is a real promo code but not usable (expired/disabled/maxed), don't treat it as invite code.
-				log.Printf("[Auth] Promo code validation failed for user %d: %v", user.ID, err)
+	// Apply invitation code first (dedicated field, or promo_code compatibility fallback when required).
+	if invitationCandidate == "" {
+		invitationCandidate = strings.TrimSpace(invitationCode)
+	}
+	if invitationCandidate != "" {
+		if applied, err := s.applyInviteCode(ctx, user, invitationCandidate); err != nil {
+			log.Printf("[Auth] Failed to apply invite code for user %d: %v", user.ID, err)
+		} else if applied {
+			changed = true
+		}
+	}
+
+	// Apply promo code (admin-managed), if enabled.
+	promo := strings.TrimSpace(promoCode)
+	if promo != "" && s.promoService != nil && s.settingService != nil && s.settingService.IsPromoCodeEnabled(ctx) {
+		if _, err := s.promoService.ValidatePromoCode(ctx, promo); err == nil {
+			if err := s.promoService.ApplyPromoCode(ctx, user.ID, promo); err != nil {
+				log.Printf("[Auth] Failed to apply promo code for user %d: %v", user.ID, err)
+			} else {
 				changed = true
 			}
+		} else if !errors.Is(err, ErrPromoCodeNotFound) {
+			log.Printf("[Auth] Promo code validation failed for user %d: %v", user.ID, err)
 		}
+	}
 
-		// 2) User invite codes (per-user referral)
-		if !changed {
-			if applied, err := s.applyInviteCode(ctx, user, code); err != nil {
-				log.Printf("[Auth] Failed to apply invite code for user %d: %v", user.ID, err)
-			} else if applied {
-				changed = true
-			}
-		}
-
-		if changed {
-			// Reload user for updated balance/invite metadata.
-			if updatedUser, err := s.userRepo.GetByID(ctx, user.ID); err == nil {
-				user = updatedUser
-			}
+	if changed {
+		// Reload user for updated balance/invite metadata.
+		if updatedUser, err := s.userRepo.GetByID(ctx, user.ID); err == nil {
+			user = updatedUser
 		}
 	}
 

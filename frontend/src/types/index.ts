@@ -56,6 +56,7 @@ export interface RegisterRequest {
   verify_code?: string
   turnstile_token?: string
   promo_code?: string
+  invitation_code?: string
 }
 
 export interface SendVerifyCodeRequest {
@@ -72,6 +73,7 @@ export interface PublicSettings {
   registration_enabled: boolean
   email_verify_enabled: boolean
   promo_code_enabled: boolean
+  invitation_code_enabled: boolean
   password_reset_enabled: boolean
   turnstile_enabled: boolean
   turnstile_site_key: string
