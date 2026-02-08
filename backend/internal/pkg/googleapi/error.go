@@ -2,6 +2,7 @@ package googleapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -36,7 +37,7 @@ type HelpLink struct {
 func ParseError(body string) (*ErrorResponse, error) {
 	var errResp ErrorResponse
 	if err := json.Unmarshal([]byte(body), &errResp); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse error response: %w", err)
 	}
 	return &errResp, nil
 }
