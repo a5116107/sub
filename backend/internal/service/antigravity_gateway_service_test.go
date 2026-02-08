@@ -81,3 +81,30 @@ func TestStripThinkingFromClaudeRequest_DoesNotDowngradeTools(t *testing.T) {
 	require.Equal(t, "secret plan", blocks[0]["text"])
 	require.Equal(t, "tool_use", blocks[1]["type"])
 }
+
+func TestAntigravityMaxRetriesForModel_AfterSwitch(t *testing.T) {
+	t.Setenv(antigravityMaxRetriesEnv, "4")
+	t.Setenv(antigravityMaxRetriesAfterSwitchEnv, "7")
+	t.Setenv(antigravityMaxRetriesAfterSwitchAlt, "")
+	t.Setenv(antigravityMaxRetriesClaudeEnv, "")
+	t.Setenv(antigravityMaxRetriesGeminiTextEnv, "")
+	t.Setenv(antigravityMaxRetriesGeminiImageEnv, "")
+
+	got := antigravityMaxRetriesForModel("claude-sonnet-4-5", false)
+	require.Equal(t, 4, got)
+
+	got = antigravityMaxRetriesForModel("claude-sonnet-4-5", true)
+	require.Equal(t, 7, got)
+}
+
+func TestAntigravityMaxRetriesForModel_AfterSwitchFallback(t *testing.T) {
+	t.Setenv(antigravityMaxRetriesEnv, "5")
+	t.Setenv(antigravityMaxRetriesAfterSwitchEnv, "")
+	t.Setenv(antigravityMaxRetriesAfterSwitchAlt, "")
+	t.Setenv(antigravityMaxRetriesClaudeEnv, "")
+	t.Setenv(antigravityMaxRetriesGeminiTextEnv, "")
+	t.Setenv(antigravityMaxRetriesGeminiImageEnv, "")
+
+	got := antigravityMaxRetriesForModel("gemini-2.5-flash", true)
+	require.Equal(t, 5, got)
+}

@@ -33,6 +33,8 @@ const (
 
 const (
 	antigravityMaxRetriesEnv            = "GATEWAY_ANTIGRAVITY_MAX_RETRIES"
+	antigravityMaxRetriesAfterSwitchEnv = "GATEWAY_ANTIGRAVITY_AFTER_SWITCHMAX_RETRIES"
+	antigravityMaxRetriesAfterSwitchAlt = "GATEWAY_ANTIGRAVITY_AFTER_SWITCH_MAX_RETRIES"
 	antigravityMaxRetriesClaudeEnv      = "GATEWAY_ANTIGRAVITY_MAX_RETRIES_CLAUDE"
 	antigravityMaxRetriesGeminiTextEnv  = "GATEWAY_ANTIGRAVITY_MAX_RETRIES_GEMINI_TEXT"
 	antigravityMaxRetriesGeminiImageEnv = "GATEWAY_ANTIGRAVITY_MAX_RETRIES_GEMINI_IMAGE"
@@ -794,6 +796,8 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 	if antigravityUseMappedModelForBilling() && strings.TrimSpace(mappedModel) != "" {
 		billingModel = mappedModel
 	}
+	afterSwitch := antigravityHasAccountSwitch(ctx)
+	maxRetries := antigravityMaxRetriesForModel(originalModel, afterSwitch)
 
 	// 获取 access_token
 	if s.tokenProvider == nil {
@@ -842,7 +846,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		httpUpstream:   s.httpUpstream,
 		settingService: s.settingService,
 		handleError:    s.handleUpstreamError,
-		maxRetries:     antigravityMaxRetriesForModel(originalModel),
+		maxRetries:     maxRetries,
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -926,7 +930,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 					httpUpstream:   s.httpUpstream,
 					settingService: s.settingService,
 					handleError:    s.handleUpstreamError,
-					maxRetries:     antigravityMaxRetriesForModel(originalModel),
+					maxRetries:     maxRetries,
 				})
 				if retryErr != nil {
 					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -1384,6 +1388,8 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 	if antigravityUseMappedModelForBilling() && strings.TrimSpace(mappedModel) != "" {
 		billingModel = mappedModel
 	}
+	afterSwitch := antigravityHasAccountSwitch(ctx)
+	maxRetries := antigravityMaxRetriesForModel(originalModel, afterSwitch)
 
 	// 获取 access_token
 	if s.tokenProvider == nil {
@@ -1448,7 +1454,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		httpUpstream:   s.httpUpstream,
 		settingService: s.settingService,
 		handleError:    s.handleUpstreamError,
-		maxRetries:     antigravityMaxRetriesForModel(originalModel),
+		maxRetries:     maxRetries,
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -1661,6 +1667,16 @@ func antigravityUseMappedModelForBilling() bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
+func antigravityHasAccountSwitch(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	if v, ok := ctx.Value(ctxkey.AccountSwitchCount).(int); ok {
+		return v > 0
+	}
+	return false
+}
+
 func antigravityFallbackCooldownSeconds() (time.Duration, bool) {
 	raw := strings.TrimSpace(os.Getenv(antigravityFallbackSecondsEnv))
 	if raw == "" {
@@ -1685,8 +1701,23 @@ func antigravityMaxRetries() int {
 	return value
 }
 
+func antigravityMaxRetriesAfterSwitch() int {
+	raw := strings.TrimSpace(os.Getenv(antigravityMaxRetriesAfterSwitchEnv))
+	if raw == "" {
+		raw = strings.TrimSpace(os.Getenv(antigravityMaxRetriesAfterSwitchAlt))
+	}
+	if raw == "" {
+		return antigravityMaxRetries()
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return antigravityMaxRetries()
+	}
+	return value
+}
+
 // antigravityMaxRetriesForModel returns retry count by model class with fallback.
-func antigravityMaxRetriesForModel(model string) int {
+func antigravityMaxRetriesForModel(model string, afterSwitch bool) int {
 	var envKey string
 	if strings.HasPrefix(model, "claude-") {
 		envKey = antigravityMaxRetriesClaudeEnv
@@ -1704,6 +1735,9 @@ func antigravityMaxRetriesForModel(model string) int {
 		}
 	}
 
+	if afterSwitch {
+		return antigravityMaxRetriesAfterSwitch()
+	}
 	return antigravityMaxRetries()
 }
 
