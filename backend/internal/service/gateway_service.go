@@ -3281,35 +3281,21 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		}
 	}
 
-	metadataUserID := ""
-	if len(body) > 0 {
-		metadataUserID = gjson.GetBytes(body, "metadata.user_id").String()
+	clientHeaders := http.Header{}
+	if c != nil && c.Request != nil {
+		clientHeaders = c.Request.Header
 	}
 
 	// OAuth账号：应用统一指纹
 	var fingerprint *Fingerprint
 	if account.IsOAuth() && s.identityService != nil {
 		// 1. 获取或创建指纹（包含随机生成的ClientID）
-		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
+		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, clientHeaders)
 		if err != nil {
 			log.Printf("Warning: failed to get fingerprint for account %d: %v", account.ID, err)
 			// 失败时降级为透传原始headers
 		} else {
 			fingerprint = fp
-
-			if metadataUserID == "" {
-				parsed := &ParsedRequest{
-					Model:          modelID,
-					Stream:         reqStream,
-					MetadataUserID: "",
-				}
-				if generatedUserID := s.buildOAuthMetadataUserID(parsed, account, fp); generatedUserID != "" {
-					if newBody, err := sjson.SetBytes(body, "metadata.user_id", generatedUserID); err == nil && len(newBody) > 0 {
-						body = newBody
-						metadataUserID = generatedUserID
-					}
-				}
-			}
 
 			// 2. 重写metadata.user_id（需要指纹中的ClientID和账号的account_uuid）
 			// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
@@ -3340,7 +3326,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	}
 
 	// 白名单透传headers
-	for key, values := range c.Request.Header {
+	for key, values := range clientHeaders {
 		lowerKey := strings.ToLower(key)
 		if allowedHeaders[lowerKey] {
 			for _, v := range values {
@@ -3378,7 +3364,8 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 			drop := map[string]struct{}{claude.BetaClaudeCode: {}}
 			req.Header.Set("anthropic-beta", mergeAnthropicBetaDropping(requiredBetas, incomingBeta, drop))
 		} else {
-			req.Header.Set("anthropic-beta", s.getBetaHeader(modelID, c.GetHeader("anthropic-beta")))
+			clientBetaHeader := req.Header.Get("anthropic-beta")
+			req.Header.Set("anthropic-beta", s.getBetaHeader(modelID, clientBetaHeader))
 		}
 	} else if s.cfg != nil && s.cfg.Gateway.InjectBetaForAPIKey && req.Header.Get("anthropic-beta") == "" {
 		// API-key：仅在请求显式使用 beta 特性且客户端未提供时，按需补齐（默认关闭）
@@ -4975,29 +4962,15 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		}
 	}
 
-	metadataUserID := ""
-	if len(body) > 0 {
-		metadataUserID = gjson.GetBytes(body, "metadata.user_id").String()
+	clientHeaders := http.Header{}
+	if c != nil && c.Request != nil {
+		clientHeaders = c.Request.Header
 	}
 	// OAuth 账号：应用统一指纹和重写 userID
 	// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
 	if account.IsOAuth() && s.identityService != nil {
-		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
+		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, clientHeaders)
 		if err == nil {
-			if metadataUserID == "" {
-				parsed := &ParsedRequest{
-					Model:          modelID,
-					Stream:         false,
-					MetadataUserID: "",
-				}
-				if generatedUserID := s.buildOAuthMetadataUserID(parsed, account, fp); generatedUserID != "" {
-					if newBody, err := sjson.SetBytes(body, "metadata.user_id", generatedUserID); err == nil && len(newBody) > 0 {
-						body = newBody
-						metadataUserID = generatedUserID
-					}
-				}
-			}
-
 			accountUUID := account.GetExtraString("account_uuid")
 			if accountUUID != "" && fp.ClientID != "" {
 				if newBody, err := s.identityService.RewriteUserIDWithMasking(ctx, body, account, accountUUID, fp.ClientID); err == nil && len(newBody) > 0 {
@@ -5025,7 +4998,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 
 	// 白名单透传 headers
-	for key, values := range c.Request.Header {
+	for key, values := range clientHeaders {
 		lowerKey := strings.ToLower(key)
 		if allowedHeaders[lowerKey] {
 			for _, v := range values {
@@ -5036,7 +5009,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 
 	// OAuth 账号：应用指纹到请求头
 	if account.IsOAuth() && s.identityService != nil {
-		fp, _ := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
+		fp, _ := s.identityService.GetOrCreateFingerprint(ctx, account.ID, clientHeaders)
 		if fp != nil {
 			s.identityService.ApplyFingerprint(req, fp)
 		}
