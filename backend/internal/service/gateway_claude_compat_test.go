@@ -98,12 +98,14 @@ func TestShouldApplyClaudeCodeCompatByRequest(t *testing.T) {
 
 	t.Run("context marks claude client", func(t *testing.T) {
 		ctx := SetClaudeCodeClient(context.Background(), true)
-		require.False(t, svc.shouldApplyClaudeCodeCompatByRequest(ctx, c, ""))
+		require.False(t, svc.shouldApplyClaudeCodeCompatByRequest(ctx, c, nil))
 	})
 
 	t.Run("fallback to ua+metadata when context not marked", func(t *testing.T) {
 		ctx := context.Background()
-		require.True(t, svc.shouldApplyClaudeCodeCompatByRequest(ctx, c, ""))
-		require.False(t, svc.shouldApplyClaudeCodeCompatByRequest(ctx, c, "session_123e4567-e89b-12d3-a456-426614174000"))
+		require.True(t, svc.shouldApplyClaudeCodeCompatByRequest(ctx, c, &ParsedRequest{}))
+		require.False(t, svc.shouldApplyClaudeCodeCompatByRequest(ctx, c, &ParsedRequest{
+			MetadataUserID: "session_123e4567-e89b-12d3-a456-426614174000",
+		}))
 	})
 }

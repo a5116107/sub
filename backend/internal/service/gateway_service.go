@@ -120,14 +120,14 @@ func (s *GatewayService) shouldApplyClaudeCodeCompat(userAgent, metadataUserID s
 	}
 }
 
-func (s *GatewayService) shouldApplyClaudeCodeCompatByRequest(ctx context.Context, c *gin.Context, metadataUserID string) bool {
+func (s *GatewayService) shouldApplyClaudeCodeCompatByRequest(ctx context.Context, c *gin.Context, parsed *ParsedRequest) bool {
 	switch s.claudeCodeCompatMode() {
 	case "always":
 		return true
 	case "never":
 		return false
 	default: // "auto"
-		return !isClaudeCodeRequest(ctx, c, metadataUserID)
+		return !isClaudeCodeRequest(ctx, c, parsed)
 	}
 }
 
@@ -2401,14 +2401,14 @@ func isClaudeCodeClient(userAgent string, metadataUserID string) bool {
 	return claudeCliUserAgentRe.MatchString(userAgent)
 }
 
-func isClaudeCodeRequest(ctx context.Context, c *gin.Context, metadataUserID string) bool {
+func isClaudeCodeRequest(ctx context.Context, c *gin.Context, parsed *ParsedRequest) bool {
 	if IsClaudeCodeClient(ctx) {
 		return true
 	}
-	if c == nil {
+	if parsed == nil || c == nil {
 		return false
 	}
-	return isClaudeCodeClient(c.GetHeader("User-Agent"), metadataUserID)
+	return isClaudeCodeClient(c.GetHeader("User-Agent"), parsed.MetadataUserID)
 }
 
 // systemIncludesClaudeCodePrompt 检查 system 中是否已包含 Claude Code 提示词
@@ -2710,7 +2710,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	reqStream := parsed.Stream
 	originalModel := reqModel
 
-	isClaudeCode := isClaudeCodeRequest(ctx, c, parsed.MetadataUserID)
+	isClaudeCode := isClaudeCodeRequest(ctx, c, parsed)
 	shouldMimicClaudeCode := account.IsOAuth() && !isClaudeCode
 
 	// Claude Code compat: 智能注入 Claude Code 系统提示词（仅 OAuth/SetupToken 账号需要）
@@ -4775,7 +4775,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 
 	body := parsed.Body
 	reqModel := parsed.Model
-	isClaudeCode := isClaudeCodeRequest(ctx, c, parsed.MetadataUserID)
+	isClaudeCode := isClaudeCodeRequest(ctx, c, parsed)
 	shouldMimicClaudeCode := account.IsOAuth() && !isClaudeCode
 
 	if shouldMimicClaudeCode {
