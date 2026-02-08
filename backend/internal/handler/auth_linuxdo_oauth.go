@@ -213,20 +213,6 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 
 	tokenPair, _, err := h.authService.LoginOrRegisterOAuthWithTokenPair(c.Request.Context(), email, username)
 	if err != nil {
-		jwtToken, _, fallbackErr := h.authService.LoginOrRegisterOAuth(c.Request.Context(), email, username)
-		if fallbackErr != nil {
-			redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(fallbackErr), infraerrors.Message(fallbackErr))
-			return
-		}
-		log.Printf("[LinuxDo OAuth] token pair unavailable, fallback to access token only: %v", err)
-		fragment := url.Values{}
-		fragment.Set("access_token", jwtToken)
-		fragment.Set("token_type", "Bearer")
-		fragment.Set("redirect", redirectTo)
-		redirectWithFragment(c, frontendCallback, fragment)
-		return
-	}
-	if err != nil {
 		// 避免把内部细节泄露给客户端；给前端保留结构化原因与提示信息即可。
 		redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(err), infraerrors.Message(err))
 		return
