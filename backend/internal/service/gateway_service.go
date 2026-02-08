@@ -2710,17 +2710,17 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	reqStream := parsed.Stream
 	originalModel := reqModel
 
-	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, parsed.MetadataUserID)
+	isClaudeCode := isClaudeCodeRequest(ctx, c, parsed.MetadataUserID)
+	shouldMimicClaudeCode := account.IsOAuth() && !isClaudeCode
 
 	// Claude Code compat: 智能注入 Claude Code 系统提示词（仅 OAuth/SetupToken 账号需要）
 	// 额外条件：1) 非 Haiku 模型  2) system 中还没有 Claude Code 提示词
-	if account.IsOAuth() &&
-		applyClaudeCompat &&
+	if shouldMimicClaudeCode &&
 		!strings.Contains(strings.ToLower(reqModel), "haiku") &&
 		!systemIncludesClaudeCodePrompt(parsed.System) {
 		body = injectClaudeCodePrompt(body, parsed.System)
 	}
-	if account.IsOAuth() && applyClaudeCompat {
+	if shouldMimicClaudeCode {
 		normalizeOpts := claudeOAuthNormalizeOptions{stripSystemCacheControl: true}
 		if s.identityService != nil {
 			if fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header); err == nil && fp != nil {
@@ -2817,7 +2817,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	retryStart := time.Now()
 	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
 		// 构建上游请求（每次重试需要重新构建，因为请求体需要重新读取）
-		upstreamReq, err := s.buildUpstreamRequest(ctx, c, account, body, token, tokenType, reqModel)
+		upstreamReq, err := s.buildUpstreamRequest(ctx, c, account, body, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 		// Capture upstream request body for ops retry of this attempt.
 		c.Set(OpsUpstreamRequestBodyKey, string(body))
 
@@ -2896,7 +2896,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 							}
 
 							log.Printf("Account %d: detected orphaned tool_result error, retrying with cleaned tool_result blocks", account.ID)
-							retryReq, buildErr := s.buildUpstreamRequest(ctx, c, account, cleanedBody, token, tokenType, reqModel)
+							retryReq, buildErr := s.buildUpstreamRequest(ctx, c, account, cleanedBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 							if buildErr == nil {
 								retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
 								if retryErr == nil {
@@ -2979,7 +2979,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					//    also downgrade tool_use/tool_result blocks to text.
 
 					filteredBody := FilterThinkingBlocksForRetry(body)
-					retryReq, buildErr := s.buildUpstreamRequest(ctx, c, account, filteredBody, token, tokenType, reqModel)
+					retryReq, buildErr := s.buildUpstreamRequest(ctx, c, account, filteredBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 					if buildErr == nil {
 						retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
 						if retryErr == nil {
@@ -3011,7 +3011,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 								if looksLikeToolSignatureError(msg2) && time.Since(retryStart) < maxRetryElapsed {
 									log.Printf("Account %d: signature retry still failing and looks tool-related, retrying with tool blocks downgraded", account.ID)
 									filteredBody2 := FilterSignatureSensitiveBlocksForRetry(body)
-									retryReq2, buildErr2 := s.buildUpstreamRequest(ctx, c, account, filteredBody2, token, tokenType, reqModel)
+									retryReq2, buildErr2 := s.buildUpstreamRequest(ctx, c, account, filteredBody2, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 									if buildErr2 == nil {
 										retryResp2, retryErr2 := s.httpUpstream.DoWithTLS(retryReq2, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
 										if retryErr2 == nil {
@@ -3236,7 +3236,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	var firstTokenMs *int
 	var clientDisconnect bool
 	if reqStream {
-		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, reqModel, account.IsOAuth() && applyClaudeCompat)
+		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, reqModel, shouldMimicClaudeCode)
 		if err != nil {
 			if err.Error() == "have error in stream" {
 				return nil, &UpstreamFailoverError{
@@ -3267,7 +3267,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	}, nil
 }
 
-func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token, tokenType, modelID string) (*http.Request, error) {
+func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token, tokenType, modelID string, reqStream bool, mimicClaudeCode bool) (*http.Request, error) {
 	// 确定目标URL
 	targetURL := claudeAPIURL
 	if account.Type == AccountTypeAPIKey {
@@ -3285,8 +3285,6 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	if len(body) > 0 {
 		metadataUserID = gjson.GetBytes(body, "metadata.user_id").String()
 	}
-	reqStream := gjson.GetBytes(body, "stream").Bool()
-	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, metadataUserID)
 
 	// OAuth账号：应用统一指纹
 	var fingerprint *Fingerprint
@@ -3369,7 +3367,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 
 	// 处理anthropic-beta header（OAuth账号需要特殊处理）
 	if tokenType == "oauth" {
-		if applyClaudeCompat {
+		if mimicClaudeCode {
 			applyClaudeCodeMimicHeaders(req, reqStream)
 
 			incomingBeta := req.Header.Get("anthropic-beta")
@@ -3394,10 +3392,10 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	// Always capture a compact fingerprint line for later error diagnostics.
 	// We only print it when needed (or when the explicit debug flag is enabled).
 	if c != nil && tokenType == "oauth" {
-		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, applyClaudeCompat))
+		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
 	}
 	if s.debugClaudeMimicEnabled() {
-		logClaudeMimicDebug(req, body, account, tokenType, applyClaudeCompat)
+		logClaudeMimicDebug(req, body, account, tokenType, mimicClaudeCode)
 	}
 	return req, nil
 }
@@ -4790,9 +4788,10 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 
 	body := parsed.Body
 	reqModel := parsed.Model
-	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, parsed.MetadataUserID)
+	isClaudeCode := isClaudeCodeRequest(ctx, c, parsed.MetadataUserID)
+	shouldMimicClaudeCode := account.IsOAuth() && !isClaudeCode
 
-	if account.IsOAuth() && applyClaudeCompat {
+	if shouldMimicClaudeCode {
 		normalizeOpts := claudeOAuthNormalizeOptions{stripSystemCacheControl: true}
 		body, reqModel = normalizeClaudeOAuthRequestBody(body, reqModel, normalizeOpts)
 	}
@@ -4838,7 +4837,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 	}
 
 	// 构建上游请求
-	upstreamReq, err := s.buildCountTokensRequest(ctx, c, account, body, token, tokenType, reqModel)
+	upstreamReq, err := s.buildCountTokensRequest(ctx, c, account, body, token, tokenType, reqModel, shouldMimicClaudeCode)
 	if err != nil {
 		s.countTokensError(c, http.StatusInternalServerError, "api_error", "Failed to build request")
 		return err
@@ -4874,7 +4873,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 				cleanedBody := FilterOrphanedToolResults(body)
 				if !bytes.Equal(cleanedBody, body) {
 					log.Printf("Account %d: detected orphaned tool_result error on count_tokens, retrying with cleaned tool_result blocks", account.ID)
-					retryReq, buildErr := s.buildCountTokensRequest(ctx, c, account, cleanedBody, token, tokenType, reqModel)
+					retryReq, buildErr := s.buildCountTokensRequest(ctx, c, account, cleanedBody, token, tokenType, reqModel, shouldMimicClaudeCode)
 					if buildErr == nil {
 						retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
 						if retryErr == nil {
@@ -4896,7 +4895,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 			log.Printf("Account %d: detected thinking block signature error on count_tokens, retrying with filtered thinking blocks", account.ID)
 
 			filteredBody := FilterThinkingBlocksForRetry(body)
-			retryReq, buildErr := s.buildCountTokensRequest(ctx, c, account, filteredBody, token, tokenType, reqModel)
+			retryReq, buildErr := s.buildCountTokensRequest(ctx, c, account, filteredBody, token, tokenType, reqModel, shouldMimicClaudeCode)
 			if buildErr == nil {
 				retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
 				if retryErr == nil {
@@ -4962,7 +4961,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 }
 
 // buildCountTokensRequest 构建 count_tokens 上游请求
-func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token, tokenType, modelID string) (*http.Request, error) {
+func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token, tokenType, modelID string, mimicClaudeCode bool) (*http.Request, error) {
 	// 确定目标 URL
 	targetURL := claudeAPICountTokensURL
 	if account.Type == AccountTypeAPIKey {
@@ -4980,8 +4979,6 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	if len(body) > 0 {
 		metadataUserID = gjson.GetBytes(body, "metadata.user_id").String()
 	}
-	applyClaudeCompat := s.shouldApplyClaudeCodeCompatByRequest(ctx, c, metadataUserID)
-
 	// OAuth 账号：应用统一指纹和重写 userID
 	// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
 	if account.IsOAuth() && s.identityService != nil {
@@ -5058,7 +5055,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 
 	// OAuth 账号：处理 anthropic-beta header
 	if tokenType == "oauth" {
-		if applyClaudeCompat {
+		if mimicClaudeCode {
 			applyClaudeCodeMimicHeaders(req, false)
 
 			incomingBeta := req.Header.Get("anthropic-beta")
@@ -5071,8 +5068,15 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 			req.Header.Set("anthropic-beta", mergeAnthropicBeta(requiredBetas, incomingBeta))
 		} else {
 			clientBetaHeader := req.Header.Get("anthropic-beta")
-			merged := mergeAnthropicBeta([]string{claude.BetaTokenCounting}, s.getBetaHeader(modelID, clientBetaHeader))
-			req.Header.Set("anthropic-beta", merged)
+			if clientBetaHeader == "" {
+				req.Header.Set("anthropic-beta", claude.CountTokensBetaHeader)
+			} else {
+				beta := s.getBetaHeader(modelID, clientBetaHeader)
+				if !strings.Contains(beta, claude.BetaTokenCounting) {
+					beta = beta + "," + claude.BetaTokenCounting
+				}
+				req.Header.Set("anthropic-beta", beta)
+			}
 		}
 	} else if s.cfg != nil && s.cfg.Gateway.InjectBetaForAPIKey && req.Header.Get("anthropic-beta") == "" {
 		// API-key：与 messages 同步的按需 beta 注入（默认关闭）
@@ -5084,10 +5088,10 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 
 	if c != nil && tokenType == "oauth" {
-		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, applyClaudeCompat))
+		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
 	}
 	if s.debugClaudeMimicEnabled() {
-		logClaudeMimicDebug(req, body, account, tokenType, applyClaudeCompat)
+		logClaudeMimicDebug(req, body, account, tokenType, mimicClaudeCode)
 	}
 	return req, nil
 }
