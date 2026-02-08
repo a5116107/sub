@@ -56,6 +56,11 @@ func (s *GatewayService) debugModelRoutingEnabled() bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
+func (s *GatewayService) debugClaudeMimicEnabled() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("SUB2API_DEBUG_CLAUDE_MIMIC")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
 func (s *GatewayService) stickySessionTTL() time.Duration {
 	if s != nil && s.cfg != nil && s.cfg.Gateway.Scheduling.StickySessionTTL > 0 {
 		return s.cfg.Gateway.Scheduling.StickySessionTTL
@@ -3389,10 +3394,10 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	// Always capture a compact fingerprint line for later error diagnostics.
 	// We only print it when needed (or when the explicit debug flag is enabled).
 	if c != nil && tokenType == "oauth" {
-		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
+		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, applyClaudeCompat))
 	}
 	if s.debugClaudeMimicEnabled() {
-		logClaudeMimicDebug(req, body, account, tokenType, mimicClaudeCode)
+		logClaudeMimicDebug(req, body, account, tokenType, applyClaudeCompat)
 	}
 	return req, nil
 }
@@ -5079,10 +5084,10 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 
 	if c != nil && tokenType == "oauth" {
-		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
+		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, applyClaudeCompat))
 	}
 	if s.debugClaudeMimicEnabled() {
-		logClaudeMimicDebug(req, body, account, tokenType, mimicClaudeCode)
+		logClaudeMimicDebug(req, body, account, tokenType, applyClaudeCompat)
 	}
 	return req, nil
 }
