@@ -272,6 +272,7 @@ func isClaudeCodeCredentialScopeError(msg string) bool {
 	return strings.Contains(m, "only authorized for use with claude code") &&
 		strings.Contains(m, "cannot be used for other api requests")
 }
+
 // sseDataRe matches SSE data lines with optional whitespace after colon.
 // Some upstream APIs return non-standard "data:" without space (should be "data: ").
 var (
@@ -2266,8 +2267,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 // isModelSupportedByAccount 根据账户平台检查模型支持
 func (s *GatewayService) isModelSupportedByAccount(account *Account, requestedModel string) bool {
 	if account.Platform == PlatformAntigravity {
-		// Antigravity 平台使用专门的模型支持检查
-		return IsAntigravityModelSupported(requestedModel)
+		return isAntigravityModelSupportedByAccount(account, requestedModel)
 	}
 	// OAuth/SetupToken 账号使用 Anthropic 标准映射（短ID → 长ID）
 	if account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {

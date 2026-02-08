@@ -273,3 +273,52 @@ func TestAntigravityGatewayService_IsModelSupported(t *testing.T) {
 		})
 	}
 }
+
+func TestAntigravityGatewayService_GetMappedModel_WildcardMapping(t *testing.T) {
+	svc := &AntigravityGatewayService{}
+
+	tests := []struct {
+		name           string
+		mapping        map[string]any
+		requestedModel string
+		expected       string
+	}{
+		{
+			name:           "wildcard maps to custom target",
+			mapping:        map[string]any{"claude-*": "claude-sonnet-4-5"},
+			requestedModel: "claude-opus-4-6",
+			expected:       "claude-sonnet-4-5",
+		},
+		{
+			name:           "wildcard target equals request model",
+			mapping:        map[string]any{"claude-*": "claude-sonnet-4-5"},
+			requestedModel: "claude-sonnet-4-5",
+			expected:       "claude-sonnet-4-5",
+		},
+		{
+			name:           "exact mapping takes precedence over wildcard",
+			mapping:        map[string]any{"claude-*": "claude-sonnet-4-5", "claude-opus-4-6": "claude-opus-4-6-thinking"},
+			requestedModel: "claude-opus-4-6",
+			expected:       "claude-opus-4-6-thinking",
+		},
+		{
+			name:           "wildcard no match keeps antigravity fallback",
+			mapping:        map[string]any{"claude-*": "claude-sonnet-4-5"},
+			requestedModel: "gpt-4",
+			expected:       "claude-sonnet-4-5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			account := &Account{
+				Platform: PlatformAntigravity,
+				Credentials: map[string]any{
+					"model_mapping": tt.mapping,
+				},
+			}
+			got := svc.getMappedModel(account, tt.requestedModel)
+			require.Equal(t, tt.expected, got)
+		})
+	}
+}

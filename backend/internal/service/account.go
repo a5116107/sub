@@ -3,6 +3,7 @@ package service
 
 import (
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -372,8 +373,15 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 	if len(mapping) == 0 {
 		return true
 	}
-	_, exists := mapping[requestedModel]
-	return exists
+	if _, exists := mapping[requestedModel]; exists {
+		return true
+	}
+	for pattern := range mapping {
+		if matchModelWildcard(pattern, requestedModel) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *Account) GetMappedModel(requestedModel string) string {
@@ -384,7 +392,38 @@ func (a *Account) GetMappedModel(requestedModel string) string {
 	if mappedModel, exists := mapping[requestedModel]; exists {
 		return mappedModel
 	}
-	return requestedModel
+	return matchModelWildcardMapping(mapping, requestedModel)
+}
+
+func matchModelWildcard(pattern, value string) bool {
+	if strings.HasSuffix(pattern, "*") {
+		prefix := pattern[:len(pattern)-1]
+		return strings.HasPrefix(value, prefix)
+	}
+	return pattern == value
+}
+
+func matchModelWildcardMapping(mapping map[string]string, requestedModel string) string {
+	type candidate struct {
+		pattern string
+		target  string
+	}
+	var candidates []candidate
+	for pattern, target := range mapping {
+		if matchModelWildcard(pattern, requestedModel) {
+			candidates = append(candidates, candidate{pattern: pattern, target: target})
+		}
+	}
+	if len(candidates) == 0 {
+		return requestedModel
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if len(candidates[i].pattern) != len(candidates[j].pattern) {
+			return len(candidates[i].pattern) > len(candidates[j].pattern)
+		}
+		return candidates[i].pattern < candidates[j].pattern
+	})
+	return candidates[0].target
 }
 
 func (a *Account) GetBaseURL() string {

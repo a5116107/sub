@@ -1027,6 +1027,39 @@ func TestGatewayService_isModelSupportedByAccount(t *testing.T) {
 			expected: false,
 		},
 		{
+			name:     "Antigravity平台-空模型允许",
+			account:  &Account{Platform: PlatformAntigravity},
+			model:    "",
+			expected: true,
+		},
+		{
+			name: "Antigravity平台-有自定义映射时支持映射内模型",
+			account: &Account{
+				Platform: PlatformAntigravity,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"my-custom-model": "upstream-model",
+						"gpt-4o":          "mapped-gpt",
+					},
+				},
+			},
+			model:    "my-custom-model",
+			expected: true,
+		},
+		{
+			name: "Antigravity平台-有自定义映射时拒绝映射外模型",
+			account: &Account{
+				Platform: PlatformAntigravity,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"my-custom-model": "upstream-model",
+					},
+				},
+			},
+			model:    "claude-sonnet-4-5",
+			expected: false,
+		},
+		{
 			name:     "Anthropic平台-无映射配置-支持所有模型",
 			account:  &Account{Platform: PlatformAnthropic},
 			model:    "claude-3-5-sonnet-20241022",

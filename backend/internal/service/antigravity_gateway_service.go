@@ -393,6 +393,19 @@ func (s *AntigravityGatewayService) getMappedModel(account *Account, requestedMo
 	return "claude-sonnet-4-5"
 }
 
+func isAntigravityModelSupportedByAccount(account *Account, requestedModel string) bool {
+	if account == nil {
+		return false
+	}
+	if strings.TrimSpace(requestedModel) == "" {
+		return true
+	}
+	if len(account.GetModelMapping()) > 0 {
+		return account.IsModelSupported(requestedModel)
+	}
+	return IsAntigravityModelSupported(requestedModel)
+}
+
 // IsModelSupported 检查模型是否被支持
 // 所有 claude- 和 gemini- 前缀的模型都能通过映射或透传支持
 func (s *AntigravityGatewayService) IsModelSupported(requestedModel string) bool {
