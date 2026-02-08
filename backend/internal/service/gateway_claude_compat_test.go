@@ -1,13 +1,9 @@
 package service
 
 import (
-	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -76,36 +72,4 @@ func TestShouldApplyClaudeCodeCompat(t *testing.T) {
 			require.Equal(t, tt.want, svc.shouldApplyClaudeCodeCompat(tt.userAgent, tt.userID))
 		})
 	}
-}
-
-func TestShouldApplyClaudeCodeCompatByRequest(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	recorder := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(recorder)
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages/count_tokens", nil)
-	req.Header.Set("User-Agent", "claude-cli/2.1.22 (external, cli)")
-	c.Request = req
-
-	svc := &GatewayService{
-		cfg: &config.Config{
-			Gateway: config.GatewayConfig{
-				ClaudeCodeCompat: config.GatewayClaudeCodeCompatConfig{
-					Mode: "auto",
-				},
-			},
-		},
-	}
-
-	t.Run("context marks claude client", func(t *testing.T) {
-		ctx := SetClaudeCodeClient(context.Background(), true)
-		require.False(t, svc.shouldApplyClaudeCodeCompatByRequest(ctx, c, nil))
-	})
-
-	t.Run("fallback to ua+metadata when context not marked", func(t *testing.T) {
-		ctx := context.Background()
-		require.True(t, svc.shouldApplyClaudeCodeCompatByRequest(ctx, c, &ParsedRequest{}))
-		require.False(t, svc.shouldApplyClaudeCodeCompatByRequest(ctx, c, &ParsedRequest{
-			MetadataUserID: "session_123e4567-e89b-12d3-a456-426614174000",
-		}))
-	})
 }

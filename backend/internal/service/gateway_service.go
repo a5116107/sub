@@ -120,17 +120,6 @@ func (s *GatewayService) shouldApplyClaudeCodeCompat(userAgent, metadataUserID s
 	}
 }
 
-func (s *GatewayService) shouldApplyClaudeCodeCompatByRequest(ctx context.Context, c *gin.Context, parsed *ParsedRequest) bool {
-	switch s.claudeCodeCompatMode() {
-	case "always":
-		return true
-	case "never":
-		return false
-	default: // "auto"
-		return !isClaudeCodeRequest(ctx, c, parsed)
-	}
-}
-
 func shortSessionHash(sessionHash string) string {
 	if sessionHash == "" {
 		return ""
