@@ -397,6 +397,60 @@ func (h *AuthHandler) ValidatePromoCode(c *gin.Context) {
 	})
 }
 
+// ValidateInvitationCodeRequest 邀请码验证请求
+type ValidateInvitationCodeRequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
+// ValidateInvitationCodeResponse 邀请码验证响应
+type ValidateInvitationCodeResponse struct {
+	Valid     bool   `json:"valid"`
+	ErrorCode string `json:"error_code,omitempty"`
+}
+
+// ValidateInvitationCode 验证邀请码（公开接口，注册前调用）
+// POST /api/v1/auth/validate-invitation-code
+func (h *AuthHandler) ValidateInvitationCode(c *gin.Context) {
+	if h.settingSvc == nil || !h.settingSvc.IsInvitationCodeEnabled(c.Request.Context()) {
+		response.Success(c, ValidateInvitationCodeResponse{
+			Valid:     false,
+			ErrorCode: "INVITATION_CODE_DISABLED",
+		})
+		return
+	}
+
+	var req ValidateInvitationCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	inviter, err := h.userService.GetByInviteCode(c.Request.Context(), req.Code)
+	if err != nil {
+		errorCode := "INVITATION_CODE_INVALID"
+		if errors.Is(err, service.ErrUserNotFound) {
+			errorCode = "INVITATION_CODE_NOT_FOUND"
+		}
+		response.Success(c, ValidateInvitationCodeResponse{
+			Valid:     false,
+			ErrorCode: errorCode,
+		})
+		return
+	}
+
+	if inviter == nil || !inviter.IsActive() {
+		response.Success(c, ValidateInvitationCodeResponse{
+			Valid:     false,
+			ErrorCode: "INVITATION_CODE_INVALID",
+		})
+		return
+	}
+
+	response.Success(c, ValidateInvitationCodeResponse{
+		Valid: true,
+	})
+}
+
 // ForgotPasswordRequest 忘记密码请求
 type ForgotPasswordRequest struct {
 	Email          string `json:"email" binding:"required,email"`

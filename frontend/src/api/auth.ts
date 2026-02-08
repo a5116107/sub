@@ -238,6 +238,27 @@ export async function validatePromoCode(code: string): Promise<ValidatePromoCode
 }
 
 /**
+ * Validate invitation code response
+ */
+export interface ValidateInvitationCodeResponse {
+  valid: boolean
+  error_code?: string
+}
+
+/**
+ * Validate invitation code (public endpoint, no auth required)
+ * @param code - Invitation code to validate
+ * @returns Validation result
+ */
+export async function validateInvitationCode(code: string): Promise<ValidateInvitationCodeResponse> {
+  const { data } = await apiClient.post<ValidateInvitationCodeResponse>(
+    '/auth/validate-invitation-code',
+    { code }
+  )
+  return data
+}
+
+/**
  * Forgot password request
  */
 export interface ForgotPasswordRequest {
@@ -306,6 +327,7 @@ export const authAPI = {
   getPublicSettings,
   sendVerifyCode,
   validatePromoCode,
+  validateInvitationCode,
   forgotPassword,
   resetPassword,
   refreshToken,
