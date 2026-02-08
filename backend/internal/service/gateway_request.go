@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"math"
 )
 
@@ -20,13 +21,13 @@ import (
 // 2. 将解析结果 ParsedRequest 传递给 Service 层
 // 3. 避免重复 json.Unmarshal，减少 CPU 和内存开销
 type ParsedRequest struct {
-	Body           []byte // 原始请求体（保留用于转发）
-	Model          string // 请求的模型名称
-	Stream         bool   // 是否为流式请求
-	MetadataUserID string // metadata.user_id（用于会话亲和）
-	System         any    // system 字段内容
-	Messages       []any  // messages 数组
-	HasSystem      bool   // 是否包含 system 字段（包含 null 也视为显式传入）
+	Body            []byte // 原始请求体（保留用于转发）
+	Model           string // 请求的模型名称
+	Stream          bool   // 是否为流式请求
+	MetadataUserID  string // metadata.user_id（用于会话亲和）
+	System          any    // system 字段内容
+	Messages        []any  // messages 数组
+	HasSystem       bool   // 是否包含 system 字段（包含 null 也视为显式传入）
 	ThinkingEnabled bool   // 是否开启 thinking（部分平台会影响最终模型名）
 	MaxTokens       int    // max_tokens 值（用于探测请求拦截）
 }
@@ -647,7 +648,7 @@ func filterThinkingBlocksInternal(body []byte, _ bool) []byte {
 				// only keep thinking blocks with valid signatures
 				if thinkingEnabled && role == "assistant" {
 					signature, _ := blockMap["signature"].(string)
-					if signature != "" && signature != "skip_thought_signature_validator" {
+					if signature != "" && signature != antigravity.DummyThoughtSignature {
 						newContent = append(newContent, block)
 						continue
 					}
