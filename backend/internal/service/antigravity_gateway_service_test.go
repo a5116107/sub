@@ -279,3 +279,19 @@ func TestTestConnection_UpstreamAccountUsesDirectEndpoint(t *testing.T) {
 	require.Equal(t, "Bearer sk-upstream", upstream.lastReq.Header.Get("Authorization"))
 	require.Equal(t, "sk-upstream", upstream.lastReq.Header.Get("x-api-key"))
 }
+
+func TestCopyUpstreamResponseHeaders_FiltersHopByHop(t *testing.T) {
+	c, _ := newGatewayTestContext(`{}`)
+
+	src := http.Header{}
+	src.Add("X-Upstream-Request-Id", "req-1")
+	src.Add("X-Upstream-Request-Id", "req-2")
+	src.Add("Connection", "keep-alive")
+	src.Add("Transfer-Encoding", "chunked")
+
+	copyUpstreamResponseHeaders(c, src)
+
+	require.Equal(t, []string{"req-1", "req-2"}, c.Writer.Header().Values("X-Upstream-Request-Id"))
+	require.Empty(t, c.Writer.Header().Get("Connection"))
+	require.Empty(t, c.Writer.Header().Get("Transfer-Encoding"))
+}

@@ -2953,6 +2953,21 @@ func copyUpstreamRequestHeaders(dst http.Header, c *gin.Context) {
 	}
 }
 
+func copyUpstreamResponseHeaders(c *gin.Context, src http.Header) {
+	if c == nil || c.Writer == nil || src == nil {
+		return
+	}
+	dst := c.Writer.Header()
+	for key, values := range src {
+		if upstreamHopByHopHeaders[strings.ToLower(key)] {
+			continue
+		}
+		for _, v := range values {
+			dst.Add(key, v)
+		}
+	}
+}
+
 // testUpstreamConnection 测试 upstream 账号连接
 func (s *AntigravityGatewayService) testUpstreamConnection(ctx context.Context, account *Account, modelID string) (*TestConnectionResult, error) {
 	baseURL := strings.TrimRight(strings.TrimSpace(account.GetCredential("base_url")), "/")
@@ -3179,6 +3194,7 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 
 upstreamClaudeSuccess:
 	requestID := resp.Header.Get("x-request-id")
+	copyUpstreamResponseHeaders(c, resp.Header)
 	if requestID != "" {
 		c.Header("x-request-id", requestID)
 	}
@@ -3432,6 +3448,7 @@ func (s *AntigravityGatewayService) ForwardUpstreamGemini(ctx context.Context, c
 
 upstreamGeminiSuccess:
 	requestID := resp.Header.Get("x-request-id")
+	copyUpstreamResponseHeaders(c, resp.Header)
 	if requestID != "" {
 		c.Header("x-request-id", requestID)
 	}
