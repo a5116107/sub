@@ -296,6 +296,12 @@ func TestAntigravityGatewayService_GetMappedModel_WildcardMapping(t *testing.T) 
 			expected:       "claude-sonnet-4-5",
 		},
 		{
+			name:           "custom wildcard target equals request model",
+			mapping:        map[string]any{"custom-*": "custom-model"},
+			requestedModel: "custom-model",
+			expected:       "custom-model",
+		},
+		{
 			name:           "exact mapping takes precedence over wildcard",
 			mapping:        map[string]any{"claude-*": "claude-sonnet-4-5", "claude-opus-4-6": "claude-opus-4-6-thinking"},
 			requestedModel: "claude-opus-4-6",

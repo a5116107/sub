@@ -36,6 +36,9 @@ const (
 	AccountTypeAPIKey     = "apikey"      // API Key 类型账号
 )
 
+// AccountTypeUpstream defines upstream passthrough account type.
+const AccountTypeUpstream = "upstream"
+
 // Redeem type constants.
 const (
 	RedeemTypeBalance      = "balance"
@@ -68,4 +71,3 @@ const (
 	SubscriptionStatusExpired   = "expired"
 	SubscriptionStatusSuspended = "suspended"
 )
-

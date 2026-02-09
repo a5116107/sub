@@ -45,7 +45,7 @@ func (p *AntigravityTokenProvider) GetAccessToken(ctx context.Context, account *
 	if account.Platform != PlatformAntigravity {
 		return "", errors.New("not an antigravity oauth account")
 	}
-	if account.Type == AccountTypeAPIKey {
+	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeUpstream {
 		apiKey := strings.TrimSpace(account.GetCredential("api_key"))
 		if apiKey == "" {
 			return "", errors.New("api_key not found in credentials")

@@ -65,6 +65,33 @@ func TestAntigravityTokenProvider_GetAccessToken_APIKey(t *testing.T) {
 		require.Contains(t, err.Error(), "api_key not found in credentials")
 		require.Empty(t, token)
 	})
+
+	t.Run("returns api key for upstream account", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformAntigravity,
+			Type:     AccountTypeUpstream,
+			Credentials: map[string]any{
+				"api_key": "ag-upstream-key",
+			},
+		}
+		token, err := provider.GetAccessToken(context.Background(), account)
+		require.NoError(t, err)
+		require.Equal(t, "ag-upstream-key", token)
+	})
+
+	t.Run("upstream account missing api_key", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformAntigravity,
+			Type:     AccountTypeUpstream,
+			Credentials: map[string]any{
+				"api_key": "",
+			},
+		}
+		token, err := provider.GetAccessToken(context.Background(), account)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "api_key not found in credentials")
+		require.Empty(t, token)
+	})
 }
 
 func TestAntigravityTokenProvider_GetAccessToken_SetupToken(t *testing.T) {
