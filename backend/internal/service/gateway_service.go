@@ -4488,9 +4488,14 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 		intervalCh = intervalTicker.C
 	}
 
+	clientDisconnected := false // 客户端断开标志，断开后继续读取上游以获取完整usage
+
 	// 仅发送一次错误事件，避免多次写入导致协议混乱（写失败时尽力通知客户端）
 	errorEventSent := false
 	sendErrorEvent := func(reason string) {
+		if clientDisconnected {
+			return
+		}
 		if errorEventSent {
 			return
 		}
@@ -4501,7 +4506,6 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 
 	needModelReplace := originalModel != mappedModel
 	rewriteTools := account.IsOAuth() && mimicClaudeCode
-	clientDisconnected := false // 客户端断开标志，断开后继续读取上游以获取完整usage
 
 	for {
 		select {
