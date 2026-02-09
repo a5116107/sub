@@ -70,3 +70,66 @@ func TestAccount_GetGeminiBaseURL(t *testing.T) {
 		})
 	}
 }
+
+func TestAccount_GetBaseURL(t *testing.T) {
+	tests := []struct {
+		name        string
+		account     Account
+		expectedURL string
+	}{
+		{
+			name: "non apikey returns empty",
+			account: Account{
+				Type:        AccountTypeOAuth,
+				Platform:    PlatformAntigravity,
+				Credentials: map[string]any{"base_url": "https://up.example.com"},
+			},
+			expectedURL: "",
+		},
+		{
+			name: "empty base_url falls back to anthropic default",
+			account: Account{
+				Type:        AccountTypeAPIKey,
+				Platform:    PlatformAnthropic,
+				Credentials: map[string]any{},
+			},
+			expectedURL: "https://api.anthropic.com",
+		},
+		{
+			name: "antigravity apikey appends suffix",
+			account: Account{
+				Type:        AccountTypeAPIKey,
+				Platform:    PlatformAntigravity,
+				Credentials: map[string]any{"base_url": "https://up.example.com"},
+			},
+			expectedURL: "https://up.example.com/antigravity",
+		},
+		{
+			name: "antigravity suffix is idempotent",
+			account: Account{
+				Type:        AccountTypeAPIKey,
+				Platform:    PlatformAntigravity,
+				Credentials: map[string]any{"base_url": "https://up.example.com/antigravity/"},
+			},
+			expectedURL: "https://up.example.com/antigravity",
+		},
+		{
+			name: "non antigravity keeps custom base_url",
+			account: Account{
+				Type:        AccountTypeAPIKey,
+				Platform:    PlatformAnthropic,
+				Credentials: map[string]any{"base_url": "https://custom.example.com"},
+			},
+			expectedURL: "https://custom.example.com",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.account.GetBaseURL()
+			if got != tc.expectedURL {
+				t.Fatalf("GetBaseURL() = %q, want %q", got, tc.expectedURL)
+			}
+		})
+	}
+}

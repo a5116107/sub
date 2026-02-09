@@ -434,6 +434,13 @@ func (a *Account) GetBaseURL() string {
 	if baseURL == "" {
 		return "https://api.anthropic.com"
 	}
+	if a.Platform == PlatformAntigravity {
+		trimmed := strings.TrimRight(baseURL, "/")
+		if strings.HasSuffix(trimmed, "/antigravity") {
+			return trimmed
+		}
+		return trimmed + "/antigravity"
+	}
 	return baseURL
 }
 
