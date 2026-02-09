@@ -68,9 +68,25 @@ type antigravityRetryLoopResult struct {
 // antigravityRetryLoop 执行带 URL fallback 的重试循环
 func antigravityRetryLoop(p antigravityRetryLoopParams) (*antigravityRetryLoopResult, error) {
 	baseURLs := antigravity.ForwardBaseURLs()
-	availableURLs := antigravity.DefaultURLAvailability.GetAvailableURLsWithBase(baseURLs)
-	if len(availableURLs) == 0 {
-		availableURLs = baseURLs
+
+	// Upstream passthrough account: route requests to account-scoped base_url only.
+	// This avoids going through shared Antigravity URL pools.
+	useGlobalAvailability := true
+	if p.account != nil && p.account.Type == AccountTypeUpstream {
+		upstreamBaseURL := strings.TrimRight(strings.TrimSpace(p.account.GetCredential("base_url")), "/")
+		if upstreamBaseURL == "" {
+			return nil, errors.New("upstream account missing base_url in credentials")
+		}
+		baseURLs = []string{upstreamBaseURL}
+		useGlobalAvailability = false
+	}
+
+	availableURLs := baseURLs
+	if useGlobalAvailability {
+		availableURLs = antigravity.DefaultURLAvailability.GetAvailableURLsWithBase(baseURLs)
+		if len(availableURLs) == 0 {
+			availableURLs = baseURLs
+		}
 	}
 	maxRetries := p.maxRetries
 	if maxRetries <= 0 {

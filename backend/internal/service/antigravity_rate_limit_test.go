@@ -124,6 +124,79 @@ func TestAntigravityRetryLoop_URLFallback_UsesLatestSuccess(t *testing.T) {
 	require.Equal(t, base2, available[0])
 }
 
+func TestAntigravityRetryLoop_UpstreamAccountUsesAccountBaseURL(t *testing.T) {
+	upstream := &stubAntigravityUpstream{firstBase: "https://ag-default.test"}
+	account := &Account{
+		ID:          2,
+		Name:        "upstream-acc",
+		Platform:    PlatformAntigravity,
+		Type:        AccountTypeUpstream,
+		Schedulable: true,
+		Status:      StatusActive,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"base_url": "https://my-upstream.example.com",
+		},
+	}
+
+	result, err := antigravityRetryLoop(antigravityRetryLoopParams{
+		prefix:       "[test-upstream]",
+		ctx:          context.Background(),
+		account:      account,
+		proxyURL:     "",
+		accessToken:  "token",
+		action:       "generateContent",
+		body:         []byte(`{"input":"test"}`),
+		quotaScope:   AntigravityQuotaScopeClaude,
+		httpUpstream: upstream,
+		handleError: func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.resp)
+	defer func() { _ = result.resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, result.resp.StatusCode)
+	require.Len(t, upstream.calls, 1)
+	require.True(t, strings.HasPrefix(upstream.calls[0], "https://my-upstream.example.com"))
+}
+
+func TestAntigravityRetryLoop_UpstreamAccountMissingBaseURL(t *testing.T) {
+	upstream := &stubAntigravityUpstream{}
+	account := &Account{
+		ID:          3,
+		Name:        "upstream-missing-base",
+		Platform:    PlatformAntigravity,
+		Type:        AccountTypeUpstream,
+		Schedulable: true,
+		Status:      StatusActive,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"base_url": "   ",
+		},
+	}
+
+	result, err := antigravityRetryLoop(antigravityRetryLoopParams{
+		prefix:       "[test-upstream-missing]",
+		ctx:          context.Background(),
+		account:      account,
+		proxyURL:     "",
+		accessToken:  "token",
+		action:       "generateContent",
+		body:         []byte(`{"input":"test"}`),
+		quotaScope:   AntigravityQuotaScopeClaude,
+		httpUpstream: upstream,
+		handleError: func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
+		},
+	})
+
+	require.Nil(t, result)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "upstream account missing base_url")
+	require.Empty(t, upstream.calls)
+}
+
 func TestAntigravityHandleUpstreamError_UsesScopeLimitWhenEnabled(t *testing.T) {
 	t.Setenv(antigravityScopeRateLimitEnv, "true")
 	repo := &stubAntigravityAccountRepo{}
