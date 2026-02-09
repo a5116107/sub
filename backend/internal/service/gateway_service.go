@@ -527,6 +527,10 @@ func (s *GatewayService) GenerateSessionHashWithContext(parsed *ParsedRequest, s
 	if len(parsed.Messages) > 0 {
 		if firstMsg, ok := parsed.Messages[0].(map[string]any); ok {
 			msgText := s.extractTextFromContent(firstMsg["content"])
+			if msgText == "" {
+				// Gemini 原生格式: contents[].parts[].text
+				msgText = s.extractTextFromGeminiParts(firstMsg["parts"])
+			}
 			if msgText != "" {
 				if sessionContextSeed != "" {
 					msgText = sessionContextSeed + "|" + msgText
@@ -651,6 +655,26 @@ func (s *GatewayService) extractTextFromContent(content any) string {
 		return strings.Join(texts, "")
 	}
 	return ""
+}
+
+func (s *GatewayService) extractTextFromGeminiParts(parts any) string {
+	v, ok := parts.([]any)
+	if !ok {
+		return ""
+	}
+	var texts []string
+	for _, part := range v {
+		partMap, ok := part.(map[string]any)
+		if !ok {
+			continue
+		}
+		text, ok := partMap["text"].(string)
+		if !ok || text == "" {
+			continue
+		}
+		texts = append(texts, text)
+	}
+	return strings.Join(texts, "")
 }
 
 func (s *GatewayService) hashContent(content string) string {

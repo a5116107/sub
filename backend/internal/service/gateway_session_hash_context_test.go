@@ -62,3 +62,25 @@ func TestGenerateSessionHash_MetadataSessionIDHasPriority(t *testing.T) {
 	})
 	require.Equal(t, sessionID, got)
 }
+
+func TestGenerateSessionHash_GeminiPartsFallback(t *testing.T) {
+	svc := &GatewayService{}
+
+	parsed := &ParsedRequest{
+		Messages: []any{
+			map[string]any{
+				"role": "user",
+				"parts": []any{
+					map[string]any{"text": "hello"},
+					map[string]any{"text": " world"},
+				},
+			},
+		},
+	}
+
+	h1 := svc.GenerateSessionHash(parsed)
+	h2 := svc.GenerateSessionHash(parsed)
+
+	require.NotEmpty(t, h1)
+	require.Equal(t, h1, h2)
+}
