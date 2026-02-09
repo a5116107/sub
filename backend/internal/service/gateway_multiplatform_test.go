@@ -3323,3 +3323,57 @@ func TestGatewayService_ResolveGatewayGroup_DetectsFallbackCycle(t *testing.T) {
 	require.Nil(t, gotID)
 	require.Contains(t, err.Error(), "fallback group cycle")
 }
+
+func TestNormalizeClaudeModelForAnthropic(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "sonnet with date suffix collapses to prefix",
+			input:    "claude-sonnet-4-5-20250929",
+			expected: "claude-sonnet-4-5",
+		},
+		{
+			name:     "haiku with custom suffix collapses to prefix",
+			input:    "claude-haiku-4-5-20251001",
+			expected: "claude-haiku-4-5",
+		},
+		{
+			name:     "non-matching model keeps original",
+			input:    "claude-opus-4-6",
+			expected: "claude-opus-4-6",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, normalizeClaudeModelForAnthropic(tt.input))
+		})
+	}
+}
+
+func TestGatewayService_RoutingAccountIDsForRequest_NormalizedAnthropicModel(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(70)
+
+	groupRepo := &mockGroupRepoForGateway{
+		groups: map[int64]*Group{
+			groupID: {
+				ID:                  groupID,
+				Platform:            PlatformAnthropic,
+				Status:              StatusActive,
+				ModelRoutingEnabled: true,
+				ModelRouting: map[string][]int64{
+					"claude-sonnet-4-5": {11, 12},
+				},
+			},
+		},
+	}
+
+	svc := &GatewayService{groupRepo: groupRepo}
+	ids := svc.routingAccountIDsForRequest(ctx, &groupID, "claude-sonnet-4-5-20250929", PlatformAnthropic)
+
+	require.Equal(t, []int64{11, 12}, ids)
+}

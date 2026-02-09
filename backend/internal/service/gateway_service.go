@@ -131,6 +131,21 @@ func shortSessionHash(sessionHash string) string {
 	return sessionHash[:8]
 }
 
+var anthropicPrefixMappings = []string{
+	"claude-opus-4-5",
+	"claude-haiku-4-5",
+	"claude-sonnet-4-5",
+}
+
+func normalizeClaudeModelForAnthropic(requestedModel string) string {
+	for _, prefix := range anthropicPrefixMappings {
+		if strings.HasPrefix(requestedModel, prefix) {
+			return prefix
+		}
+	}
+	return requestedModel
+}
+
 func redactAuthHeaderValue(v string) string {
 	v = strings.TrimSpace(v)
 	if v == "" {
@@ -1689,6 +1704,7 @@ func (s *GatewayService) routingAccountIDsForRequest(ctx context.Context, groupI
 	if groupID == nil || requestedModel == "" || platform != PlatformAnthropic {
 		return nil
 	}
+	lookupModel := normalizeClaudeModelForAnthropic(requestedModel)
 	group, err := s.resolveGroupByID(ctx, *groupID)
 	if err != nil || group == nil {
 		if s.debugModelRoutingEnabled() {
@@ -1703,10 +1719,10 @@ func (s *GatewayService) routingAccountIDsForRequest(ctx context.Context, groupI
 		}
 		return nil
 	}
-	ids := group.GetRoutingAccountIDs(requestedModel)
+	ids := group.GetRoutingAccountIDs(lookupModel)
 	if s.debugModelRoutingEnabled() {
-		log.Printf("[ModelRoutingDebug] routing lookup: group_id=%d model=%s enabled=%v rules=%d matched_ids=%v",
-			group.ID, requestedModel, group.ModelRoutingEnabled, len(group.ModelRouting), ids)
+		log.Printf("[ModelRoutingDebug] routing lookup: group_id=%d model=%s normalized=%s enabled=%v rules=%d matched_ids=%v",
+			group.ID, requestedModel, lookupModel, group.ModelRoutingEnabled, len(group.ModelRouting), ids)
 	}
 	return ids
 }
@@ -1750,7 +1766,7 @@ func (s *GatewayService) checkClaudeCodeRestriction(ctx context.Context, groupID
 	}
 
 	// 强制平台模式不检查 Claude Code 限制
-	if _, hasForcePlatform := ctx.Value(ctxkey.ForcePlatform).(string); hasForcePlatform {
+	if forcePlatform, hasForcePlatform := ctx.Value(ctxkey.ForcePlatform).(string); hasForcePlatform && forcePlatform != "" {
 		return nil, groupID, nil
 	}
 
