@@ -295,3 +295,91 @@ func TestCopyUpstreamResponseHeaders_FiltersHopByHop(t *testing.T) {
 	require.Empty(t, c.Writer.Header().Get("Connection"))
 	require.Empty(t, c.Writer.Header().Get("Transfer-Encoding"))
 }
+
+func TestForward_UpstreamAccountSuccessPassthroughBody(t *testing.T) {
+	upstream := &captureUpstreamRequest{
+		statusCode: http.StatusOK,
+		body:       "data: {\"type\":\"message_start\"}\n\ndata: [DONE]\n\n",
+		headers: http.Header{
+			"Content-Type": []string{"text/event-stream"},
+			"X-Trace-Id":   []string{"trace-123"},
+			"Connection":   []string{"keep-alive"},
+			"X-Request-Id": []string{"req-up-1"},
+		},
+	}
+	svc := &AntigravityGatewayService{httpUpstream: upstream}
+
+	reqBody := `{"model":"claude-sonnet-4-5","max_tokens":16,"messages":[{"role":"user","content":"hi"}],"stream":true}`
+	c, rec := newGatewayTestContext(reqBody)
+	c.Request.Header.Set("anthropic-version", "2023-06-01")
+
+	account := &Account{
+		ID:          201,
+		Name:        "upstream-claude-ok",
+		Platform:    PlatformAntigravity,
+		Type:        AccountTypeUpstream,
+		Schedulable: true,
+		Status:      StatusActive,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"base_url": "https://up.example.com/",
+			"api_key":  "sk-upstream",
+		},
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, []byte(reqBody))
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, upstream.body, rec.Body.String())
+	require.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+	require.Equal(t, "trace-123", rec.Header().Get("X-Trace-Id"))
+	require.Empty(t, rec.Header().Get("Connection"))
+	require.Equal(t, "req-up-1", result.RequestID)
+	require.Equal(t, ClaudeUsage{}, result.Usage)
+}
+
+func TestForwardGemini_UpstreamAccountSuccessPassthroughBody(t *testing.T) {
+	upstream := &captureUpstreamRequest{
+		statusCode: http.StatusOK,
+		body:       "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"ok\"}]}}]}\n\n",
+		headers: http.Header{
+			"Content-Type": []string{"text/event-stream"},
+			"X-Upstream":   []string{"gemini"},
+			"Connection":   []string{"close"},
+			"X-Request-Id": []string{"req-up-gm-1"},
+		},
+	}
+	svc := &AntigravityGatewayService{httpUpstream: upstream}
+
+	reqBody := `{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}`
+	c, rec := newGatewayTestContext(reqBody)
+
+	account := &Account{
+		ID:          202,
+		Name:        "upstream-gemini-ok",
+		Platform:    PlatformAntigravity,
+		Type:        AccountTypeUpstream,
+		Schedulable: true,
+		Status:      StatusActive,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"base_url": "https://up.example.com",
+			"api_key":  "sk-upstream",
+			"model_mapping": map[string]any{
+				"my-custom-model": "gemini-3-pro-high",
+			},
+		},
+	}
+
+	result, err := svc.ForwardGemini(context.Background(), c, account, "my-custom-model", "generateContent", true, []byte(reqBody))
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, upstream.body, rec.Body.String())
+	require.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+	require.Equal(t, "gemini", rec.Header().Get("X-Upstream"))
+	require.Empty(t, rec.Header().Get("Connection"))
+	require.Equal(t, "req-up-gm-1", result.RequestID)
+	require.Equal(t, ClaudeUsage{}, result.Usage)
+}

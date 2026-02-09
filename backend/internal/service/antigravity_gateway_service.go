@@ -3231,37 +3231,18 @@ upstreamClaudeSuccess:
 	if requestID != "" {
 		c.Header("x-request-id", requestID)
 	}
-
-	var usage *ClaudeUsage
-	var firstTokenMs *int
-	if claudeReq.Stream {
-		streamRes, err := s.handleClaudeStreamingResponse(c, resp, startTime, originalModel)
-		if err != nil {
-			log.Printf("%s status=stream_error error=%v", prefix, err)
-			return nil, err
-		}
-		usage = streamRes.usage
-		firstTokenMs = streamRes.firstTokenMs
-	} else {
-		streamRes, err := s.handleClaudeStreamToNonStreaming(c, resp, startTime, originalModel)
-		if err != nil {
-			log.Printf("%s status=stream_collect_error error=%v", prefix, err)
-			return nil, err
-		}
-		usage = streamRes.usage
-		firstTokenMs = streamRes.firstTokenMs
-	}
-	if usage == nil {
-		usage = &ClaudeUsage{}
+	c.Status(resp.StatusCode)
+	if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+		log.Printf("%s status=copy_error error=%v", prefix, err)
+		return nil, err
 	}
 
 	return &ForwardResult{
-		RequestID:    requestID,
-		Usage:        *usage,
-		Model:        originalModel,
-		Stream:       claudeReq.Stream,
-		Duration:     time.Since(startTime),
-		FirstTokenMs: firstTokenMs,
+		RequestID: requestID,
+		Usage:     ClaudeUsage{},
+		Model:     originalModel,
+		Stream:    claudeReq.Stream,
+		Duration:  time.Since(startTime),
 	}, nil
 }
 
@@ -3485,28 +3466,10 @@ upstreamGeminiSuccess:
 	if requestID != "" {
 		c.Header("x-request-id", requestID)
 	}
-
-	var usage *ClaudeUsage
-	var firstTokenMs *int
-	if stream {
-		streamRes, err := s.handleGeminiStreamingResponse(c, resp, startTime)
-		if err != nil {
-			log.Printf("%s status=stream_error error=%v", prefix, err)
-			return nil, err
-		}
-		usage = streamRes.usage
-		firstTokenMs = streamRes.firstTokenMs
-	} else {
-		streamRes, err := s.handleGeminiStreamToNonStreaming(c, resp, startTime)
-		if err != nil {
-			log.Printf("%s status=stream_collect_error error=%v", prefix, err)
-			return nil, err
-		}
-		usage = streamRes.usage
-		firstTokenMs = streamRes.firstTokenMs
-	}
-	if usage == nil {
-		usage = &ClaudeUsage{}
+	c.Status(resp.StatusCode)
+	if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+		log.Printf("%s status=copy_error error=%v", prefix, err)
+		return nil, err
 	}
 
 	imageCount := 0
@@ -3515,13 +3478,12 @@ upstreamGeminiSuccess:
 	}
 
 	return &ForwardResult{
-		RequestID:    requestID,
-		Usage:        *usage,
-		Model:        originalModel,
-		Stream:       stream,
-		Duration:     time.Since(startTime),
-		FirstTokenMs: firstTokenMs,
-		ImageCount:   imageCount,
-		ImageSize:    imageSize,
+		RequestID:  requestID,
+		Usage:      ClaudeUsage{},
+		Model:      originalModel,
+		Stream:     stream,
+		Duration:   time.Since(startTime),
+		ImageCount: imageCount,
+		ImageSize:  imageSize,
 	}, nil
 }
