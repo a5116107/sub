@@ -14,8 +14,6 @@ import (
 )
 
 func TestGeminiOAuthService_GenerateAuthURL_RedirectURIStrategy(t *testing.T) {
-	t.Setenv(geminicli.GeminiCLIBuiltinOAuthClientSecretEnvVar, "test-builtin-secret")
-
 	type testCase struct {
 		name          string
 		cfg           *config.Config

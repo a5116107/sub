@@ -6,8 +6,6 @@ import (
 )
 
 func TestEffectiveOAuthConfig_GoogleOne(t *testing.T) {
-	t.Setenv(GeminiCLIBuiltinOAuthClientSecretEnvVar, "test-builtin-secret")
-
 	tests := []struct {
 		name         string
 		input        OAuthConfig
@@ -86,8 +84,6 @@ func TestEffectiveOAuthConfig_GoogleOne(t *testing.T) {
 }
 
 func TestEffectiveOAuthConfig_ScopeFiltering(t *testing.T) {
-	t.Setenv(GeminiCLIBuiltinOAuthClientSecretEnvVar, "test-builtin-secret")
-
 	// Test that Google One with built-in client filters out restricted scopes
 	cfg, err := EffectiveOAuthConfig(OAuthConfig{
 		Scopes: "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/generative-language.retriever https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.profile",

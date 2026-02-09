@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -84,16 +83,8 @@ func isGeminiCLIBuiltinOAuthClient(clientID, clientSecret string) bool {
 		return false
 	}
 
-	builtinClientID := strings.TrimSpace(os.Getenv(geminicli.GeminiCLIBuiltinOAuthClientIDEnvVar))
-	if builtinClientID == "" {
-		builtinClientID = geminicli.GeminiCLIOAuthClientID
-	}
-	builtinClientSecret := strings.TrimSpace(os.Getenv(geminicli.GeminiCLIBuiltinOAuthClientSecretEnvVar))
-	if builtinClientSecret == "" {
-		return false
-	}
-
-	return normalizedClientID == builtinClientID && normalizedClientSecret == builtinClientSecret
+	return normalizedClientID == geminicli.GeminiCLIOAuthClientID &&
+		normalizedClientSecret == geminicli.GeminiCLIOAuthClientSecret
 }
 
 func (s *GeminiOAuthService) GetOAuthConfig() *GeminiOAuthCapabilities {
