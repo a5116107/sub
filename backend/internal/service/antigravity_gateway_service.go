@@ -471,6 +471,42 @@ func (s *AntigravityGatewayService) getMappedModel(account *Account, requestedMo
 	return "claude-sonnet-4-5"
 }
 
+func mapAntigravityModelForScheduling(account *Account, requestedModel string) string {
+	if account == nil {
+		return ""
+	}
+	requestedModel = strings.TrimSpace(requestedModel)
+	if requestedModel == "" {
+		return ""
+	}
+
+	if len(account.GetModelMapping()) > 0 {
+		if mapped := account.GetMappedModel(requestedModel); mapped != requestedModel {
+			return mapped
+		}
+		if account.IsModelSupported(requestedModel) {
+			return requestedModel
+		}
+		return ""
+	}
+
+	if !IsAntigravityModelSupported(requestedModel) {
+		return ""
+	}
+	if antigravitySupportedModels[requestedModel] {
+		return requestedModel
+	}
+	for _, pm := range antigravityPrefixMapping {
+		if strings.HasPrefix(requestedModel, pm.prefix) {
+			return pm.target
+		}
+	}
+	if strings.HasPrefix(requestedModel, "gemini-") {
+		return requestedModel
+	}
+	return "claude-sonnet-4-5"
+}
+
 func isAntigravityModelSupportedByAccount(account *Account, requestedModel string) bool {
 	if account == nil {
 		return false
@@ -478,10 +514,7 @@ func isAntigravityModelSupportedByAccount(account *Account, requestedModel strin
 	if strings.TrimSpace(requestedModel) == "" {
 		return true
 	}
-	if len(account.GetModelMapping()) > 0 {
-		return account.IsModelSupported(requestedModel)
-	}
-	return IsAntigravityModelSupported(requestedModel)
+	return mapAntigravityModelForScheduling(account, requestedModel) != ""
 }
 
 // IsModelSupported 检查模型是否被支持

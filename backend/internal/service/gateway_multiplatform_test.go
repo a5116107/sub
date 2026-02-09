@@ -1161,6 +1161,25 @@ func TestGatewayService_isModelSupportedByAccountWithContext_ThinkingMode(t *tes
 			expected:        false,
 		},
 		{
+			name: "thinking_enabled_checks_suffix_on_mapped_model",
+			modelMapping: map[string]any{
+				"claude-3-5-sonnet-20241022": "claude-sonnet-4-5",
+			},
+			requestedModel:  "claude-3-5-sonnet-20241022",
+			thinkingEnabled: true,
+			expected:        false,
+		},
+		{
+			name: "thinking_enabled_checks_suffix_on_mapped_model_with_thinking_mapping",
+			modelMapping: map[string]any{
+				"claude-3-5-sonnet-20241022": "claude-sonnet-4-5",
+				"claude-sonnet-4-5-thinking": "claude-sonnet-4-5-thinking",
+			},
+			requestedModel:  "claude-3-5-sonnet-20241022",
+			thinkingEnabled: true,
+			expected:        true,
+		},
+		{
 			name: "thinking_enabled_wildcard_mapping_passes",
 			modelMapping: map[string]any{
 				"claude-*": "claude-sonnet-4-5",

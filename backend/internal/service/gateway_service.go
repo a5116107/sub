@@ -2316,12 +2316,13 @@ func (s *GatewayService) isModelSupportedByAccountWithContext(ctx context.Contex
 		if strings.TrimSpace(requestedModel) == "" {
 			return true
 		}
-		if !s.isModelSupportedByAccount(account, requestedModel) {
+		mappedModel := mapAntigravityModelForScheduling(account, requestedModel)
+		if mappedModel == "" {
 			return false
 		}
 		if enabled, ok := ctx.Value(ctxkey.ThinkingEnabled).(bool); ok {
-			finalModel := applyThinkingModelSuffix(requestedModel, enabled)
-			if finalModel == requestedModel {
+			finalModel := applyThinkingModelSuffix(mappedModel, enabled)
+			if finalModel == mappedModel {
 				return true
 			}
 			return account.IsModelSupported(finalModel)
