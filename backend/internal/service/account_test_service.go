@@ -246,15 +246,15 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("anthropic-version", "2023-06-01")
 
+	// Apply Claude Code client headers.
+	for key, value := range claude.DefaultHeaders {
+		req.Header.Set(key, value)
+	}
+
 	// Set authentication header and beta header based on account type.
 	if useBearer {
-		// OAuth accounts use the full Claude Code beta set.
 		req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
 		req.Header.Set("Authorization", "Bearer "+authToken)
-		// Apply Claude Code client headers for OAuth only.
-		for key, value := range claude.DefaultHeaders {
-			req.Header.Set(key, value)
-		}
 	} else {
 		// API key accounts should not include oauth beta.
 		req.Header.Set("anthropic-beta", claude.APIKeyBetaHeader)
