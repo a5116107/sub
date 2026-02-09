@@ -63,14 +63,24 @@ func ParseGatewayRequest(body []byte) (*ParsedRequest, error) {
 			parsed.MetadataUserID = userID
 		}
 	}
+	// Anthropic/OpenAI 风格
 	// system 字段只要存在就视为显式提供（即使为 null），
 	// 以避免客户端传 null 时被默认 system 误注入。
 	if system, ok := req["system"]; ok {
 		parsed.HasSystem = true
 		parsed.System = system
+	} else if sysInst, ok := req["systemInstruction"].(map[string]any); ok {
+		// Gemini 原生风格：systemInstruction.parts
+		if parts, ok := sysInst["parts"].([]any); ok {
+			parsed.System = parts
+		}
 	}
+
 	if messages, ok := req["messages"].([]any); ok {
 		parsed.Messages = messages
+	} else if contents, ok := req["contents"].([]any); ok {
+		// Gemini 原生风格：contents
+		parsed.Messages = contents
 	}
 
 	// thinking: {type: "enabled"}

@@ -51,6 +51,39 @@ func TestParseGatewayRequest_SystemNull(t *testing.T) {
 	require.Nil(t, parsed.System)
 }
 
+func TestParseGatewayRequest_GeminiNativeFields(t *testing.T) {
+	body := []byte(`{
+		"model":"gemini-3-flash",
+		"systemInstruction":{"parts":[{"text":"gemini system"}]},
+		"contents":[{"role":"user","parts":[{"text":"hello"}]}]
+	}`)
+
+	parsed, err := ParseGatewayRequest(body)
+	require.NoError(t, err)
+	require.False(t, parsed.HasSystem)
+	require.NotNil(t, parsed.System)
+	require.Len(t, parsed.Messages, 1)
+}
+
+func TestParseGatewayRequest_AnthropicFieldsTakePriorityOverGemini(t *testing.T) {
+	body := []byte(`{
+		"model":"claude-sonnet-4-5",
+		"system":"real system",
+		"messages":[{"role":"user","content":"real content"}],
+		"systemInstruction":{"parts":[{"text":"gemini system"}]},
+		"contents":[{"role":"user","parts":[{"text":"gemini content"}]}]
+	}`)
+
+	parsed, err := ParseGatewayRequest(body)
+	require.NoError(t, err)
+	require.True(t, parsed.HasSystem)
+	require.Equal(t, "real system", parsed.System)
+	require.Len(t, parsed.Messages, 1)
+	msg, ok := parsed.Messages[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "real content", msg["content"])
+}
+
 func TestParseGatewayRequest_InvalidModelType(t *testing.T) {
 	body := []byte(`{"model":123}`)
 	_, err := ParseGatewayRequest(body)
