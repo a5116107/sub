@@ -246,6 +246,70 @@ func TestForwardGemini_UpstreamAccountRoutesToGeminiEndpoint(t *testing.T) {
 	require.Empty(t, upstream.lastReq.Header.Get("Connection"))
 }
 
+func TestForward_UpstreamAccountBaseURLWithAntigravitySuffix(t *testing.T) {
+	upstream := &captureUpstreamRequest{
+		statusCode: http.StatusInternalServerError,
+		body:       `{"error":{"message":"boom"}}`,
+	}
+	svc := &AntigravityGatewayService{httpUpstream: upstream}
+
+	reqBody := `{"model":"claude-sonnet-4-5","max_tokens":16,"messages":[{"role":"user","content":"hi"}],"stream":false}`
+	c, _ := newGatewayTestContext(reqBody)
+	c.Request.Header.Set("anthropic-version", "2023-06-01")
+
+	account := &Account{
+		ID:          111,
+		Name:        "upstream-claude-suffix",
+		Platform:    PlatformAntigravity,
+		Type:        AccountTypeUpstream,
+		Schedulable: true,
+		Status:      StatusActive,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"base_url": "https://up.example.com/antigravity/",
+			"api_key":  "sk-upstream",
+		},
+	}
+
+	_, err := svc.Forward(context.Background(), c, account, []byte(reqBody))
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, "https://up.example.com/antigravity/v1/messages", upstream.lastReq.URL.String())
+}
+
+func TestForwardGemini_UpstreamAccountBaseURLWithAntigravitySuffix(t *testing.T) {
+	upstream := &captureUpstreamRequest{
+		statusCode: http.StatusInternalServerError,
+		body:       `{"error":{"message":"boom"}}`,
+	}
+	svc := &AntigravityGatewayService{httpUpstream: upstream}
+
+	reqBody := `{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}`
+	c, _ := newGatewayTestContext(reqBody)
+
+	account := &Account{
+		ID:          112,
+		Name:        "upstream-gemini-suffix",
+		Platform:    PlatformAntigravity,
+		Type:        AccountTypeUpstream,
+		Schedulable: true,
+		Status:      StatusActive,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"base_url": "https://up.example.com/antigravity",
+			"api_key":  "sk-upstream",
+			"model_mapping": map[string]any{
+				"my-custom-model": "gemini-3-pro-high",
+			},
+		},
+	}
+
+	_, err := svc.ForwardGemini(context.Background(), c, account, "my-custom-model", "generateContent", true, []byte(reqBody))
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, "https://up.example.com/antigravity/v1beta/models/gemini-3-pro-high:generateContent?alt=sse", upstream.lastReq.URL.String())
+}
+
 func TestTestConnection_UpstreamAccountUsesDirectEndpoint(t *testing.T) {
 	upstream := &captureUpstreamRequest{
 		statusCode: http.StatusOK,

@@ -88,7 +88,7 @@ func antigravityRetryLoop(p antigravityRetryLoopParams) (*antigravityRetryLoopRe
 	// This avoids going through shared Antigravity URL pools.
 	useGlobalAvailability := true
 	if p.account != nil && p.account.Type == AccountTypeUpstream {
-		upstreamBaseURL := strings.TrimRight(strings.TrimSpace(p.account.GetCredential("base_url")), "/")
+		upstreamBaseURL := normalizeUpstreamBaseURL(p.account.GetCredential("base_url"))
 		if upstreamBaseURL == "" {
 			return nil, errors.New("upstream account missing base_url in credentials")
 		}
@@ -257,6 +257,15 @@ urlFallbackLoop:
 	}
 
 	return &antigravityRetryLoopResult{resp: resp}, nil
+}
+
+func normalizeUpstreamBaseURL(raw string) string {
+	baseURL := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if strings.HasSuffix(baseURL, "/antigravity") {
+		baseURL = strings.TrimSuffix(baseURL, "/antigravity")
+		baseURL = strings.TrimRight(baseURL, "/")
+	}
+	return baseURL
 }
 
 // shouldRetryAntigravityError 判断是否应该重试
@@ -3003,7 +3012,7 @@ func copyUpstreamResponseHeaders(c *gin.Context, src http.Header) {
 
 // testUpstreamConnection 测试 upstream 账号连接
 func (s *AntigravityGatewayService) testUpstreamConnection(ctx context.Context, account *Account, modelID string) (*TestConnectionResult, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(account.GetCredential("base_url")), "/")
+	baseURL := normalizeUpstreamBaseURL(account.GetCredential("base_url"))
 	if baseURL == "" {
 		return nil, errors.New("upstream account missing base_url in credentials")
 	}
@@ -3078,7 +3087,7 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 	sessionID := getSessionID(c)
 	prefix := logPrefix(sessionID, account.Name)
 
-	baseURL := strings.TrimRight(strings.TrimSpace(account.GetCredential("base_url")), "/")
+	baseURL := normalizeUpstreamBaseURL(account.GetCredential("base_url"))
 	if baseURL == "" {
 		return nil, s.writeClaudeError(c, http.StatusBadGateway, "api_error", "Upstream account missing base_url")
 	}
@@ -3252,7 +3261,7 @@ func (s *AntigravityGatewayService) ForwardUpstreamGemini(ctx context.Context, c
 	sessionID := getSessionID(c)
 	prefix := logPrefix(sessionID, account.Name)
 
-	baseURL := strings.TrimRight(strings.TrimSpace(account.GetCredential("base_url")), "/")
+	baseURL := normalizeUpstreamBaseURL(account.GetCredential("base_url"))
 	if baseURL == "" {
 		return nil, s.writeGoogleError(c, http.StatusBadGateway, "Upstream account missing base_url")
 	}
