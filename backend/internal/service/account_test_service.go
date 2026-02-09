@@ -251,7 +251,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		req.Header.Set(key, value)
 	}
 
-	// Set authentication header and beta header based on account type
+	// Set authentication header
 	if useBearer {
 		req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
 		req.Header.Set("Authorization", "Bearer "+authToken)
