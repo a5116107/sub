@@ -437,6 +437,23 @@ func (a *Account) GetBaseURL() string {
 	return baseURL
 }
 
+// GetGeminiBaseURL returns the base URL for Gemini-compatible upstream requests.
+// For Antigravity API-key accounts, "/antigravity" is appended automatically.
+func (a *Account) GetGeminiBaseURL(defaultBaseURL string) string {
+	baseURL := strings.TrimSpace(a.GetCredential("base_url"))
+	if baseURL == "" {
+		baseURL = defaultBaseURL
+	}
+	if a.Platform == PlatformAntigravity && a.Type == AccountTypeAPIKey {
+		trimmed := strings.TrimRight(baseURL, "/")
+		if strings.HasSuffix(trimmed, "/antigravity") {
+			return trimmed
+		}
+		return trimmed + "/antigravity"
+	}
+	return baseURL
+}
+
 func (a *Account) GetExtraString(key string) string {
 	if a.Extra == nil {
 		return ""
