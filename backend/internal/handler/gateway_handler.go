@@ -307,7 +307,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 
 	// 计算粘性会话hash（用户侧可控），再按 user scope 防止跨用户碰撞/Pinning。
-	sessionHash := h.gatewayService.GenerateSessionHash(originalParsedReq)
+	sessionHashCtx := &service.SessionHashContext{
+		ClientIP:  ip.GetClientIP(c),
+		UserAgent: c.GetHeader("User-Agent"),
+		APIKeyID:  apiKey.ID,
+	}
+	sessionHash := h.gatewayService.GenerateSessionHashWithContext(originalParsedReq, sessionHashCtx)
 	if apiKey != nil && apiKey.User != nil {
 		sessionHash = service.ScopeStickySessionKey(apiKey.User.ID, sessionHash)
 	}
@@ -996,7 +1001,12 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	}
 
 	// 计算粘性会话 hash
-	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
+	sessionHashCtx := &service.SessionHashContext{
+		ClientIP:  ip.GetClientIP(c),
+		UserAgent: c.GetHeader("User-Agent"),
+		APIKeyID:  apiKey.ID,
+	}
+	sessionHash := h.gatewayService.GenerateSessionHashWithContext(parsedReq, sessionHashCtx)
 	if apiKey != nil && apiKey.User != nil {
 		sessionHash = service.ScopeStickySessionKey(apiKey.User.ID, sessionHash)
 	}

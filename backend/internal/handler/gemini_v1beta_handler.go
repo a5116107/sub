@@ -240,7 +240,12 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	if sessionHash == "" {
 		// Fallback: 使用通用的会话哈希生成逻辑（适用于其他客户端）
 		parsedReq, _ := service.ParseGatewayRequest(body)
-		sessionHash = h.gatewayService.GenerateSessionHash(parsedReq)
+		sessionHashCtx := &service.SessionHashContext{
+			ClientIP:  ip.GetClientIP(c),
+			UserAgent: c.GetHeader("User-Agent"),
+			APIKeyID:  apiKey.ID,
+		}
+		sessionHash = h.gatewayService.GenerateSessionHashWithContext(parsedReq, sessionHashCtx)
 	}
 	sessionKey := sessionHash
 	if sessionHash != "" {

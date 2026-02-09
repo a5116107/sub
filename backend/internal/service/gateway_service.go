@@ -483,10 +483,21 @@ func (s *GatewayService) ApplyRateMultiplierToSubscription() bool {
 }
 
 // GenerateSessionHash 从预解析请求计算粘性会话 hash
+type SessionHashContext struct {
+	ClientIP  string
+	UserAgent string
+	APIKeyID  int64
+}
+
 func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
+	return s.GenerateSessionHashWithContext(parsed, nil)
+}
+
+func (s *GatewayService) GenerateSessionHashWithContext(parsed *ParsedRequest, sessionCtx *SessionHashContext) string {
 	if parsed == nil {
 		return ""
 	}
+	sessionContextSeed := buildSessionContextSeed(sessionCtx)
 
 	// 1. 最高优先级：从 metadata.user_id 提取 session_xxx
 	if parsed.MetadataUserID != "" {
@@ -505,6 +516,9 @@ func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
 	if parsed.System != nil {
 		systemText := s.extractTextFromSystem(parsed.System)
 		if systemText != "" {
+			if sessionContextSeed != "" {
+				systemText = sessionContextSeed + "|" + systemText
+			}
 			return s.hashContent(systemText)
 		}
 	}
@@ -514,12 +528,27 @@ func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
 		if firstMsg, ok := parsed.Messages[0].(map[string]any); ok {
 			msgText := s.extractTextFromContent(firstMsg["content"])
 			if msgText != "" {
+				if sessionContextSeed != "" {
+					msgText = sessionContextSeed + "|" + msgText
+				}
 				return s.hashContent(msgText)
 			}
 		}
 	}
 
 	return ""
+}
+
+func buildSessionContextSeed(sessionCtx *SessionHashContext) string {
+	if sessionCtx == nil {
+		return ""
+	}
+	clientIP := strings.TrimSpace(sessionCtx.ClientIP)
+	userAgent := strings.TrimSpace(sessionCtx.UserAgent)
+	if clientIP == "" && userAgent == "" && sessionCtx.APIKeyID <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s|%s|%d", clientIP, userAgent, sessionCtx.APIKeyID)
 }
 
 // BindStickySession sets session -> account binding with standard TTL.
