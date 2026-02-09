@@ -85,6 +85,23 @@ func TestGeminiOAuthService_GenerateAuthURL_RedirectURIStrategy(t *testing.T) {
 			oauthType:     "ai_studio",
 			wantErrSubstr: "AI Studio OAuth requires a custom OAuth Client",
 		},
+		{
+			name: "ai_studio accepts builtin client id with custom secret",
+			cfg: &config.Config{
+				Gemini: config.GeminiConfig{
+					OAuth: config.GeminiOAuthConfig{
+						ClientID:     geminicli.GeminiCLIOAuthClientID,
+						ClientSecret: "custom-client-secret",
+						Scopes:       geminicli.DefaultAIStudioScopes,
+					},
+				},
+			},
+			oauthType:     "ai_studio",
+			wantClientID:  geminicli.GeminiCLIOAuthClientID,
+			wantRedirect:  geminicli.AIStudioOAuthRedirectURI,
+			wantScope:     geminicli.DefaultAIStudioScopes,
+			wantProjectID: "",
+		},
 	}
 
 	for _, tt := range tests {
