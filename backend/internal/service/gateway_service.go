@@ -3490,6 +3490,9 @@ func applyClaudeOAuthHeaderDefaults(req *http.Request, isStream bool) {
 	if req == nil {
 		return
 	}
+	if req.Header.Get("accept") == "" {
+		req.Header.Set("accept", "application/json")
+	}
 	for key, value := range claude.DefaultHeaders {
 		if value == "" {
 			continue

@@ -82,3 +82,22 @@ func TestBuildCountTokensRequest_MimicMergesRequiredBetas(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,token-counting-2024-11-01,foo", req.Header.Get("anthropic-beta"))
 }
+
+func TestApplyClaudeOAuthHeaderDefaults_SetsAcceptWhenMissing(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	req.Header = make(http.Header)
+
+	applyClaudeOAuthHeaderDefaults(req, false)
+
+	require.Equal(t, "application/json", req.Header.Get("accept"))
+}
+
+func TestApplyClaudeOAuthHeaderDefaults_KeepsExistingAccept(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	req.Header.Set("accept", "text/event-stream")
+
+	applyClaudeOAuthHeaderDefaults(req, true)
+
+	require.Equal(t, "text/event-stream", req.Header.Get("accept"))
+	require.Equal(t, "stream", req.Header.Get("x-stainless-helper-method"))
+}
