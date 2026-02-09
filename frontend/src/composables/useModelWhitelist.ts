@@ -58,6 +58,28 @@ const geminiModels = [
   'gemini-3-pro-preview'
 ]
 
+// Antigravity 官方支持模型（精确匹配）
+const antigravityModels = [
+  // Claude 4.5+ 系列
+  'claude-opus-4-6',
+  'claude-opus-4-5-thinking',
+  'claude-sonnet-4-5',
+  'claude-sonnet-4-5-thinking',
+  // Gemini 2.5 系列
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash-thinking',
+  'gemini-2.5-pro',
+  // Gemini 3 系列
+  'gemini-3-flash',
+  'gemini-3-pro-high',
+  'gemini-3-pro-low',
+  'gemini-3-pro-image',
+  // 其他
+  'gpt-oss-120b-medium',
+  'tab_flash_lite_preview'
+]
+
 // 智谱 GLM
 const zhipuModels = [
   'glm-4', 'glm-4v', 'glm-4-plus', 'glm-4-0520',
@@ -240,6 +262,17 @@ const geminiPresetMappings = [
   { label: '2.5 Pro', from: 'gemini-2.5-pro', to: 'gemini-2.5-pro', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400' }
 ]
 
+const antigravityPresetMappings = [
+  { label: 'Claude→Sonnet', from: 'claude-*', to: 'claude-sonnet-4-5', color: 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400' },
+  { label: 'Sonnet→Sonnet', from: 'claude-sonnet-*', to: 'claude-sonnet-4-5', color: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-400' },
+  { label: 'Opus→Opus', from: 'claude-opus-*', to: 'claude-opus-4-6-thinking', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-400' },
+  { label: 'Haiku→Sonnet', from: 'claude-haiku-*', to: 'claude-sonnet-4-5', color: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  { label: 'Gemini 3→Flash', from: 'gemini-3*', to: 'gemini-3-flash', color: 'bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-400' },
+  { label: 'Gemini 2.5→Flash', from: 'gemini-2.5*', to: 'gemini-2.5-flash', color: 'bg-orange-100 text-orange-700 hover:bg-orange-200 dark:bg-orange-900/30 dark:text-orange-400' },
+  { label: 'Sonnet 4.5', from: 'claude-sonnet-4-5', to: 'claude-sonnet-4-5', color: 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400' },
+  { label: 'Opus 4.6-thinking', from: 'claude-opus-4-6-thinking', to: 'claude-opus-4-6-thinking', color: 'bg-pink-100 text-pink-700 hover:bg-pink-200 dark:bg-pink-900/30 dark:text-pink-400' }
+]
+
 let antigravityDefaultMappingsCache: { from: string; to: string }[] | null = null
 
 export async function fetchAntigravityDefaultMappings(): Promise<{ from: string; to: string }[]> {
@@ -282,6 +315,7 @@ export function getModelsByPlatform(platform: string): string[] {
     case 'anthropic':
     case 'claude': return claudeModels
     case 'gemini': return geminiModels
+    case 'antigravity': return antigravityModels
     case 'iflow': return []
     case 'zhipu': return zhipuModels
     case 'qwen': return qwenModels
@@ -306,12 +340,19 @@ export function getModelsByPlatform(platform: string): string[] {
 export function getPresetMappingsByPlatform(platform: string) {
   if (platform === 'openai') return openaiPresetMappings
   if (platform === 'gemini') return geminiPresetMappings
+  if (platform === 'antigravity') return antigravityPresetMappings
   return anthropicPresetMappings
 }
 
 // =====================
 // 构建模型映射对象（用于 API）
 // =====================
+
+export function isValidWildcardPattern(pattern: string): boolean {
+  const starIndex = pattern.indexOf('*')
+  if (starIndex === -1) return true
+  return starIndex === pattern.length - 1 && pattern.lastIndexOf('*') === starIndex
+}
 
 export function buildModelMappingObject(
   mode: 'whitelist' | 'mapping',
@@ -322,13 +363,18 @@ export function buildModelMappingObject(
 
   if (mode === 'whitelist') {
     for (const model of allowedModels) {
-      mapping[model] = model
+      if (!model.includes('*')) {
+        mapping[model] = model
+      }
     }
   } else {
     for (const m of modelMappings) {
       const from = m.from.trim()
       const to = m.to.trim()
-      if (from && to) mapping[from] = to
+      if (!from || !to) continue
+      if (!isValidWildcardPattern(from)) continue
+      if (to.includes('*')) continue
+      mapping[from] = to
     }
   }
 
