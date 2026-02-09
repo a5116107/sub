@@ -31,6 +31,21 @@ const (
 	antigravityRetryMaxDelay     = 16 * time.Second
 )
 
+// upstreamHopByHopHeaders 透传请求头时需要排除的 hop-by-hop 头
+var upstreamHopByHopHeaders = map[string]bool{
+	"connection":          true,
+	"keep-alive":          true,
+	"proxy-authenticate":  true,
+	"proxy-authorization": true,
+	"proxy-connection":    true,
+	"te":                  true,
+	"trailer":             true,
+	"transfer-encoding":   true,
+	"upgrade":             true,
+	"host":                true,
+	"content-length":      true,
+}
+
 const (
 	antigravityMaxRetriesEnv            = "GATEWAY_ANTIGRAVITY_MAX_RETRIES"
 	antigravityMaxRetriesAfterSwitchEnv = "GATEWAY_ANTIGRAVITY_AFTER_SWITCHMAX_RETRIES"
@@ -2920,6 +2935,20 @@ func filterEmptyPartsFromGeminiRequest(body []byte) ([]byte, error) {
 	return json.Marshal(payload)
 }
 
+func copyUpstreamRequestHeaders(dst http.Header, c *gin.Context) {
+	if dst == nil || c == nil || c.Request == nil {
+		return
+	}
+	for key, values := range c.Request.Header {
+		if upstreamHopByHopHeaders[strings.ToLower(key)] {
+			continue
+		}
+		for _, v := range values {
+			dst.Add(key, v)
+		}
+	}
+}
+
 // testUpstreamConnection 测试 upstream 账号连接
 func (s *AntigravityGatewayService) testUpstreamConnection(ctx context.Context, account *Account, modelID string) (*TestConnectionResult, error) {
 	baseURL := strings.TrimRight(strings.TrimSpace(account.GetCredential("base_url")), "/")
@@ -3055,23 +3084,17 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 		if err != nil {
 			return nil, s.writeClaudeError(c, http.StatusInternalServerError, "api_error", "Failed to build request")
 		}
-		req.Header.Set("Content-Type", "application/json")
+		copyUpstreamRequestHeaders(req.Header, c)
+		if strings.TrimSpace(req.Header.Get("Content-Type")) == "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 		req.Header.Set("x-api-key", apiKey)
-		if c != nil {
-			if v := strings.TrimSpace(c.GetHeader("anthropic-version")); v != "" {
-				req.Header.Set("anthropic-version", v)
-			} else {
-				req.Header.Set("anthropic-version", "2023-06-01")
-			}
-			if v := strings.TrimSpace(c.GetHeader("anthropic-beta")); v != "" {
-				req.Header.Set("anthropic-beta", v)
-			}
-			if len(upstreamBody) > 0 {
-				c.Set(OpsUpstreamRequestBodyKey, string(upstreamBody))
-			}
-		} else {
+		if strings.TrimSpace(req.Header.Get("anthropic-version")) == "" {
 			req.Header.Set("anthropic-version", "2023-06-01")
+		}
+		if c != nil && len(upstreamBody) > 0 {
+			c.Set(OpsUpstreamRequestBodyKey, string(upstreamBody))
 		}
 
 		resp, err = s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
@@ -3120,19 +3143,13 @@ func (s *AntigravityGatewayService) ForwardUpstream(ctx context.Context, c *gin.
 				retryBody, _ := json.Marshal(&retryClaudeReq)
 				retryReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(retryBody))
 				if err == nil {
-					retryReq.Header.Set("Content-Type", "application/json")
+					copyUpstreamRequestHeaders(retryReq.Header, c)
+					if strings.TrimSpace(retryReq.Header.Get("Content-Type")) == "" {
+						retryReq.Header.Set("Content-Type", "application/json")
+					}
 					retryReq.Header.Set("Authorization", "Bearer "+apiKey)
 					retryReq.Header.Set("x-api-key", apiKey)
-					if c != nil {
-						if v := strings.TrimSpace(c.GetHeader("anthropic-version")); v != "" {
-							retryReq.Header.Set("anthropic-version", v)
-						} else {
-							retryReq.Header.Set("anthropic-version", "2023-06-01")
-						}
-						if v := strings.TrimSpace(c.GetHeader("anthropic-beta")); v != "" {
-							retryReq.Header.Set("anthropic-beta", v)
-						}
-					} else {
+					if strings.TrimSpace(retryReq.Header.Get("anthropic-version")) == "" {
 						retryReq.Header.Set("anthropic-version", "2023-06-01")
 					}
 
@@ -3271,7 +3288,10 @@ func (s *AntigravityGatewayService) ForwardUpstreamGemini(ctx context.Context, c
 		if err != nil {
 			return nil, s.writeGoogleError(c, http.StatusInternalServerError, "Failed to build request")
 		}
-		req.Header.Set("Content-Type", "application/json")
+		copyUpstreamRequestHeaders(req.Header, c)
+		if strings.TrimSpace(req.Header.Get("Content-Type")) == "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 
 		if c != nil && len(body) > 0 {
@@ -3334,7 +3354,10 @@ func (s *AntigravityGatewayService) ForwardUpstreamGemini(ctx context.Context, c
 				}
 				fallbackReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fallbackURL, bytes.NewReader(body))
 				if err == nil {
-					fallbackReq.Header.Set("Content-Type", "application/json")
+					copyUpstreamRequestHeaders(fallbackReq.Header, c)
+					if strings.TrimSpace(fallbackReq.Header.Get("Content-Type")) == "" {
+						fallbackReq.Header.Set("Content-Type", "application/json")
+					}
 					fallbackReq.Header.Set("Authorization", "Bearer "+apiKey)
 					fallbackResp, err := s.httpUpstream.Do(fallbackReq, proxyURL, account.ID, account.Concurrency)
 					if err == nil && fallbackResp.StatusCode < 400 {

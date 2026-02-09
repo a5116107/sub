@@ -168,6 +168,10 @@ func TestForward_UpstreamAccountRoutesToClaudeEndpoint(t *testing.T) {
 	reqBody := `{"model":"claude-sonnet-4-5","max_tokens":16,"messages":[{"role":"user","content":"hi"}],"stream":false}`
 	c, _ := newGatewayTestContext(reqBody)
 	c.Request.Header.Set("anthropic-version", "2023-06-01")
+	c.Request.Header.Set("anthropic-beta", "beta-flag")
+	c.Request.Header.Set("X-Custom-Trace", "trace-001")
+	c.Request.Header.Set("Connection", "keep-alive")
+	c.Request.Header.Set("Authorization", "Bearer client-token")
 
 	account := &Account{
 		ID:          101,
@@ -194,6 +198,9 @@ func TestForward_UpstreamAccountRoutesToClaudeEndpoint(t *testing.T) {
 	require.Equal(t, "Bearer sk-upstream", upstream.lastReq.Header.Get("Authorization"))
 	require.Equal(t, "sk-upstream", upstream.lastReq.Header.Get("x-api-key"))
 	require.Equal(t, "2023-06-01", upstream.lastReq.Header.Get("anthropic-version"))
+	require.Equal(t, "beta-flag", upstream.lastReq.Header.Get("anthropic-beta"))
+	require.Equal(t, "trace-001", upstream.lastReq.Header.Get("X-Custom-Trace"))
+	require.Empty(t, upstream.lastReq.Header.Get("Connection"))
 }
 
 func TestForwardGemini_UpstreamAccountRoutesToGeminiEndpoint(t *testing.T) {
@@ -205,6 +212,9 @@ func TestForwardGemini_UpstreamAccountRoutesToGeminiEndpoint(t *testing.T) {
 
 	reqBody := `{"contents":[{"role":"user","parts":[{"text":"hello"}]}]}`
 	c, _ := newGatewayTestContext(reqBody)
+	c.Request.Header.Set("X-Goog-Api-Client", "gl-go/1.22")
+	c.Request.Header.Set("Connection", "close")
+	c.Request.Header.Set("Authorization", "Bearer client-token")
 
 	account := &Account{
 		ID:          102,
@@ -232,6 +242,8 @@ func TestForwardGemini_UpstreamAccountRoutesToGeminiEndpoint(t *testing.T) {
 	require.NotNil(t, upstream.lastReq)
 	require.Equal(t, "https://up.example.com/antigravity/v1beta/models/gemini-3-pro-high:generateContent?alt=sse", upstream.lastReq.URL.String())
 	require.Equal(t, "Bearer sk-upstream", upstream.lastReq.Header.Get("Authorization"))
+	require.Equal(t, "gl-go/1.22", upstream.lastReq.Header.Get("X-Goog-Api-Client"))
+	require.Empty(t, upstream.lastReq.Header.Get("Connection"))
 }
 
 func TestTestConnection_UpstreamAccountUsesDirectEndpoint(t *testing.T) {
