@@ -3604,7 +3604,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		firstTokenMs = streamResult.firstTokenMs
 		clientDisconnect = streamResult.clientDisconnect
 	} else {
-		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, reqModel, toolNameMap)
+		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, reqModel, toolNameMap, shouldMimicClaudeCode)
 		if err != nil {
 			return nil, err
 		}
@@ -4462,7 +4462,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 	}
 
 	needModelReplace := originalModel != mappedModel
-	rewriteTools := account.IsOAuth()
+	rewriteTools := account.IsOAuth() && mimicClaudeCode
 	clientDisconnected := false // 客户端断开标志，断开后继续读取上游以获取完整usage
 
 	for {
@@ -4628,6 +4628,9 @@ func rewriteToolNamesInValue(value any, toolNameMap map[string]string) bool {
 }
 
 func (s *GatewayService) replaceToolNamesInSSELine(line string, toolNameMap map[string]string) string {
+	if len(toolNameMap) == 0 {
+		return line
+	}
 	if !sseDataRe.MatchString(line) {
 		return line
 	}
@@ -4704,7 +4707,7 @@ func (s *GatewayService) parseSSEUsage(data string, usage *ClaudeUsage) {
 	}
 }
 
-func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string, toolNameMap map[string]string) (*ClaudeUsage, error) {
+func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string, toolNameMap map[string]string, mimicClaudeCode bool) (*ClaudeUsage, error) {
 	// 更新5h窗口状态
 	s.rateLimitService.UpdateSessionWindow(ctx, account, resp.Header)
 
@@ -4734,7 +4737,7 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 	if originalModel != mappedModel {
 		body = s.replaceModelInResponseBody(body, mappedModel, originalModel)
 	}
-	if account.IsOAuth() {
+	if account.IsOAuth() && mimicClaudeCode {
 		body = s.replaceToolNamesInResponseBody(body, toolNameMap)
 	}
 
@@ -4775,6 +4778,9 @@ func (s *GatewayService) replaceModelInResponseBody(body []byte, fromModel, toMo
 }
 
 func (s *GatewayService) replaceToolNamesInResponseBody(body []byte, toolNameMap map[string]string) []byte {
+	if len(toolNameMap) == 0 {
+		return body
+	}
 	if len(body) == 0 {
 		return body
 	}

@@ -68,3 +68,27 @@ func TestReplaceToolNamesInResponseBody_RestoreOriginalToolName(t *testing.T) {
 	require.Equal(t, "websearch", gjson.GetBytes(rewritten, "content.0.name").String())
 	require.Equal(t, "myCustomTool", gjson.GetBytes(rewritten, "content.1.name").String())
 }
+
+func TestReplaceToolNamesInResponseBody_NoMapNoRewrite(t *testing.T) {
+	service := &GatewayService{}
+	body := []byte(`{
+		"type":"message",
+		"content":[
+			{"type":"tool_use","name":"WebSearch","input":{"q":"a"}},
+			{"type":"tool_use","name":"Task","input":{"path":"b"}}
+		]
+	}`)
+
+	rewritten := service.replaceToolNamesInResponseBody(body, nil)
+
+	require.JSONEq(t, string(body), string(rewritten))
+}
+
+func TestReplaceToolNamesInSSELine_NoMapNoRewrite(t *testing.T) {
+	service := &GatewayService{}
+	line := `data: {"type":"content_block_delta","delta":{"type":"tool_use","name":"WebSearch"}}`
+
+	rewritten := service.replaceToolNamesInSSELine(line, nil)
+
+	require.Equal(t, line, rewritten)
+}
