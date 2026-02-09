@@ -21,6 +21,7 @@ const (
 
 	// Antigravity OAuth 客户端凭证
 	ClientID     = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+	ClientSecret = "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"
 
 	// Client secret must be provided at runtime; it must not be committed.
 	AntigravityOAuthClientSecretEnvVar = "ANTIGRAVITY_OAUTH_CLIENT_SECRET"
@@ -62,7 +63,7 @@ func oauthClientID() string {
 func oauthClientSecret() (string, error) {
 	secret := strings.TrimSpace(os.Getenv(AntigravityOAuthClientSecretEnvVar))
 	if secret == "" {
-		return "", fmt.Errorf("Antigravity OAuth client secret not configured: please set %s", AntigravityOAuthClientSecretEnvVar)
+		secret = ClientSecret
 	}
 	return secret, nil
 }
