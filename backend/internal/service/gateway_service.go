@@ -287,6 +287,8 @@ var (
 	toolPrefixRe         = regexp.MustCompile(`(?i)^(?:oc_|mcp_)`)
 	toolNameBoundaryRe   = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 	toolNameCamelRe      = regexp.MustCompile(`([a-z0-9])([A-Z])`)
+	toolNameFieldRe      = regexp.MustCompile(`"name"\s*:\s*"([^"]+)"`)
+	modelFieldRe         = regexp.MustCompile(`"model"\s*:\s*"([^"]+)"`)
 
 	claudeToolNameOverrides = map[string]string{
 		"bash":      "Bash",
@@ -4643,6 +4645,37 @@ func rewriteToolNamesInValue(value any, toolNameMap map[string]string) bool {
 	}
 }
 
+func replaceToolNamesInText(text string, toolNameMap map[string]string) string {
+	if text == "" {
+		return text
+	}
+	output := toolNameFieldRe.ReplaceAllStringFunc(text, func(match string) string {
+		submatches := toolNameFieldRe.FindStringSubmatch(match)
+		if len(submatches) < 2 {
+			return match
+		}
+		name := submatches[1]
+		mapped := normalizeToolNameForOpenCode(name, toolNameMap)
+		if mapped == name {
+			return match
+		}
+		return strings.Replace(match, name, mapped, 1)
+	})
+	output = modelFieldRe.ReplaceAllStringFunc(output, func(match string) string {
+		submatches := modelFieldRe.FindStringSubmatch(match)
+		if len(submatches) < 2 {
+			return match
+		}
+		model := submatches[1]
+		mapped := claude.DenormalizeModelID(model)
+		if mapped == model {
+			return match
+		}
+		return strings.Replace(match, model, mapped, 1)
+	})
+	return output
+}
+
 func (s *GatewayService) replaceToolNamesInSSELine(line string, toolNameMap map[string]string) string {
 	if len(toolNameMap) == 0 {
 		return line
@@ -4657,7 +4690,11 @@ func (s *GatewayService) replaceToolNamesInSSELine(line string, toolNameMap map[
 
 	var event map[string]any
 	if err := json.Unmarshal([]byte(data), &event); err != nil {
-		return line
+		replaced := replaceToolNamesInText(data, toolNameMap)
+		if replaced == data {
+			return line
+		}
+		return "data: " + replaced
 	}
 	if !rewriteToolNamesInValue(event, toolNameMap) {
 		return line
@@ -4802,7 +4839,11 @@ func (s *GatewayService) replaceToolNamesInResponseBody(body []byte, toolNameMap
 	}
 	var resp map[string]any
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return body
+		replaced := replaceToolNamesInText(string(body), toolNameMap)
+		if replaced == string(body) {
+			return body
+		}
+		return []byte(replaced)
 	}
 	if !rewriteToolNamesInValue(resp, toolNameMap) {
 		return body

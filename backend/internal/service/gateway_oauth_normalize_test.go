@@ -92,3 +92,27 @@ func TestReplaceToolNamesInSSELine_NoMapNoRewrite(t *testing.T) {
 
 	require.Equal(t, line, rewritten)
 }
+
+func TestReplaceToolNamesInSSELine_TextFallback(t *testing.T) {
+	service := &GatewayService{}
+	toolNameMap := map[string]string{
+		"WebSearch": "websearch",
+	}
+	line := `data: {"type":"content_block_delta","name":"WebSearch","model":"claude-sonnet-4-5-20250929"`
+
+	rewritten := service.replaceToolNamesInSSELine(line, toolNameMap)
+
+	require.Equal(t, `data: {"type":"content_block_delta","name":"websearch","model":"claude-sonnet-4-5"`, rewritten)
+}
+
+func TestReplaceToolNamesInResponseBody_TextFallback(t *testing.T) {
+	service := &GatewayService{}
+	toolNameMap := map[string]string{
+		"WebSearch": "websearch",
+	}
+	body := []byte(`{"type":"message","name":"WebSearch","model":"claude-sonnet-4-5-20250929"`)
+
+	rewritten := service.replaceToolNamesInResponseBody(body, toolNameMap)
+
+	require.Equal(t, `{"type":"message","name":"websearch","model":"claude-sonnet-4-5"`, string(rewritten))
+}
