@@ -146,6 +146,35 @@ func normalizeClaudeModelForAnthropic(requestedModel string) string {
 	return requestedModel
 }
 
+func resolveGatewayMappedModel(account *Account, reqModel string) (mappedModel string, mappingSource string) {
+	mappedModel = reqModel
+	if account == nil || reqModel == "" {
+		return mappedModel, ""
+	}
+
+	if account.Type == AccountTypeAPIKey {
+		byAccount := account.GetMappedModel(reqModel)
+		if byAccount != reqModel {
+			return byAccount, "account"
+		}
+		if account.Platform == PlatformAnthropic {
+			normalized := normalizeClaudeModelForAnthropic(reqModel)
+			if normalized != reqModel {
+				return normalized, "prefix"
+			}
+		}
+		return mappedModel, ""
+	}
+
+	if account.Platform == PlatformAnthropic {
+		normalized := claude.NormalizeModelID(reqModel)
+		if normalized != reqModel {
+			return normalized, "normalize"
+		}
+	}
+	return mappedModel, ""
+}
+
 func redactAuthHeaderValue(v string) string {
 	v = strings.TrimSpace(v)
 	if v == "" {
@@ -3113,22 +3142,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	// - APIKey 账号：使用账号级别的显式映射（如果配置），否则透传原始模型名
 	// - OAuth/SetupToken 账号：使用 Anthropic 标准映射（短ID → 长ID）
 	if reqModel != "" {
-		mappedModel := reqModel
-		mappingSource := ""
-		if account.Type == AccountTypeAPIKey {
-			byAccount := account.GetMappedModel(reqModel)
-			if byAccount != reqModel {
-				mappedModel = byAccount
-				mappingSource = "account"
-			}
-		}
-		if mappingSource == "" && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
-			normalized := claude.NormalizeModelID(reqModel)
-			if normalized != reqModel {
-				mappedModel = normalized
-				mappingSource = "normalize"
-			}
-		}
+		mappedModel, mappingSource := resolveGatewayMappedModel(account, reqModel)
 		if mappedModel != reqModel {
 			body = s.replaceModelInBody(body, mappedModel)
 			reqModel = mappedModel
@@ -5296,22 +5310,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 	// - APIKey 账号：使用账号级别的显式映射（如果配置），否则透传原始模型名
 	// - OAuth/SetupToken 账号：使用 Anthropic 标准映射（短ID → 长ID）
 	if reqModel != "" {
-		mappedModel := reqModel
-		mappingSource := ""
-		if account.Type == AccountTypeAPIKey {
-			byAccount := account.GetMappedModel(reqModel)
-			if byAccount != reqModel {
-				mappedModel = byAccount
-				mappingSource = "account"
-			}
-		}
-		if mappingSource == "" && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
-			normalized := claude.NormalizeModelID(reqModel)
-			if normalized != reqModel {
-				mappedModel = normalized
-				mappingSource = "normalize"
-			}
-		}
+		mappedModel, mappingSource := resolveGatewayMappedModel(account, reqModel)
 		if mappedModel != reqModel {
 			body = s.replaceModelInBody(body, mappedModel)
 			reqModel = mappedModel

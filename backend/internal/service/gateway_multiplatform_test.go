@@ -3377,3 +3377,67 @@ func TestGatewayService_RoutingAccountIDsForRequest_NormalizedAnthropicModel(t *
 
 	require.Equal(t, []int64{11, 12}, ids)
 }
+
+func TestResolveGatewayMappedModel(t *testing.T) {
+	tests := []struct {
+		name           string
+		account        *Account
+		reqModel       string
+		expectedModel  string
+		expectedSource string
+	}{
+		{
+			name: "anthropic apikey uses account mapping first",
+			account: &Account{
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"claude-sonnet-4-5-20250929": "mapped-sonnet",
+					},
+				},
+			},
+			reqModel:       "claude-sonnet-4-5-20250929",
+			expectedModel:  "mapped-sonnet",
+			expectedSource: "account",
+		},
+		{
+			name: "anthropic apikey falls back to prefix mapping",
+			account: &Account{
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeAPIKey,
+			},
+			reqModel:       "claude-sonnet-4-5-20250929",
+			expectedModel:  "claude-sonnet-4-5",
+			expectedSource: "prefix",
+		},
+		{
+			name: "anthropic oauth keeps normalize behavior",
+			account: &Account{
+				Platform: PlatformAnthropic,
+				Type:     AccountTypeOAuth,
+			},
+			reqModel:       "claude-sonnet-4-5",
+			expectedModel:  "claude-sonnet-4-5-20250929",
+			expectedSource: "normalize",
+		},
+		{
+			name: "non anthropic apikey keeps original when no mapping",
+			account: &Account{
+				Platform: PlatformOpenAI,
+				Type:     AccountTypeAPIKey,
+			},
+			reqModel:       "gpt-4o",
+			expectedModel:  "gpt-4o",
+			expectedSource: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model, source := resolveGatewayMappedModel(tt.account, tt.reqModel)
+			require.Equal(t, tt.expectedModel, model)
+			require.Equal(t, tt.expectedSource, source)
+		})
+	}
+}
