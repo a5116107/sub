@@ -2676,6 +2676,20 @@ func ParseGeminiRateLimitResetTime(body []byte) *int64 {
 							}
 						}
 					}
+					if v, ok := dm["retryDelay"].(string); ok {
+						if dur, err := time.ParseDuration(v); err == nil {
+							ts := time.Now().Unix() + int64(dur.Seconds())
+							return &ts
+						}
+					}
+					if retryInfo, ok := dm["retryInfo"].(map[string]any); ok {
+						if v, ok := retryInfo["retryDelay"].(string); ok {
+							if dur, err := time.ParseDuration(v); err == nil {
+								ts := time.Now().Unix() + int64(dur.Seconds())
+								return &ts
+							}
+						}
+					}
 				}
 			}
 		}

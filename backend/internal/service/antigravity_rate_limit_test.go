@@ -292,6 +292,23 @@ func TestAntigravityHandleUpstreamError_FallbackCooldownRespectsSecondsEnv(t *te
 	require.WithinDuration(t, now.Add(7*time.Second), call.resetAt, 3*time.Second)
 }
 
+func TestAntigravityHandleUpstreamError_UsesRetryDelayFromRetryInfo(t *testing.T) {
+	t.Setenv(antigravityScopeRateLimitEnv, "false")
+	repo := &stubAntigravityAccountRepo{}
+	svc := &AntigravityGatewayService{accountRepo: repo}
+	account := &Account{ID: 14, Name: "acc-14", Platform: PlatformAntigravity}
+
+	body := []byte(`{"error":{"message":"rate limited","details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"4s"}]}}`)
+	now := time.Now()
+	svc.handleUpstreamError(context.Background(), "[test]", account, http.StatusTooManyRequests, http.Header{}, body, AntigravityQuotaScopeClaude)
+
+	require.Len(t, repo.rateCalls, 1)
+	require.Empty(t, repo.scopeCalls)
+	call := repo.rateCalls[0]
+	require.Equal(t, account.ID, call.accountID)
+	require.WithinDuration(t, now.Add(4*time.Second), call.resetAt, 3*time.Second)
+}
+
 func TestAccountIsSchedulableForModel_AntigravityRateLimits(t *testing.T) {
 	now := time.Now()
 	future := now.Add(10 * time.Minute)

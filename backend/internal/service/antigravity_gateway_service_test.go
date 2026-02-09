@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/gin-gonic/gin"
@@ -358,6 +359,15 @@ func TestCopyUpstreamResponseHeaders_FiltersHopByHop(t *testing.T) {
 	require.Equal(t, []string{"req-1", "req-2"}, c.Writer.Header().Values("X-Upstream-Request-Id"))
 	require.Empty(t, c.Writer.Header().Get("Connection"))
 	require.Empty(t, c.Writer.Header().Get("Transfer-Encoding"))
+}
+
+func TestParseGeminiRateLimitResetTime_UsesRetryDelay(t *testing.T) {
+	body := []byte(`{"error":{"details":[{"@type":"type.googleapis.com/google.rpc.RetryInfo","retryDelay":"3s"}]}}`)
+
+	before := time.Now()
+	resetAt := ParseGeminiRateLimitResetTime(body)
+	require.NotNil(t, resetAt)
+	require.WithinDuration(t, before.Add(3*time.Second), time.Unix(*resetAt, 0), 2*time.Second)
 }
 
 func TestForward_UpstreamAccountSuccessPassthroughBody(t *testing.T) {
