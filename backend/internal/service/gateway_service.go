@@ -878,6 +878,11 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 	return s.selectAccountForModelWithPlatform(ctx, groupID, sessionHash, requestedModel, excludedIDs, platform)
 }
 
+type accountWithLoad struct {
+	account  *Account
+	loadInfo *AccountLoadInfo
+}
+
 // SelectAccountWithLoadAwareness selects account with load-awareness and wait plan.
 // metadataUserID: 已废弃参数，会话限制现在统一使用 sessionHash
 func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, metadataUserID string) (*AccountSelectionResult, error) {
@@ -1142,10 +1147,6 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 			routingLoadMap, _ := s.concurrencyService.GetAccountsLoadBatch(ctx, routingLoads)
 
 			// 3. 按负载感知排序
-			type accountWithLoad struct {
-				account  *Account
-				loadInfo *AccountLoadInfo
-			}
 			var routingAvailable []accountWithLoad
 			for _, acc := range routingCandidates {
 				loadInfo := routingLoadMap[acc.ID]
@@ -1178,6 +1179,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 						return a.account.LastUsedAt.Before(*b.account.LastUsedAt)
 					}
 				})
+				shuffleWithinSortGroups(routingAvailable)
 
 				// 4. 尝试获取槽位
 				for _, item := range routingAvailable {
@@ -1332,10 +1334,6 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 			return result, nil
 		}
 	} else {
-		type accountWithLoad struct {
-			account  *Account
-			loadInfo *AccountLoadInfo
-		}
 		var available []accountWithLoad
 		for _, acc := range candidates {
 			loadInfo := loadMap[acc.ID]
@@ -1823,6 +1821,49 @@ func sortAccountsByPriorityAndLastUsed(accounts []*Account, preferOAuth bool) {
 			return a.LastUsedAt.Before(*b.LastUsedAt)
 		}
 	})
+}
+
+func shuffleWithinSortGroups(accounts []accountWithLoad) {
+	if len(accounts) <= 1 {
+		return
+	}
+	i := 0
+	for i < len(accounts) {
+		j := i + 1
+		for j < len(accounts) && sameAccountWithLoadGroup(accounts[i], accounts[j]) {
+			j++
+		}
+		if j-i > 1 {
+			mathrand.Shuffle(j-i, func(a, b int) {
+				accounts[i+a], accounts[i+b] = accounts[i+b], accounts[i+a]
+			})
+		}
+		i = j
+	}
+}
+
+func sameAccountWithLoadGroup(a, b accountWithLoad) bool {
+	if a.account == nil || b.account == nil || a.loadInfo == nil || b.loadInfo == nil {
+		return false
+	}
+	if a.account.Priority != b.account.Priority {
+		return false
+	}
+	if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
+		return false
+	}
+	return sameLastUsedAt(a.account.LastUsedAt, b.account.LastUsedAt)
+}
+
+func sameLastUsedAt(a, b *time.Time) bool {
+	switch {
+	case a == nil && b == nil:
+		return true
+	case a == nil || b == nil:
+		return false
+	default:
+		return a.Unix() == b.Unix()
+	}
 }
 
 // sortCandidatesForFallback 根据配置选择排序策略
