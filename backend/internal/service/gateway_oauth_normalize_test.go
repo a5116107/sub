@@ -116,3 +116,33 @@ func TestReplaceToolNamesInResponseBody_TextFallback(t *testing.T) {
 
 	require.Equal(t, `{"type":"message","name":"websearch","model":"claude-sonnet-4-5"`, string(rewritten))
 }
+
+func TestReplaceToolNamesInResponseBody_StripsPrefixedToolName(t *testing.T) {
+	service := &GatewayService{}
+	toolNameMap := map[string]string{
+		"WebSearch": "websearch",
+	}
+	body := []byte(`{
+		"type":"message",
+		"content":[
+			{"type":"tool_use","name":"oc_websearch","input":{"q":"a"}}
+		]
+	}`)
+
+	rewritten := service.replaceToolNamesInResponseBody(body, toolNameMap)
+
+	require.Equal(t, "websearch", gjson.GetBytes(rewritten, "content.0.name").String())
+}
+
+func TestReplaceToolNamesInSSELine_StripsPrefixedToolName(t *testing.T) {
+	service := &GatewayService{}
+	toolNameMap := map[string]string{
+		"WebSearch": "websearch",
+	}
+	line := `data: {"type":"content_block_start","content_block":{"type":"tool_use","name":"mcp_websearch","input":{"q":"x"}}}`
+
+	rewritten := service.replaceToolNamesInSSELine(line, toolNameMap)
+	require.GreaterOrEqual(t, len(rewritten), len("data: "))
+	data := rewritten[len("data: "):]
+	require.Equal(t, "websearch", gjson.Get(data, "content_block.name").String())
+}

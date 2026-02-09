@@ -872,10 +872,16 @@ func normalizeToolNameForOpenCode(name string, cache map[string]string) string {
 			return mapped
 		}
 	}
-	if mapped, ok := openCodeToolOverrides[name]; ok {
+	stripped := stripToolPrefix(name)
+	if cache != nil {
+		if mapped, ok := cache[stripped]; ok {
+			return mapped
+		}
+	}
+	if mapped, ok := openCodeToolOverrides[stripped]; ok {
 		return mapped
 	}
-	return toSnakeCase(name)
+	return toSnakeCase(stripped)
 }
 
 func stripCacheControlFromSystemBlocks(system any) bool {
