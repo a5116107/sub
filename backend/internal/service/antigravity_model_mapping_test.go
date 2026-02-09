@@ -328,3 +328,50 @@ func TestAntigravityGatewayService_GetMappedModel_WildcardMapping(t *testing.T) 
 		})
 	}
 }
+
+func TestMapAntigravityModelForScheduling_WildcardTargetEqualsRequest(t *testing.T) {
+	tests := []struct {
+		name           string
+		modelMapping   map[string]any
+		requestedModel string
+		expected       string
+	}{
+		{
+			name:           "wildcard target equals request model",
+			modelMapping:   map[string]any{"claude-*": "claude-sonnet-4-5"},
+			requestedModel: "claude-sonnet-4-5",
+			expected:       "claude-sonnet-4-5",
+		},
+		{
+			name:           "wildcard target differs from request model",
+			modelMapping:   map[string]any{"claude-*": "claude-sonnet-4-5"},
+			requestedModel: "claude-opus-4-6",
+			expected:       "claude-sonnet-4-5",
+		},
+		{
+			name:           "wildcard no match returns empty",
+			modelMapping:   map[string]any{"claude-*": "claude-sonnet-4-5"},
+			requestedModel: "gpt-4o",
+			expected:       "",
+		},
+		{
+			name:           "explicit passthrough same name",
+			modelMapping:   map[string]any{"claude-sonnet-4-5": "claude-sonnet-4-5"},
+			requestedModel: "claude-sonnet-4-5",
+			expected:       "claude-sonnet-4-5",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			account := &Account{
+				Platform: PlatformAntigravity,
+				Credentials: map[string]any{
+					"model_mapping": tt.modelMapping,
+				},
+			}
+			got := mapAntigravityModelForScheduling(account, tt.requestedModel)
+			require.Equal(t, tt.expected, got)
+		})
+	}
+}

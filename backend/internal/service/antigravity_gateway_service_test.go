@@ -370,6 +370,29 @@ func TestParseGeminiRateLimitResetTime_UsesRetryDelay(t *testing.T) {
 	require.WithinDuration(t, before.Add(3*time.Second), time.Unix(*resetAt, 0), 2*time.Second)
 }
 
+func TestNormalizeUpstreamBaseURL(t *testing.T) {
+	require.Equal(t, "https://up.example.com", normalizeUpstreamBaseURL("https://up.example.com"))
+	require.Equal(t, "https://up.example.com", normalizeUpstreamBaseURL("https://up.example.com/"))
+	require.Equal(t, "https://up.example.com", normalizeUpstreamBaseURL("https://up.example.com/antigravity"))
+	require.Equal(t, "https://up.example.com", normalizeUpstreamBaseURL("https://up.example.com/antigravity/"))
+	require.Equal(t, "", normalizeUpstreamBaseURL("   "))
+}
+
+func TestMapAntigravityModelForScheduling_WildcardMapping(t *testing.T) {
+	account := &Account{
+		Platform: PlatformAntigravity,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"claude-*": "claude-sonnet-4-5",
+			},
+		},
+	}
+
+	require.Equal(t, "claude-sonnet-4-5", mapAntigravityModelForScheduling(account, "claude-opus-4-6"))
+	require.Equal(t, "claude-sonnet-4-5", mapAntigravityModelForScheduling(account, "claude-sonnet-4-5"))
+	require.Equal(t, "", mapAntigravityModelForScheduling(account, "gpt-4o"))
+}
+
 func TestForward_UpstreamAccountSuccessPassthroughBody(t *testing.T) {
 	upstream := &captureUpstreamRequest{
 		statusCode: http.StatusOK,

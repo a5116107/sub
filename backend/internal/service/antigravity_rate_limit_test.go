@@ -162,6 +162,44 @@ func TestAntigravityRetryLoop_UpstreamAccountUsesAccountBaseURL(t *testing.T) {
 	require.True(t, strings.HasPrefix(upstream.calls[0], "https://my-upstream.example.com"))
 }
 
+func TestAntigravityRetryLoop_UpstreamAccountBaseURLWithAntigravitySuffix(t *testing.T) {
+	upstream := &stubAntigravityUpstream{firstBase: "https://up.example.com"}
+	account := &Account{
+		ID:          22,
+		Name:        "upstream-suffix",
+		Platform:    PlatformAntigravity,
+		Type:        AccountTypeUpstream,
+		Schedulable: true,
+		Status:      StatusActive,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"base_url": "https://up.example.com/antigravity/",
+		},
+	}
+
+	result, err := antigravityRetryLoop(antigravityRetryLoopParams{
+		prefix:       "[test-upstream-suffix]",
+		ctx:          context.Background(),
+		account:      account,
+		proxyURL:     "",
+		accessToken:  "token",
+		action:       "generateContent",
+		body:         []byte(`{"input":"test"}`),
+		quotaScope:   AntigravityQuotaScopeClaude,
+		httpUpstream: upstream,
+		handleError: func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.resp)
+	defer func() { _ = result.resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, result.resp.StatusCode)
+	require.Len(t, upstream.calls, 1)
+	require.True(t, strings.HasPrefix(upstream.calls[0], "https://up.example.com/v1internal:generateContent"))
+}
+
 func TestAntigravityRetryLoop_UpstreamAccountMissingBaseURL(t *testing.T) {
 	upstream := &stubAntigravityUpstream{}
 	account := &Account{
