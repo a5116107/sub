@@ -1821,6 +1821,7 @@ func sortAccountsByPriorityAndLastUsed(accounts []*Account, preferOAuth bool) {
 			return a.LastUsedAt.Before(*b.LastUsedAt)
 		}
 	})
+	shuffleWithinPriorityAndLastUsed(accounts)
 }
 
 func shuffleWithinSortGroups(accounts []accountWithLoad) {
@@ -1863,6 +1864,35 @@ func sameLastUsedAt(a, b *time.Time) bool {
 		return false
 	default:
 		return a.Unix() == b.Unix()
+	}
+}
+
+func sameAccountGroup(a, b *Account) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	if a.Priority != b.Priority {
+		return false
+	}
+	return sameLastUsedAt(a.LastUsedAt, b.LastUsedAt)
+}
+
+func shuffleWithinPriorityAndLastUsed(accounts []*Account) {
+	if len(accounts) <= 1 {
+		return
+	}
+	i := 0
+	for i < len(accounts) {
+		j := i + 1
+		for j < len(accounts) && sameAccountGroup(accounts[i], accounts[j]) {
+			j++
+		}
+		if j-i > 1 {
+			mathrand.Shuffle(j-i, func(a, b int) {
+				accounts[i+a], accounts[i+b] = accounts[i+b], accounts[i+a]
+			})
+		}
+		i = j
 	}
 }
 
