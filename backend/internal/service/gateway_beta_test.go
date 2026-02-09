@@ -101,3 +101,31 @@ func TestApplyClaudeOAuthHeaderDefaults_KeepsExistingAccept(t *testing.T) {
 	require.Equal(t, "text/event-stream", req.Header.Get("accept"))
 	require.Equal(t, "stream", req.Header.Get("x-stainless-helper-method"))
 }
+
+func TestBuildUpstreamRequest_MimicDropsClaudeCodeBetaForMessages(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	c.Request.Header.Set("anthropic-beta", "claude-code-20250219,foo")
+
+	svc := &GatewayService{}
+	account := &Account{Type: AccountTypeOAuth}
+	body := []byte(`{"model":"claude-sonnet-4-5","messages":[{"role":"user","content":"hi"}]}`)
+
+	req, err := svc.buildUpstreamRequest(
+		context.Background(),
+		c,
+		account,
+		body,
+		"test-oauth-token",
+		"oauth",
+		"claude-sonnet-4-5",
+		true,
+		true,
+	)
+	require.NoError(t, err)
+	require.Equal(t, "oauth-2025-04-20,interleaved-thinking-2025-05-14,foo", req.Header.Get("anthropic-beta"))
+	require.Equal(t, "application/json", req.Header.Get("accept"))
+	require.Equal(t, "stream", req.Header.Get("x-stainless-helper-method"))
+}
