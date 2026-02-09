@@ -1859,6 +1859,11 @@ func antigravityMaxRetriesForModel(model string, afterSwitch bool) int {
 }
 
 func (s *AntigravityGatewayService) handleUpstreamError(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
+	// 遵守自定义错误码策略：未命中则跳过所有限流/错误标记处理。
+	if account != nil && !account.ShouldHandleErrorCode(statusCode) {
+		return
+	}
+
 	// 429 使用 Gemini 格式解析（从 body 解析重置时间）
 	if statusCode == 429 {
 		useScopeLimit := antigravityUseScopeRateLimit() && quotaScope != ""

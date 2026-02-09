@@ -180,6 +180,29 @@ func TestClientStatusForSkippedCustomErrorPolicy(t *testing.T) {
 	}
 }
 
+func TestHandleUpstreamError_SkipsRateLimitWhenCustomCodeMismatch(t *testing.T) {
+	svc := &AntigravityGatewayService{}
+	account := &Account{
+		Type: AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"custom_error_codes_enabled": true,
+			"custom_error_codes":         []any{float64(599)},
+		},
+	}
+
+	require.NotPanics(t, func() {
+		svc.handleUpstreamError(
+			context.Background(),
+			"[test]",
+			account,
+			http.StatusTooManyRequests,
+			http.Header{},
+			[]byte(`{"error":{"message":"rate limit"}}`),
+			"",
+		)
+	})
+}
+
 type captureUpstreamRequest struct {
 	statusCode int
 	body       string
