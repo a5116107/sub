@@ -393,6 +393,12 @@ func TestMapAntigravityModelForScheduling_WildcardMapping(t *testing.T) {
 	require.Equal(t, "", mapAntigravityModelForScheduling(account, "gpt-4o"))
 }
 
+func TestApplyThinkingModelSuffix(t *testing.T) {
+	require.Equal(t, "claude-sonnet-4-5", applyThinkingModelSuffix("claude-sonnet-4-5", false))
+	require.Equal(t, "claude-sonnet-4-5-thinking", applyThinkingModelSuffix("claude-sonnet-4-5", true))
+	require.Equal(t, "claude-opus-4-6-thinking", applyThinkingModelSuffix("claude-opus-4-6-thinking", true))
+}
+
 func TestForward_UpstreamAccountSuccessPassthroughBody(t *testing.T) {
 	upstream := &captureUpstreamRequest{
 		statusCode: http.StatusOK,

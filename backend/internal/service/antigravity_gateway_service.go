@@ -881,6 +881,8 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 
 	originalModel := claudeReq.Model
 	mappedModel := s.getMappedModel(account, claudeReq.Model)
+	thinkingEnabled := claudeReq.Thinking != nil && claudeReq.Thinking.Type == "enabled"
+	mappedModel = applyThinkingModelSuffix(mappedModel, thinkingEnabled)
 	quotaScope, _ := resolveAntigravityQuotaScope(originalModel)
 	billingModel := originalModel
 	if antigravityUseMappedModelForBilling() && strings.TrimSpace(mappedModel) != "" {
