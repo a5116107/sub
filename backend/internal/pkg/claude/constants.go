@@ -16,6 +16,11 @@ const (
 const DefaultBetaHeader = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking + "," + BetaFineGrainedToolStreaming
 
 // MessageBetaHeaderNoTools /v1/messages 在无工具时的 beta header
+//
+// NOTE: Claude Code OAuth credentials are scoped to Claude Code. When we "mimic"
+// Claude Code for non-Claude-Code clients, we must include the claude-code beta
+// even if the request doesn't use tools, otherwise upstream may reject the
+// request as a non-Claude-Code API request.
 const MessageBetaHeaderNoTools = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking
 
 // MessageBetaHeaderWithTools /v1/messages 在有工具时的 beta header
@@ -35,6 +40,8 @@ const APIKeyHaikuBetaHeader = BetaInterleavedThinking
 
 // DefaultHeaders 是 Claude Code 客户端默认请求头。
 var DefaultHeaders = map[string]string{
+	// Keep these in sync with recent Claude CLI traffic to reduce the chance
+	// that Claude Code-scoped OAuth credentials are rejected as "non-CLI" usage.
 	"User-Agent":                                "claude-cli/2.1.22 (external, cli)",
 	"X-Stainless-Lang":                          "js",
 	"X-Stainless-Package-Version":               "0.70.0",

@@ -169,16 +169,21 @@ func (s *IdentityService) ApplyFingerprint(req *http.Request, fp *Fingerprint) {
 // RewriteUserID 重写body中的metadata.user_id
 // 输入格式：user_{clientId}_account__session_{sessionUUID}
 // 输出格式：user_{cachedClientID}_account_{accountUUID}_session_{newHash}
+//
+// 重要：此函数使用 json.RawMessage 保留其他字段的原始字节，
+// 避免重新序列化导致 thinking 块等内容被修改。
 func (s *IdentityService) RewriteUserID(body []byte, accountID int64, accountUUID, cachedClientID string) ([]byte, error) {
 	if len(body) == 0 || accountUUID == "" || cachedClientID == "" {
 		return body, nil
 	}
 
+	// 使用 RawMessage 保留其他字段的原始字节
 	var reqMap map[string]json.RawMessage
 	if err := json.Unmarshal(body, &reqMap); err != nil {
 		return body, nil
 	}
 
+	// 解析 metadata 字段
 	metadataRaw, ok := reqMap["metadata"]
 	if !ok {
 		return body, nil
@@ -212,6 +217,7 @@ func (s *IdentityService) RewriteUserID(body []byte, accountID int64, accountUUI
 
 	metadata["user_id"] = newUserID
 
+	// 只重新序列化 metadata 字段
 	newMetadataRaw, err := json.Marshal(metadata)
 	if err != nil {
 		return body, nil
@@ -224,6 +230,9 @@ func (s *IdentityService) RewriteUserID(body []byte, accountID int64, accountUUI
 // RewriteUserIDWithMasking 重写body中的metadata.user_id，支持会话ID伪装
 // 如果账号启用了会话ID伪装（session_id_masking_enabled），
 // 则在完成常规重写后，将 session 部分替换为固定的伪装ID（15分钟内保持不变）
+//
+// 重要：此函数使用 json.RawMessage 保留其他字段的原始字节，
+// 避免重新序列化导致 thinking 块等内容被修改。
 func (s *IdentityService) RewriteUserIDWithMasking(ctx context.Context, body []byte, account *Account, accountUUID, cachedClientID string) ([]byte, error) {
 	// 先执行常规的 RewriteUserID 逻辑
 	newBody, err := s.RewriteUserID(body, account.ID, accountUUID, cachedClientID)
@@ -236,11 +245,13 @@ func (s *IdentityService) RewriteUserIDWithMasking(ctx context.Context, body []b
 		return newBody, nil
 	}
 
+	// 使用 RawMessage 保留其他字段的原始字节
 	var reqMap map[string]json.RawMessage
 	if err := json.Unmarshal(newBody, &reqMap); err != nil {
 		return newBody, nil
 	}
 
+	// 解析 metadata 字段
 	metadataRaw, ok := reqMap["metadata"]
 	if !ok {
 		return newBody, nil
@@ -292,6 +303,7 @@ func (s *IdentityService) RewriteUserIDWithMasking(ctx context.Context, body []b
 
 	metadata["user_id"] = newUserID
 
+	// 只重新序列化 metadata 字段
 	newMetadataRaw, marshalErr := json.Marshal(metadata)
 	if marshalErr != nil {
 		return newBody, nil
@@ -345,7 +357,7 @@ func generateUUIDFromSeed(seed string) string {
 }
 
 // parseUserAgentVersion 解析user-agent版本号
-// 例如：claude-cli/2.0.62 -> (2, 0, 62)
+// 例如：claude-cli/2.1.2 -> (2, 1, 2)
 func parseUserAgentVersion(ua string) (major, minor, patch int, ok bool) {
 	// 匹配 xxx/x.y.z 格式
 	matches := userAgentVersionRegex.FindStringSubmatch(ua)
