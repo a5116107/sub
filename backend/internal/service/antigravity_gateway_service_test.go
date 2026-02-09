@@ -150,6 +150,41 @@ func (s *captureUpstreamRequest) DoWithTLS(req *http.Request, proxyURL string, a
 	return s.Do(req, proxyURL, accountID, accountConcurrency)
 }
 
+type upstreamResponseStep struct {
+	statusCode int
+	body       string
+	headers    http.Header
+}
+
+type sequenceUpstreamRequest struct {
+	steps []upstreamResponseStep
+	urls  []string
+}
+
+func (s *sequenceUpstreamRequest) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
+	s.urls = append(s.urls, req.URL.String())
+	stepIdx := len(s.urls) - 1
+	if stepIdx >= len(s.steps) {
+		stepIdx = len(s.steps) - 1
+	}
+	step := s.steps[stepIdx]
+
+	respHeaders := make(http.Header)
+	for k, values := range step.headers {
+		respHeaders[k] = append([]string(nil), values...)
+	}
+
+	return &http.Response{
+		StatusCode: step.statusCode,
+		Header:     respHeaders,
+		Body:       io.NopCloser(strings.NewReader(step.body)),
+	}, nil
+}
+
+func (s *sequenceUpstreamRequest) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, enableTLSFingerprint bool) (*http.Response, error) {
+	return s.Do(req, proxyURL, accountID, accountConcurrency)
+}
+
 func newGatewayTestContext(body string) (*gin.Context, *httptest.ResponseRecorder) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -343,6 +378,57 @@ func TestTestConnection_UpstreamAccountUsesDirectEndpoint(t *testing.T) {
 	require.Equal(t, "https://up.example.com/antigravity/v1/messages", upstream.lastReq.URL.String())
 	require.Equal(t, "Bearer sk-upstream", upstream.lastReq.Header.Get("Authorization"))
 	require.Equal(t, "sk-upstream", upstream.lastReq.Header.Get("x-api-key"))
+}
+
+func TestTestConnection_UsesForwardBaseURLOrderForFallback(t *testing.T) {
+	originalBaseURLs := append([]string(nil), antigravity.BaseURLs...)
+	originalBaseURL := antigravity.BaseURL
+	originalAvailability := antigravity.DefaultURLAvailability
+	t.Cleanup(func() {
+		antigravity.BaseURLs = originalBaseURLs
+		antigravity.BaseURL = originalBaseURL
+		antigravity.DefaultURLAvailability = originalAvailability
+	})
+
+	antigravity.BaseURLs = []string{
+		"https://cloudcode-pa.googleapis.com",
+		"https://daily-cloudcode-pa.sandbox.googleapis.com",
+	}
+	antigravity.BaseURL = antigravity.BaseURLs[0]
+	antigravity.DefaultURLAvailability = antigravity.NewURLAvailability(time.Minute)
+
+	upstream := &sequenceUpstreamRequest{
+		steps: []upstreamResponseStep{
+			{statusCode: http.StatusTooManyRequests, body: `{"error":"rate_limited"}`},
+			{statusCode: http.StatusOK, body: "data: {\"response\":{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"pong\"}]}}]}}\n\n"},
+		},
+	}
+	svc := &AntigravityGatewayService{
+		tokenProvider: &AntigravityTokenProvider{},
+		httpUpstream:  upstream,
+	}
+
+	account := &Account{
+		ID:          104,
+		Name:        "apikey-test",
+		Platform:    PlatformAntigravity,
+		Type:        AccountTypeAPIKey,
+		Schedulable: true,
+		Status:      StatusActive,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":    "sk-apikey",
+			"project_id": "proj-1",
+		},
+	}
+
+	result, err := svc.TestConnection(context.Background(), account, "gemini-3-flash")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "pong", result.Text)
+	require.GreaterOrEqual(t, len(upstream.urls), 2)
+	require.Contains(t, upstream.urls[0], "daily-cloudcode-pa.sandbox.googleapis.com")
+	require.Contains(t, upstream.urls[1], "cloudcode-pa.googleapis.com")
 }
 
 func TestCopyUpstreamResponseHeaders_FiltersHopByHop(t *testing.T) {

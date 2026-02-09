@@ -581,9 +581,10 @@ func (s *AntigravityGatewayService) TestConnection(ctx context.Context, account 
 	}
 
 	// URL fallback 循环
-	availableURLs := antigravity.DefaultURLAvailability.GetAvailableURLs()
+	baseURLs := antigravity.ForwardBaseURLs()
+	availableURLs := antigravity.DefaultURLAvailability.GetAvailableURLsWithBase(baseURLs)
 	if len(availableURLs) == 0 {
-		availableURLs = antigravity.BaseURLs // 所有 URL 都不可用时，重试所有
+		availableURLs = baseURLs // 所有 URL 都不可用时，按转发顺序重试
 	}
 
 	var lastErr error
