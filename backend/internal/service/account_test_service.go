@@ -76,11 +76,9 @@ func (s *AccountTestService) validateUpstreamBaseURL(raw string) (string, error)
 		return urlvalidator.ValidateURLFormat(raw, s.cfg.Security.URLAllowlist.AllowInsecureHTTP)
 	}
 	normalized, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
-		AllowedHosts:     chooseAllowlist(s.cfg.Security.URLAllowlist.OpenAIHosts, s.cfg.Security.URLAllowlist.UpstreamHosts),
+		AllowedHosts:     s.cfg.Security.URLAllowlist.UpstreamHosts,
 		RequireAllowlist: true,
 		AllowPrivate:     s.cfg.Security.URLAllowlist.AllowPrivateHosts,
-		AllowPorts:       []int{443},
-		RequireNoPath:    true,
 	})
 	if err != nil {
 		return "", err
@@ -248,17 +246,16 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("anthropic-version", "2023-06-01")
 
+	// Apply Claude Code client headers
+	for key, value := range claude.DefaultHeaders {
+		req.Header.Set(key, value)
+	}
+
 	// Set authentication header and beta header based on account type
 	if useBearer {
-		// OAuth accounts use full Claude Code beta header.
 		req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
 		req.Header.Set("Authorization", "Bearer "+authToken)
-		// Apply Claude Code client headers for OAuth.
-		for key, value := range claude.DefaultHeaders {
-			req.Header.Set(key, value)
-		}
 	} else {
-		// API key accounts use simplified beta header (without oauth beta).
 		req.Header.Set("anthropic-beta", claude.APIKeyBetaHeader)
 		req.Header.Set("x-api-key", authToken)
 	}
