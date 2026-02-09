@@ -1634,8 +1634,9 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 
 		// Always record upstream context for Ops error logs, even when we will failover.
 		setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
+		clientStatusCode, skippedByCustomErrorPolicy := clientStatusForSkippedCustomErrorPolicy(account, resp.StatusCode)
 
-		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+		if !skippedByCustomErrorPolicy && s.shouldFailoverUpstreamError(resp.StatusCode) {
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 				Platform:           account.Platform,
 				AccountID:          account.ID,
@@ -1663,9 +1664,9 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 			Message:            upstreamMsg,
 			Detail:             upstreamDetail,
 		})
-		log.Printf("[antigravity-Forward] upstream error status=%d body=%s", resp.StatusCode, truncateForLog(unwrappedForOps, 500))
-		c.Data(resp.StatusCode, contentType, unwrappedForOps)
-		return nil, fmt.Errorf("antigravity upstream error: %d", resp.StatusCode)
+		log.Printf("[antigravity-Forward] upstream error status=%d client_status=%d body=%s", resp.StatusCode, clientStatusCode, truncateForLog(unwrappedForOps, 500))
+		c.Data(clientStatusCode, contentType, unwrappedForOps)
+		return nil, fmt.Errorf("antigravity upstream error: %d", clientStatusCode)
 	}
 
 handleSuccess:
@@ -1730,6 +1731,19 @@ func (s *AntigravityGatewayService) shouldFailoverUpstreamError(statusCode int) 
 	default:
 		return statusCode >= 500
 	}
+}
+
+func clientStatusForSkippedCustomErrorPolicy(account *Account, upstreamStatusCode int) (int, bool) {
+	if account == nil {
+		return upstreamStatusCode, false
+	}
+	if !account.IsCustomErrorCodesEnabled() {
+		return upstreamStatusCode, false
+	}
+	if account.ShouldHandleErrorCode(upstreamStatusCode) {
+		return upstreamStatusCode, false
+	}
+	return http.StatusInternalServerError, true
 }
 
 // sleepAntigravityBackoffWithContext 带 context 取消检查的退避等待
@@ -3485,8 +3499,9 @@ func (s *AntigravityGatewayService) ForwardUpstreamGemini(ctx context.Context, c
 		}
 
 		setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
+		clientStatusCode, skippedByCustomErrorPolicy := clientStatusForSkippedCustomErrorPolicy(account, resp.StatusCode)
 
-		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+		if !skippedByCustomErrorPolicy && s.shouldFailoverUpstreamError(resp.StatusCode) {
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 				Platform:           account.Platform,
 				AccountID:          account.ID,
@@ -3512,9 +3527,9 @@ func (s *AntigravityGatewayService) ForwardUpstreamGemini(ctx context.Context, c
 			Message:            upstreamMsg,
 			Detail:             upstreamDetail,
 		})
-		log.Printf("[antigravity-Forward-Upstream] upstream error status=%d body=%s", resp.StatusCode, truncateForLog(respBody, 500))
-		c.Data(resp.StatusCode, contentType, respBody)
-		return nil, fmt.Errorf("antigravity upstream error: %d", resp.StatusCode)
+		log.Printf("[antigravity-Forward-Upstream] upstream error status=%d client_status=%d body=%s", resp.StatusCode, clientStatusCode, truncateForLog(respBody, 500))
+		c.Data(clientStatusCode, contentType, respBody)
+		return nil, fmt.Errorf("antigravity upstream error: %d", clientStatusCode)
 	}
 
 upstreamGeminiSuccess:

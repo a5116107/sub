@@ -116,6 +116,70 @@ func TestAntigravityMaxRetriesForModel_AfterSwitchFallback(t *testing.T) {
 	require.Equal(t, 5, got)
 }
 
+func TestClientStatusForSkippedCustomErrorPolicy(t *testing.T) {
+	tests := []struct {
+		name           string
+		account        *Account
+		upstreamStatus int
+		expectStatus   int
+		expectSkipped  bool
+	}{
+		{
+			name:           "nil account keeps upstream status",
+			account:        nil,
+			upstreamStatus: http.StatusTooManyRequests,
+			expectStatus:   http.StatusTooManyRequests,
+			expectSkipped:  false,
+		},
+		{
+			name: "custom error code disabled keeps upstream status",
+			account: &Account{
+				Type: AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"custom_error_codes_enabled": false,
+				},
+			},
+			upstreamStatus: http.StatusInternalServerError,
+			expectStatus:   http.StatusInternalServerError,
+			expectSkipped:  false,
+		},
+		{
+			name: "custom error code enabled and matched keeps upstream status",
+			account: &Account{
+				Type: AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"custom_error_codes_enabled": true,
+					"custom_error_codes":         []any{float64(http.StatusTooManyRequests)},
+				},
+			},
+			upstreamStatus: http.StatusTooManyRequests,
+			expectStatus:   http.StatusTooManyRequests,
+			expectSkipped:  false,
+		},
+		{
+			name: "custom error code enabled and skipped maps to 500",
+			account: &Account{
+				Type: AccountTypeAPIKey,
+				Credentials: map[string]any{
+					"custom_error_codes_enabled": true,
+					"custom_error_codes":         []any{float64(599)},
+				},
+			},
+			upstreamStatus: http.StatusTooManyRequests,
+			expectStatus:   http.StatusInternalServerError,
+			expectSkipped:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status, skipped := clientStatusForSkippedCustomErrorPolicy(tt.account, tt.upstreamStatus)
+			require.Equal(t, tt.expectStatus, status)
+			require.Equal(t, tt.expectSkipped, skipped)
+		})
+	}
+}
+
 type captureUpstreamRequest struct {
 	statusCode int
 	body       string
