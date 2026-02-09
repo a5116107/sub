@@ -1113,6 +1113,102 @@ func TestGatewayService_isModelSupportedByAccount(t *testing.T) {
 	}
 }
 
+func TestGatewayService_isModelSupportedByAccountWithContext_ThinkingMode(t *testing.T) {
+	svc := &GatewayService{}
+
+	tests := []struct {
+		name            string
+		modelMapping    map[string]any
+		requestedModel  string
+		thinkingEnabled bool
+		expected        bool
+	}{
+		{
+			name: "thinking_enabled_requires_thinking_variant_when_mapping_present",
+			modelMapping: map[string]any{
+				"claude-sonnet-4-5": "claude-sonnet-4-5",
+			},
+			requestedModel:  "claude-sonnet-4-5",
+			thinkingEnabled: true,
+			expected:        false,
+		},
+		{
+			name: "thinking_enabled_with_base_and_thinking_mapping",
+			modelMapping: map[string]any{
+				"claude-sonnet-4-5":          "claude-sonnet-4-5",
+				"claude-sonnet-4-5-thinking": "claude-sonnet-4-5-thinking",
+			},
+			requestedModel:  "claude-sonnet-4-5",
+			thinkingEnabled: true,
+			expected:        true,
+		},
+		{
+			name: "thinking_enabled_without_base_mapping_returns_false",
+			modelMapping: map[string]any{
+				"claude-sonnet-4-5-thinking": "claude-sonnet-4-5-thinking",
+			},
+			requestedModel:  "claude-sonnet-4-5",
+			thinkingEnabled: true,
+			expected:        false,
+		},
+		{
+			name: "thinking_disabled_with_only_thinking_mapping_returns_false",
+			modelMapping: map[string]any{
+				"claude-sonnet-4-5-thinking": "claude-sonnet-4-5-thinking",
+			},
+			requestedModel:  "claude-sonnet-4-5",
+			thinkingEnabled: false,
+			expected:        false,
+		},
+		{
+			name: "thinking_enabled_wildcard_mapping_passes",
+			modelMapping: map[string]any{
+				"claude-*": "claude-sonnet-4-5",
+			},
+			requestedModel:  "claude-sonnet-4-5",
+			thinkingEnabled: true,
+			expected:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			account := &Account{
+				Platform: PlatformAntigravity,
+				Credentials: map[string]any{
+					"model_mapping": tt.modelMapping,
+				},
+			}
+			ctx := context.WithValue(context.Background(), ctxkey.ThinkingEnabled, tt.thinkingEnabled)
+			require.Equal(t, tt.expected, svc.isModelSupportedByAccountWithContext(ctx, account, tt.requestedModel))
+		})
+	}
+}
+
+func TestGatewayService_isModelSupportedByAccountWithContext_CustomMappingThinking(t *testing.T) {
+	svc := &GatewayService{}
+
+	account := &Account{
+		Platform: PlatformAntigravity,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"claude-sonnet-4-5":          "claude-sonnet-4-5",
+				"claude-sonnet-4-5-thinking": "claude-sonnet-4-5-thinking",
+				"my-custom-model":            "upstream-model",
+			},
+		},
+	}
+
+	ctx := context.WithValue(context.Background(), ctxkey.ThinkingEnabled, true)
+	require.True(t, svc.isModelSupportedByAccountWithContext(ctx, account, "claude-sonnet-4-5"))
+
+	ctx = context.WithValue(context.Background(), ctxkey.ThinkingEnabled, false)
+	require.True(t, svc.isModelSupportedByAccountWithContext(ctx, account, "claude-sonnet-4-5"))
+
+	ctx = context.WithValue(context.Background(), ctxkey.ThinkingEnabled, true)
+	require.True(t, svc.isModelSupportedByAccountWithContext(ctx, account, "my-custom-model"))
+}
+
 // TestGatewayService_selectAccountWithMixedScheduling 测试混合调度
 func TestGatewayService_selectAccountWithMixedScheduling(t *testing.T) {
 	ctx := context.Background()
