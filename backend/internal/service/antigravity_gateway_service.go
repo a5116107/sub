@@ -1137,6 +1137,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 
 	var usage *ClaudeUsage
 	var firstTokenMs *int
+	var clientDisconnect bool
 	if claudeReq.Stream {
 		// 客户端要求流式，直接透传转换
 		streamRes, err := s.handleClaudeStreamingResponse(c, resp, startTime, originalModel)
@@ -1146,6 +1147,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		}
 		usage = streamRes.usage
 		firstTokenMs = streamRes.firstTokenMs
+		clientDisconnect = streamRes.clientDisconnect
 	} else {
 		// 客户端要求非流式，收集流式响应后转换返回
 		streamRes, err := s.handleClaudeStreamToNonStreaming(c, resp, startTime, originalModel)
@@ -1160,12 +1162,13 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 	originalModel = billingModel
 
 	return &ForwardResult{
-		RequestID:    requestID,
-		Usage:        *usage,
-		Model:        originalModel, // 使用原始模型用于计费和日志
-		Stream:       claudeReq.Stream,
-		Duration:     time.Since(startTime),
-		FirstTokenMs: firstTokenMs,
+		RequestID:        requestID,
+		Usage:            *usage,
+		Model:            originalModel, // 使用原始模型用于计费和日志
+		Stream:           claudeReq.Stream,
+		Duration:         time.Since(startTime),
+		FirstTokenMs:     firstTokenMs,
+		ClientDisconnect: clientDisconnect,
 	}, nil
 }
 
@@ -1673,6 +1676,7 @@ handleSuccess:
 
 	var usage *ClaudeUsage
 	var firstTokenMs *int
+	var clientDisconnect bool
 
 	if stream {
 		// 客户端要求流式，直接透传
@@ -1683,6 +1687,7 @@ handleSuccess:
 		}
 		usage = streamRes.usage
 		firstTokenMs = streamRes.firstTokenMs
+		clientDisconnect = streamRes.clientDisconnect
 	} else {
 		// 客户端要求非流式，收集流式响应后返回
 		streamRes, err := s.handleGeminiStreamToNonStreaming(c, resp, startTime)
@@ -1706,14 +1711,15 @@ handleSuccess:
 	}
 
 	return &ForwardResult{
-		RequestID:    requestID,
-		Usage:        *usage,
-		Model:        billingModel,
-		Stream:       stream,
-		Duration:     time.Since(startTime),
-		FirstTokenMs: firstTokenMs,
-		ImageCount:   imageCount,
-		ImageSize:    imageSize,
+		RequestID:        requestID,
+		Usage:            *usage,
+		Model:            billingModel,
+		Stream:           stream,
+		Duration:         time.Since(startTime),
+		FirstTokenMs:     firstTokenMs,
+		ClientDisconnect: clientDisconnect,
+		ImageCount:       imageCount,
+		ImageSize:        imageSize,
 	}, nil
 }
 
@@ -1897,8 +1903,9 @@ func (s *AntigravityGatewayService) resolveResetTime(resetAt *int64, defaultDur 
 }
 
 type antigravityStreamResult struct {
-	usage        *ClaudeUsage
-	firstTokenMs *int
+	usage            *ClaudeUsage
+	firstTokenMs     *int
+	clientDisconnect bool
 }
 
 func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context, resp *http.Response, startTime time.Time) (*antigravityStreamResult, error) {
@@ -1927,6 +1934,7 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 	scanner.Buffer(make([]byte, 64*1024), maxLineSize)
 	usage := &ClaudeUsage{}
 	var firstTokenMs *int
+	clientDisconnected := false
 
 	type scanEvent struct {
 		line string
@@ -1977,6 +1985,9 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 	// 仅发送一次错误事件，避免多次写入导致协议混乱
 	errorEventSent := false
 	sendErrorEvent := func(reason string) {
+		if clientDisconnected {
+			return
+		}
 		if errorEventSent {
 			return
 		}
@@ -1989,9 +2000,16 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 		select {
 		case ev, ok := <-events:
 			if !ok {
-				return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs}, nil
+				return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, nil
 			}
 			if ev.err != nil {
+				if errors.Is(ev.err, context.Canceled) || errors.Is(ev.err, context.DeadlineExceeded) {
+					return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: true}, nil
+				}
+				if clientDisconnected {
+					log.Printf("Upstream read error after client disconnect (antigravity): %v", ev.err)
+					return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: true}, nil
+				}
 				if errors.Is(ev.err, bufio.ErrTooLong) {
 					log.Printf("SSE line too long (antigravity): max_size=%d error=%v", maxLineSize, ev.err)
 					sendErrorEvent("response_too_large")
@@ -2006,11 +2024,14 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 			if strings.HasPrefix(trimmed, "data:") {
 				payload := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
 				if payload == "" || payload == "[DONE]" {
-					if _, err := fmt.Fprintf(c.Writer, "%s\n", line); err != nil {
-						sendErrorEvent("write_failed")
-						return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs}, err
+					if !clientDisconnected {
+						if _, err := fmt.Fprintf(c.Writer, "%s\n", line); err != nil {
+							clientDisconnected = true
+							log.Printf("Client disconnected during antigravity stream, continuing to drain upstream for billing")
+						} else {
+							flusher.Flush()
+						}
 					}
-					flusher.Flush()
 					continue
 				}
 
@@ -2046,24 +2067,33 @@ func (s *AntigravityGatewayService) handleGeminiStreamingResponse(c *gin.Context
 					firstTokenMs = &ms
 				}
 
-				if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", payload); err != nil {
-					sendErrorEvent("write_failed")
-					return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs}, err
+				if !clientDisconnected {
+					if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", payload); err != nil {
+						clientDisconnected = true
+						log.Printf("Client disconnected during antigravity stream, continuing to drain upstream for billing")
+					} else {
+						flusher.Flush()
+					}
 				}
-				flusher.Flush()
 				continue
 			}
 
-			if _, err := fmt.Fprintf(c.Writer, "%s\n", line); err != nil {
-				sendErrorEvent("write_failed")
-				return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs}, err
+			if !clientDisconnected {
+				if _, err := fmt.Fprintf(c.Writer, "%s\n", line); err != nil {
+					clientDisconnected = true
+					log.Printf("Client disconnected during antigravity stream, continuing to drain upstream for billing")
+				} else {
+					flusher.Flush()
+				}
 			}
-			flusher.Flush()
 
 		case <-intervalCh:
 			lastRead := time.Unix(0, atomic.LoadInt64(&lastReadAt))
 			if time.Since(lastRead) < streamInterval {
 				continue
+			}
+			if clientDisconnected {
+				return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs, clientDisconnect: true}, nil
 			}
 			log.Printf("Stream data interval timeout (antigravity)")
 			// 注意：此函数没有 account 上下文，无法调用 HandleStreamTimeout
@@ -2714,6 +2744,7 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 
 	processor := antigravity.NewStreamingProcessor(originalModel)
 	var firstTokenMs *int
+	clientDisconnected := false
 	// 使用 Scanner 并限制单行大小，避免 ReadString 无上限导致 OOM
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -2783,6 +2814,9 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 	// 仅发送一次错误事件，避免多次写入导致协议混乱
 	errorEventSent := false
 	sendErrorEvent := func(reason string) {
+		if clientDisconnected {
+			return
+		}
 		if errorEventSent {
 			return
 		}
@@ -2798,12 +2832,21 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 				// 发送结束事件
 				finalEvents, agUsage := processor.Finish()
 				if len(finalEvents) > 0 {
-					_, _ = c.Writer.Write(finalEvents)
-					flusher.Flush()
+					if !clientDisconnected {
+						_, _ = c.Writer.Write(finalEvents)
+						flusher.Flush()
+					}
 				}
-				return &antigravityStreamResult{usage: convertUsage(agUsage), firstTokenMs: firstTokenMs}, nil
+				return &antigravityStreamResult{usage: convertUsage(agUsage), firstTokenMs: firstTokenMs, clientDisconnect: clientDisconnected}, nil
 			}
 			if ev.err != nil {
+				if errors.Is(ev.err, context.Canceled) || errors.Is(ev.err, context.DeadlineExceeded) {
+					return &antigravityStreamResult{usage: convertUsage(nil), firstTokenMs: firstTokenMs, clientDisconnect: true}, nil
+				}
+				if clientDisconnected {
+					log.Printf("Upstream read error after client disconnect (antigravity Claude): %v", ev.err)
+					return &antigravityStreamResult{usage: convertUsage(nil), firstTokenMs: firstTokenMs, clientDisconnect: true}, nil
+				}
 				if errors.Is(ev.err, bufio.ErrTooLong) {
 					log.Printf("SSE line too long (antigravity): max_size=%d error=%v", maxLineSize, ev.err)
 					sendErrorEvent("response_too_large")
@@ -2823,21 +2866,23 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 					firstTokenMs = &ms
 				}
 
-				if _, writeErr := c.Writer.Write(claudeEvents); writeErr != nil {
-					finalEvents, agUsage := processor.Finish()
-					if len(finalEvents) > 0 {
-						_, _ = c.Writer.Write(finalEvents)
+				if !clientDisconnected {
+					if _, writeErr := c.Writer.Write(claudeEvents); writeErr != nil {
+						clientDisconnected = true
+						log.Printf("Client disconnected during antigravity Claude stream, continuing to drain upstream for billing")
+					} else {
+						flusher.Flush()
 					}
-					sendErrorEvent("write_failed")
-					return &antigravityStreamResult{usage: convertUsage(agUsage), firstTokenMs: firstTokenMs}, writeErr
 				}
-				flusher.Flush()
 			}
 
 		case <-intervalCh:
 			lastRead := time.Unix(0, atomic.LoadInt64(&lastReadAt))
 			if time.Since(lastRead) < streamInterval {
 				continue
+			}
+			if clientDisconnected {
+				return &antigravityStreamResult{usage: convertUsage(nil), firstTokenMs: firstTokenMs, clientDisconnect: true}, nil
 			}
 			log.Printf("Stream data interval timeout (antigravity)")
 			// 注意：此函数没有 account 上下文，无法调用 HandleStreamTimeout
