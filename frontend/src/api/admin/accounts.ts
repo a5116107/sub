@@ -267,6 +267,26 @@ export async function exchangeCode(
 }
 
 /**
+ * Refresh OpenAI token using refresh token
+ * @param refreshToken - The refresh token
+ * @param proxyId - Optional proxy ID
+ * @returns Token information including access_token, email, etc.
+ */
+export async function refreshOpenAIToken(
+  refreshToken: string,
+  proxyId?: number | null
+): Promise<Record<string, unknown>> {
+  const payload: { refresh_token: string; proxy_id?: number } = {
+    refresh_token: refreshToken
+  }
+  if (proxyId) {
+    payload.proxy_id = proxyId
+  }
+  const { data } = await apiClient.post<Record<string, unknown>>('/admin/openai/refresh-token', payload)
+  return data
+}
+
+/**
  * Batch create accounts
  * @param accounts - Array of account data
  * @returns Results of batch creation
@@ -487,6 +507,7 @@ export const accountsAPI = {
   getAntigravityDefaultModelMapping,
   generateAuthUrl,
   exchangeCode,
+  refreshOpenAIToken,
   batchCreate,
   batchUpdateCredentials,
   bulkUpdate,

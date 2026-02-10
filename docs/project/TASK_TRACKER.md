@@ -1,7 +1,7 @@
 # Task Tracker
 
 > **Last Updated**: 2026-02-10
-> **Active**: 1 | **Pending**: 2 | **Completed This Week**: 8
+> **Active**: 1 | **Pending**: 2 | **Completed This Week**: 9
 
 ---
 
@@ -17,7 +17,8 @@
 | UPSYNC-006 | Upstream forwarding/passthrough hardening parity | P1 | Completed |  | 2026-02-10 | `docs/project/tasks/UPSYNC-006.md` |
 | UPSYNC-007 | Claude/OAuth compatibility residual parity | P1 | Completed |  | 2026-02-10 | `docs/project/tasks/UPSYNC-007.md` |
 | UPSYNC-008 | Scheduler/failover fairness and retry-budget parity | P1 | Completed |  | 2026-02-10 | `docs/project/tasks/UPSYNC-008.md` |
-| UPSYNC-009 | Admin/UI parity pack (non-destructive) | P2 | Active |  | 2026-02-10 | `docs/project/tasks/UPSYNC-009.md` |
+| UPSYNC-009 | Admin/UI parity pack (non-destructive) | P2 | Completed |  | 2026-02-10 | `docs/project/tasks/UPSYNC-009.md` |
+| UPSYNC-012 | Group drag-sort parity (schema/API/UI, compatibility-first) | P2 | Active |  | 2026-02-10 | `docs/project/tasks/UPSYNC-012.md` |
 | UPSYNC-010 | Digest session store migration (flat cache, compatibility-first) | P2 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-010.md` |
 | UPSYNC-011 | Closure gate: tag parity + residual diff triage | P2 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-011.md` |
 | SEC-045 | Security/SSRF: provider-specific upstream allowlists | P2 | Completed |  | 2026-02-03 | `docs/project/tasks/SEC-045.md` |

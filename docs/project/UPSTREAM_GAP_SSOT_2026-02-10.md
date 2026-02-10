@@ -29,7 +29,8 @@
 | Upstream forwarding parity | Residual passthrough/routing edges and regression-proofing | `9236936a`, `1563bd3d`, `6ab77f5e`, `4f57d7f7` | P1 | `UPSYNC-006` |
 | Claude/OAuth compat residuals | Beta/header/session/fingerprint/mimic edge consistency | `0c011b88`, `2a7d04fe`, `9a48b2e9`, `d182ef03` | P1 | `UPSYNC-007` |
 | Scheduler/failover consistency | Retry budget/cooldown/load-aware fairness closure | `1af06aed`, `3077fd27`, `12515246` | P1 | `UPSYNC-008` |
-| Admin/UI parity pack | Group sorting, toolbar unification, badge props, OAuth batch RT workflows | `bac9e2bf`, `b1c30df8`, `470b37be`, `8a0a8558` | P2 | `UPSYNC-009` |
+| Admin/UI parity pack | Toolbar unification, badge props, OAuth batch RT workflows | `b1c30df8`, `470b37be`, `8a0a8558` | P2 | `UPSYNC-009` |
+| Group drag-sort parity | Drag-and-drop group ordering with persistent sort_order semantics | `bac9e2bf` | P2 | `UPSYNC-012` |
 | Session store technical debt | Trie-based digest session store replacement with flat cache | `b889d501` | P2 | `UPSYNC-010` |
 | Closure governance | Tag-gap closure report, residual-diff triage, release readiness | `51572b5d`, `3c936441`, `aa4b1021` | P2 | `UPSYNC-011` |
 
@@ -44,11 +45,10 @@
 1. `UPSYNC-001` (baseline lock and evidence refresh)
 2. `UPSYNC-002` + `UPSYNC-003` (P0 runtime parity)
 3. `UPSYNC-004` + `UPSYNC-005` + `UPSYNC-006` + `UPSYNC-007` + `UPSYNC-008` (P1 core parity)
-4. `UPSYNC-009` + `UPSYNC-010` + `UPSYNC-011` (P2 parity/tech-debt/closure)
+4. `UPSYNC-009` + `UPSYNC-012` + `UPSYNC-010` + `UPSYNC-011` (P2 parity/tech-debt/closure)
 
 ## Standard Verification Pack (Every Batch)
 
 - `go test ./internal/service/...`
 - `go test ./...`
 - `pnpm -C frontend typecheck`
-

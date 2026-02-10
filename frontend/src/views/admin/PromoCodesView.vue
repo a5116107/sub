@@ -1,26 +1,9 @@
 <template>
   <AppLayout>
     <TablePageLayout>
-      <template #actions>
-        <div class="flex justify-end gap-3">
-          <button
-            @click="loadCodes"
-            :disabled="loading"
-            class="btn btn-secondary"
-            :title="t('common.refresh')"
-          >
-            <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-          </button>
-          <button @click="showCreateDialog = true" class="btn btn-primary">
-            <Icon name="plus" size="md" class="mr-1" />
-            {{ t('admin.promo.createCode') }}
-          </button>
-        </div>
-      </template>
-
       <template #filters>
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div class="max-w-md flex-1">
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex-1 sm:max-w-64">
             <input
               v-model="searchQuery"
               type="text"
@@ -29,13 +12,25 @@
               @input="handleSearch"
             />
           </div>
-          <div class="flex gap-2">
-            <Select
-              v-model="filters.status"
-              :options="filterStatusOptions"
-              class="w-36"
-              @change="loadCodes"
-            />
+          <Select
+            v-model="filters.status"
+            :options="filterStatusOptions"
+            class="w-36"
+            @change="loadCodes"
+          />
+          <div class="flex flex-1 flex-wrap items-center justify-end gap-2">
+            <button
+              @click="loadCodes"
+              :disabled="loading"
+              class="btn btn-secondary"
+              :title="t('common.refresh')"
+            >
+              <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+            </button>
+            <button @click="showCreateDialog = true" class="btn btn-primary">
+              <Icon name="plus" size="md" class="mr-1" />
+              {{ t('admin.promo.createCode') }}
+            </button>
           </div>
         </div>
       </template>

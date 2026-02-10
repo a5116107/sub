@@ -1,26 +1,9 @@
 <template>
   <AppLayout>
     <TablePageLayout>
-      <template #actions>
-        <div class="flex justify-end gap-3">
-          <button
-            @click="loadAnnouncements"
-            :disabled="loading"
-            class="btn btn-secondary"
-            :title="t('common.refresh')"
-          >
-            <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-          </button>
-          <button @click="openCreateDialog" class="btn btn-primary">
-            <Icon name="plus" size="md" class="mr-1" />
-            {{ t('admin.announcements.createAnnouncement') }}
-          </button>
-        </div>
-      </template>
-
       <template #filters>
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div class="max-w-md flex-1">
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex-1 sm:max-w-64">
             <input
               v-model="searchQuery"
               type="text"
@@ -29,13 +12,25 @@
               @input="handleSearch"
             />
           </div>
-          <div class="flex gap-2">
-            <Select
-              v-model="filters.status"
-              :options="statusFilterOptions"
-              class="w-40"
-              @change="handleStatusChange"
-            />
+          <Select
+            v-model="filters.status"
+            :options="statusFilterOptions"
+            class="w-40"
+            @change="handleStatusChange"
+          />
+          <div class="flex flex-1 flex-wrap items-center justify-end gap-2">
+            <button
+              @click="loadAnnouncements"
+              :disabled="loading"
+              class="btn btn-secondary"
+              :title="t('common.refresh')"
+            >
+              <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+            </button>
+            <button @click="openCreateDialog" class="btn btn-primary">
+              <Icon name="plus" size="md" class="mr-1" />
+              {{ t('admin.announcements.createAnnouncement') }}
+            </button>
           </div>
         </div>
       </template>
