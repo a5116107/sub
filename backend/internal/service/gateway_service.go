@@ -916,7 +916,6 @@ func normalizeClaudeOAuthRequestBody(body []byte, modelID string, opts claudeOAu
 	}
 
 	modified := false
-	toolNameMap := make(map[string]string)
 
 	if system, ok := req["system"]; ok {
 		switch v := system.(type) {
@@ -957,92 +956,9 @@ func normalizeClaudeOAuthRequestBody(body []byte, modelID string, opts claudeOAu
 		}
 	}
 
-	if rawTools, exists := req["tools"]; exists {
-		switch tools := rawTools.(type) {
-		case []any:
-			for idx, tool := range tools {
-				toolMap, ok := tool.(map[string]any)
-				if !ok {
-					continue
-				}
-				name, ok := toolMap["name"].(string)
-				if !ok {
-					continue
-				}
-				normalized := normalizeToolNameForClaude(name, toolNameMap)
-				if normalized != "" && normalized != name {
-					toolMap["name"] = normalized
-					modified = true
-				}
-				tools[idx] = toolMap
-			}
-			req["tools"] = tools
-		case map[string]any:
-			normalizedTools := make(map[string]any, len(tools))
-			for name, value := range tools {
-				normalized := normalizeToolNameForClaude(name, toolNameMap)
-				if normalized == "" {
-					normalized = name
-				}
-				if toolMap, ok := value.(map[string]any); ok {
-					if toolName, ok := toolMap["name"].(string); ok {
-						mappedName := normalizeToolNameForClaude(toolName, toolNameMap)
-						if mappedName != "" && mappedName != toolName {
-							toolMap["name"] = mappedName
-							modified = true
-						}
-					} else if normalized != name {
-						toolMap["name"] = normalized
-						modified = true
-					}
-					normalizedTools[normalized] = toolMap
-					if normalized != name {
-						modified = true
-					}
-					continue
-				}
-				normalizedTools[normalized] = value
-				if normalized != name {
-					modified = true
-				}
-			}
-			req["tools"] = normalizedTools
-		}
-	} else {
+	if _, exists := req["tools"]; !exists {
 		req["tools"] = []any{}
 		modified = true
-	}
-
-	if messages, ok := req["messages"].([]any); ok {
-		for _, msg := range messages {
-			msgMap, ok := msg.(map[string]any)
-			if !ok {
-				continue
-			}
-			content, ok := msgMap["content"].([]any)
-			if !ok {
-				continue
-			}
-			for _, block := range content {
-				blockMap, ok := block.(map[string]any)
-				if !ok {
-					continue
-				}
-				blockType, _ := blockMap["type"].(string)
-				if blockType != "tool_use" {
-					continue
-				}
-				name, ok := blockMap["name"].(string)
-				if !ok {
-					continue
-				}
-				normalized := normalizeToolNameForClaude(name, toolNameMap)
-				if normalized != "" && normalized != name {
-					blockMap["name"] = normalized
-					modified = true
-				}
-			}
-		}
 	}
 
 	if opts.stripSystemCacheControl {
@@ -1075,23 +991,14 @@ func normalizeClaudeOAuthRequestBody(body []byte, modelID string, opts claudeOAu
 	}
 
 	if !modified {
-		if len(toolNameMap) == 0 {
-			return body, modelID, nil
-		}
-		return body, modelID, toolNameMap
+		return body, modelID, nil
 	}
 
 	newBody, err := json.Marshal(req)
 	if err != nil {
-		if len(toolNameMap) == 0 {
-			return body, modelID, nil
-		}
-		return body, modelID, toolNameMap
+		return body, modelID, nil
 	}
-	if len(toolNameMap) == 0 {
-		return newBody, modelID, nil
-	}
-	return newBody, modelID, toolNameMap
+	return newBody, modelID, nil
 }
 
 // SelectAccount 选择账号（粘性会话+优先级）

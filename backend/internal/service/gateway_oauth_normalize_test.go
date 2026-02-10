@@ -7,7 +7,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func TestNormalizeClaudeOAuthRequestBody_NormalizeAndRewriteToolNames(t *testing.T) {
+func TestNormalizeClaudeOAuthRequestBody_NormalizeAndKeepToolNames(t *testing.T) {
 	input := []byte(`{
 		"model":"claude-sonnet-4-5",
 		"system":[{"type":"text","text":"You are OpenCode, the best coding agent on the planet.","cache_control":{"type":"ephemeral"}}],
@@ -24,11 +24,10 @@ func TestNormalizeClaudeOAuthRequestBody_NormalizeAndRewriteToolNames(t *testing
 	require.Equal(t, "claude-sonnet-4-5-20250929", modelID)
 	require.Equal(t, "claude-sonnet-4-5-20250929", gjson.GetBytes(body, "model").String())
 	require.Equal(t, "Task", gjson.GetBytes(body, "tools.0.name").String())
-	require.Equal(t, "MyCustomTool", gjson.GetBytes(body, "tools.1.name").String())
-	require.Equal(t, "WebSearch", gjson.GetBytes(body, "tools.2.name").String())
-	require.Equal(t, "WebSearch", gjson.GetBytes(body, "messages.0.content.0.name").String())
-	require.Equal(t, "myCustomTool", toolNameMap["MyCustomTool"])
-	require.Equal(t, "websearch", toolNameMap["WebSearch"])
+	require.Equal(t, "myCustomTool", gjson.GetBytes(body, "tools.1.name").String())
+	require.Equal(t, "oc_websearch", gjson.GetBytes(body, "tools.2.name").String())
+	require.Equal(t, "oc_websearch", gjson.GetBytes(body, "messages.0.content.0.name").String())
+	require.Nil(t, toolNameMap)
 	require.Equal(t, "You are Claude Code, Anthropic's official CLI for Claude.", gjson.GetBytes(body, "system.0.text").String())
 	require.False(t, gjson.GetBytes(body, "system.0.cache_control").Exists())
 	require.False(t, gjson.GetBytes(body, "temperature").Exists())
