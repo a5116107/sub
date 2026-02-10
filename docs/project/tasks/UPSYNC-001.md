@@ -1,6 +1,6 @@
 # UPSYNC-001: Baseline lock and gap evidence refresh
 
-> Status: Active
+> Status: Completed
 > Priority: P1
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`
 
@@ -37,4 +37,3 @@ Create a reproducible baseline for upstream sync work so all following tasks ope
 - `git rev-list --left-right --cherry-pick --count HEAD...origin/main`
 - `git describe --tags --abbrev=0 HEAD`
 - `git describe --tags --abbrev=0 origin/main`
-

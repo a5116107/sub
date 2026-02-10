@@ -1,7 +1,7 @@
 # Task Tracker
 
 > **Last Updated**: 2026-02-10
-> **Active**: 1 | **Pending**: 10 | **Completed This Week**: 0
+> **Active**: 1 | **Pending**: 8 | **Completed This Week**: 2
 
 ---
 
@@ -9,9 +9,9 @@
 
 | ID | Task | Priority | Status | Owner | Start Date | Source |
 |----|------|----------|--------|-------|------------|--------|
-| UPSYNC-001 | Upsync SSOT baseline lock + gap evidence refresh | P1 | Active |  | 2026-02-10 | `docs/project/tasks/UPSYNC-001.md` |
-| UPSYNC-002 | Failover runtime parity: linear delay + cache-billing exemption | P0 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-002.md` |
-| UPSYNC-003 | Unified error-policy parity for Gemini/Antigravity loops | P0 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-003.md` |
+| UPSYNC-001 | Upsync SSOT baseline lock + gap evidence refresh | P1 | Completed |  | 2026-02-10 | `docs/project/tasks/UPSYNC-001.md` |
+| UPSYNC-002 | Failover runtime parity: linear delay + cache-billing exemption | P0 | Completed |  | 2026-02-10 | `docs/project/tasks/UPSYNC-002.md` |
+| UPSYNC-003 | Unified error-policy parity for Gemini/Antigravity loops | P0 | Active |  | 2026-02-10 | `docs/project/tasks/UPSYNC-003.md` |
 | UPSYNC-004 | Model-level rate-limit clear/reset parity (backend + UI) | P1 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-004.md` |
 | UPSYNC-005 | CRS sync preview + selective account sync | P1 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-005.md` |
 | UPSYNC-006 | Upstream forwarding/passthrough hardening parity | P1 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-006.md` |

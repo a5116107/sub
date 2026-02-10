@@ -257,6 +257,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	if sessionKey != "" {
 		sessionBoundAccountID, _ = h.gatewayService.GetCachedSessionAccountID(c.Request.Context(), apiKey.GroupID, sessionKey)
 	}
+	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
 	cleanedForUnknownBinding := false
 	// Apply generic payload rules (safe subset) before billing reservation, so reservation reflects the final payload.
 	if h.payloadRulesEngine != nil && h.payloadRulesEngine.HasRules() {
@@ -333,6 +334,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	switchCount := 0
 	failedAccountIDs := make(map[int64]struct{})
 	var lastFailoverErr *service.UpstreamFailoverError
+	var forceCacheBilling bool // 粘性会话切换时的缓存计费标记
 
 	for {
 		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, modelName, failedAccountIDs, "") // Gemini 不使用会话限制
@@ -431,6 +433,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
 				failedAccountIDs[account.ID] = struct{}{}
+				if needForceCacheBilling(hasBoundSession, failoverErr) {
+					forceCacheBilling = true
+				}
 				if switchCount >= maxAccountSwitches {
 					lastFailoverErr = failoverErr
 					h.handleGeminiFailoverExhausted(c, lastFailoverErr)
@@ -439,6 +444,11 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				lastFailoverErr = failoverErr
 				switchCount++
 				log.Printf("Gemini account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
+				if account.Platform == service.PlatformAntigravity {
+					if !sleepFailoverDelay(c.Request.Context(), switchCount) {
+						return
+					}
+				}
 				continue
 			}
 			// ForwardNative already wrote the response
@@ -457,7 +467,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			reservedUSD = reservation.AmountUSD
 			released = true
 		}
-		go func(result *service.ForwardResult, usedAccount *service.Account, ua, ip, clientRequestID string, reservedUSD float64) {
+		go func(result *service.ForwardResult, usedAccount *service.Account, ua, ip, clientRequestID string, reservedUSD float64, fcb bool) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if strings.TrimSpace(clientRequestID) != "" {
@@ -472,10 +482,11 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				UserAgent:    ua,
 				IPAddress:    ip,
 				ReservedUSD:  reservedUSD,
+				ForceCacheBilling: fcb,
 			}); err != nil {
 				log.Printf("Record usage failed: %v", err)
 			}
-		}(result, account, userAgent, clientIP, clientRequestID, reservedUSD)
+		}(result, account, userAgent, clientIP, clientRequestID, reservedUSD, forceCacheBilling)
 		return
 	}
 }

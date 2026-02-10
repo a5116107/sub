@@ -328,12 +328,18 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	if platform == service.PlatformGemini && sessionHash != "" {
 		sessionKey = "gemini:" + sessionHash
 	}
+	var sessionBoundAccountID int64
+	if sessionKey != "" {
+		sessionBoundAccountID, _ = h.gatewayService.GetCachedSessionAccountID(c.Request.Context(), apiKey.GroupID, sessionKey)
+	}
+	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
 
 	if platform == service.PlatformGemini {
 		maxAccountSwitches := h.maxAccountSwitchesGemini
 		switchCount := 0
 		failedAccountIDs := make(map[int64]struct{})
 		var lastFailoverErr *service.UpstreamFailoverError
+		var forceCacheBilling bool // 粘性会话切换时的缓存计费标记
 
 		for {
 			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, failedAccountIDs, "") // Gemini 不使用会话限制
@@ -438,12 +444,20 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				if errors.As(err, &failoverErr) {
 					failedAccountIDs[account.ID] = struct{}{}
 					lastFailoverErr = failoverErr
+					if needForceCacheBilling(hasBoundSession, failoverErr) {
+						forceCacheBilling = true
+					}
 					if switchCount >= maxAccountSwitches {
 						h.handleFailoverExhausted(c, failoverErr, service.PlatformGemini, streamStarted)
 						return
 					}
 					switchCount++
 					log.Printf("Account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
+					if account.Platform == service.PlatformAntigravity {
+						if !sleepFailoverDelay(c.Request.Context(), switchCount) {
+							return
+						}
+					}
 					continue
 				}
 				// 错误响应已在Forward中处理，这里只记录日志
@@ -466,7 +480,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if result != nil {
 				reservedUsageLogID = result.UsageLogID
 			}
-			go func(result *service.ForwardResult, usedAccount *service.Account, ua, clientIP, clientRequestID string, reservedUSD float64, reservedUsageLogID int64) {
+			go func(result *service.ForwardResult, usedAccount *service.Account, ua, clientIP, clientRequestID string, reservedUSD float64, reservedUsageLogID int64, fcb bool) {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				if strings.TrimSpace(clientRequestID) != "" {
@@ -482,10 +496,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					IPAddress:          clientIP,
 					ReservedUSD:        reservedUSD,
 					ReservedUsageLogID: reservedUsageLogID,
+					ForceCacheBilling:  fcb,
 				}); err != nil {
 					log.Printf("Record usage failed: %v", err)
 				}
-			}(result, account, userAgent, clientIP, clientRequestID, reservedUSD, reservedUsageLogID)
+			}(result, account, userAgent, clientIP, clientRequestID, reservedUSD, reservedUsageLogID, forceCacheBilling)
 			return
 		}
 	}
@@ -494,6 +509,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	switchCount := 0
 	failedAccountIDs := make(map[int64]struct{})
 	var lastFailoverErr *service.UpstreamFailoverError
+	var forceCacheBilling bool // 粘性会话切换时的缓存计费标记
 
 	for {
 		// 选择支持该模型的账号
@@ -597,12 +613,20 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if errors.As(err, &failoverErr) {
 				failedAccountIDs[account.ID] = struct{}{}
 				lastFailoverErr = failoverErr
+				if needForceCacheBilling(hasBoundSession, failoverErr) {
+					forceCacheBilling = true
+				}
 				if switchCount >= maxAccountSwitches {
 					h.handleFailoverExhausted(c, failoverErr, account.Platform, streamStarted)
 					return
 				}
 				switchCount++
 				log.Printf("Account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
+				if account.Platform == service.PlatformAntigravity {
+					if !sleepFailoverDelay(c.Request.Context(), switchCount) {
+						return
+					}
+				}
 				continue
 			}
 			// 错误响应已在Forward中处理，这里只记录日志
@@ -615,7 +639,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		clientIP := ip.GetClientIP(c)
 
 		// 异步记录使用量（subscription已在函数开头获取）
-		go func(result *service.ForwardResult, usedAccount *service.Account, ua, clientIP string) {
+		go func(result *service.ForwardResult, usedAccount *service.Account, ua, clientIP string, fcb bool) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
@@ -626,10 +650,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				Subscription: subscription,
 				UserAgent:    ua,
 				IPAddress:    clientIP,
+				ForceCacheBilling: fcb,
 			}); err != nil {
 				log.Printf("Record usage failed: %v", err)
 			}
-		}(result, account, userAgent, clientIP)
+		}(result, account, userAgent, clientIP, forceCacheBilling)
 		return
 	}
 }
@@ -846,6 +871,27 @@ func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, su
 func (h *GatewayHandler) handleConcurrencyError(c *gin.Context, err error, slotType string, streamStarted bool) {
 	h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error",
 		fmt.Sprintf("Concurrency limit exceeded for %s, please retry later", slotType), streamStarted)
+}
+
+// needForceCacheBilling 判断 failover 时是否需要强制缓存计费。
+// 粘性会话切换账号、或上游明确标记时，将 input_tokens 转为 cache_read 计费。
+func needForceCacheBilling(hasBoundSession bool, failoverErr *service.UpstreamFailoverError) bool {
+	return hasBoundSession || (failoverErr != nil && failoverErr.ForceCacheBilling)
+}
+
+// sleepFailoverDelay 账号切换线性递增延时：第1次0s、第2次1s、第3次2s…
+// 返回 false 表示 context 已取消。
+func sleepFailoverDelay(ctx context.Context, switchCount int) bool {
+	delay := time.Duration(switchCount-1) * time.Second
+	if delay <= 0 {
+		return true
+	}
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(delay):
+		return true
+	}
 }
 
 func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, platform string, streamStarted bool) {

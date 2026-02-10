@@ -1,6 +1,6 @@
 # UPSYNC-003: Unified error-policy parity for Gemini/Antigravity loops
 
-> Status: Pending
+> Status: Active
 > Priority: P0
 > Depends on: `UPSYNC-001`
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`
@@ -31,4 +31,3 @@ Close remaining edge cases in custom error-code policy handling and retry sequen
 - `go test ./internal/service/... -run "ErrorPolicy|Gemini|Antigravity|RateLimit" -count=1`
 - `go test ./internal/service/...`
 - `go test ./...`
-

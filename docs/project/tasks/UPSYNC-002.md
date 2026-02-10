@@ -1,6 +1,6 @@
 # UPSYNC-002: Failover runtime parity (linear delay + cache billing exemption)
 
-> Status: Pending
+> Status: Completed
 > Priority: P0
 > Depends on: `UPSYNC-001`
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`
@@ -33,4 +33,3 @@ Match upstream failover behavior for Antigravity switch loops without breaking e
 - `go test ./internal/handler/...`
 - `go test ./internal/service/... -run "Failover|Sticky|CacheBilling|Disconnect" -count=1`
 - `go test ./...`
-

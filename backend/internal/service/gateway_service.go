@@ -477,8 +477,9 @@ type ForwardResult struct {
 
 // UpstreamFailoverError indicates an upstream error that should trigger account failover.
 type UpstreamFailoverError struct {
-	StatusCode   int
-	ResponseBody []byte
+	StatusCode        int
+	ResponseBody      []byte
+	ForceCacheBilling bool // Antigravity 粘性会话切换时设为 true
 }
 
 func (e *UpstreamFailoverError) Error() string {
@@ -4895,6 +4896,7 @@ type RecordUsageInput struct {
 	APIKey       *APIKey
 	User         *User
 	Account      *Account
+	ForceCacheBilling bool
 	Subscription *UserSubscription // 可选：订阅信息
 	UserAgent    string            // 请求的 User-Agent
 	IPAddress    string            // 请求的客户端 IP 地址
@@ -4913,6 +4915,19 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
+
+	// 强制缓存计费：将 input_tokens 转为 cache_read_input_tokens
+	// 用于粘性会话切换时的特殊计费处理
+	if input.ForceCacheBilling && result.Usage.InputTokens > 0 {
+		accountID := int64(0)
+		if account != nil {
+			accountID = account.ID
+		}
+		log.Printf("force_cache_billing: %d input_tokens -> cache_read_input_tokens (account=%d)",
+			result.Usage.InputTokens, accountID)
+		result.Usage.CacheReadInputTokens += result.Usage.InputTokens
+		result.Usage.InputTokens = 0
+	}
 
 	// Billing idempotency key MUST NOT come from client headers (Idempotency-Key, X-Request-Id, etc).
 	// Prefer upstream request id; if missing, generate a server-side UUID.
