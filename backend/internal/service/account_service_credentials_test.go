@@ -43,6 +43,9 @@ func (m *accountRepoForCredentialsTest) Create(ctx context.Context, account *Acc
 func (m *accountRepoForCredentialsTest) GetByCRSAccountID(ctx context.Context, crsAccountID string) (*Account, error) {
 	return nil, nil
 }
+func (m *accountRepoForCredentialsTest) ListCRSAccountIDs(ctx context.Context) (map[string]int64, error) {
+	return map[string]int64{}, nil
+}
 func (m *accountRepoForCredentialsTest) Update(ctx context.Context, account *Account) error {
 	return nil
 }
