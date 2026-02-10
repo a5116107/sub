@@ -1,6 +1,6 @@
 # UPSYNC-008: Scheduler/failover fairness and retry-budget parity
 
-> Status: Pending
+> Status: Active
 > Priority: P1
 > Depends on: `UPSYNC-002`, `UPSYNC-003`
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`
@@ -30,4 +30,3 @@ Align scheduler and failover behavior for fairness and retry predictability.
 - `go test ./internal/service/... -run "Scheduler|Shuffle|Retry|Cooldown|Sticky" -count=1`
 - `go test ./internal/service/...`
 - `go test ./...`
-
