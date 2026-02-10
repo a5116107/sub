@@ -1,6 +1,6 @@
 # UPSYNC-009: Admin/UI parity pack (non-destructive)
 
-> Status: Pending
+> Status: Active
 > Priority: P2
 > Depends on: `UPSYNC-004`, `UPSYNC-005`
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`
@@ -32,4 +32,3 @@ Absorb high-value admin/UI parity items while preserving existing UX flows.
 - `pnpm -C frontend typecheck`
 - `pnpm -C frontend test:run` (if tests exist for touched modules)
 - `go test ./internal/handler/...` (for related API contract updates)
-

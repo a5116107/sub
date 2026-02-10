@@ -1,6 +1,6 @@
 # UPSYNC-008: Scheduler/failover fairness and retry-budget parity
 
-> Status: Active
+> Status: Completed
 > Priority: P1
 > Depends on: `UPSYNC-002`, `UPSYNC-003`
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`

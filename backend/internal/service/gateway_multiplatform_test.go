@@ -3444,3 +3444,74 @@ func TestResolveGatewayMappedModel(t *testing.T) {
 		})
 	}
 }
+
+func TestStickyBindingCleanupOnExcludedAccount(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("legacy select clears and rebinds excluded sticky account", func(t *testing.T) {
+		repo := &mockAccountRepoForPlatform{
+			accounts: []Account{
+				{ID: 1, Platform: PlatformAnthropic, Priority: 2, Status: StatusActive, Schedulable: true},
+				{ID: 2, Platform: PlatformAnthropic, Priority: 1, Status: StatusActive, Schedulable: true},
+			},
+			accountsByID: map[int64]*Account{},
+		}
+		for i := range repo.accounts {
+			repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+		}
+
+		cache := &mockGatewayCacheForPlatform{
+			sessionBindings: map[string]int64{"sticky": 1},
+		}
+
+		svc := &GatewayService{
+			accountRepo: repo,
+			cache:       cache,
+			cfg:         testConfig(),
+		}
+
+		excluded := map[int64]struct{}{1: {}}
+		account, err := svc.selectAccountForModelWithPlatform(ctx, nil, "sticky", "claude-3-5-sonnet-20241022", excluded, PlatformAnthropic)
+		require.NoError(t, err)
+		require.NotNil(t, account)
+		require.Equal(t, int64(2), account.ID)
+		require.Equal(t, 1, cache.deletedSessions["sticky"])
+		require.Equal(t, int64(2), cache.sessionBindings["sticky"])
+	})
+
+	t.Run("load-aware select clears and rebinds excluded sticky account", func(t *testing.T) {
+		repo := &mockAccountRepoForPlatform{
+			accounts: []Account{
+				{ID: 1, Platform: PlatformAnthropic, Priority: 2, Status: StatusActive, Schedulable: true, Concurrency: 5},
+				{ID: 2, Platform: PlatformAnthropic, Priority: 1, Status: StatusActive, Schedulable: true, Concurrency: 5},
+			},
+			accountsByID: map[int64]*Account{},
+		}
+		for i := range repo.accounts {
+			repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+		}
+
+		cache := &mockGatewayCacheForPlatform{
+			sessionBindings: map[string]int64{"sticky": 1},
+		}
+
+		cfg := testConfig()
+		cfg.Gateway.Scheduling.LoadBatchEnabled = false
+
+		svc := &GatewayService{
+			accountRepo:        repo,
+			cache:              cache,
+			cfg:                cfg,
+			concurrencyService: nil,
+		}
+
+		excluded := map[int64]struct{}{1: {}}
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sticky", "claude-3-5-sonnet-20241022", excluded, "")
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.NotNil(t, result.Account)
+		require.Equal(t, int64(2), result.Account.ID)
+		require.Equal(t, 1, cache.deletedSessions["sticky"])
+		require.Equal(t, int64(2), cache.sessionBindings["sticky"])
+	})
+}
