@@ -1,7 +1,7 @@
 # Task Tracker
 
 > **Last Updated**: 2026-02-10
-> **Active**: 1 | **Pending**: 5 | **Completed This Week**: 5
+> **Active**: 1 | **Pending**: 4 | **Completed This Week**: 6
 
 ---
 
@@ -14,8 +14,8 @@
 | UPSYNC-003 | Unified error-policy parity for Gemini/Antigravity loops | P0 | Completed |  | 2026-02-10 | `docs/project/tasks/UPSYNC-003.md` |
 | UPSYNC-004 | Model-level rate-limit clear/reset parity (backend + UI) | P1 | Completed |  | 2026-02-10 | `docs/project/tasks/UPSYNC-004.md` |
 | UPSYNC-005 | CRS sync preview + selective account sync | P1 | Completed |  | 2026-02-10 | `docs/project/tasks/UPSYNC-005.md` |
-| UPSYNC-006 | Upstream forwarding/passthrough hardening parity | P1 | Active |  | 2026-02-10 | `docs/project/tasks/UPSYNC-006.md` |
-| UPSYNC-007 | Claude/OAuth compatibility residual parity | P1 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-007.md` |
+| UPSYNC-006 | Upstream forwarding/passthrough hardening parity | P1 | Completed |  | 2026-02-10 | `docs/project/tasks/UPSYNC-006.md` |
+| UPSYNC-007 | Claude/OAuth compatibility residual parity | P1 | Active |  | 2026-02-10 | `docs/project/tasks/UPSYNC-007.md` |
 | UPSYNC-008 | Scheduler/failover fairness and retry-budget parity | P1 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-008.md` |
 | UPSYNC-009 | Admin/UI parity pack (non-destructive) | P2 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-009.md` |
 | UPSYNC-010 | Digest session store migration (flat cache, compatibility-first) | P2 | Pending |  | 2026-02-10 | `docs/project/tasks/UPSYNC-010.md` |
