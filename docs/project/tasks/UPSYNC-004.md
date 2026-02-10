@@ -1,6 +1,6 @@
 # UPSYNC-004: Model-level rate-limit clear/reset parity (backend + UI)
 
-> Status: Pending
+> Status: Active
 > Priority: P1
 > Depends on: `UPSYNC-001`
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`
@@ -33,4 +33,3 @@ Complete model-level rate-limit governance parity while preserving current API c
 - `go test ./internal/handler/...`
 - `go test ./internal/service/... -run "RateLimit|TempUnsched|ModelRate" -count=1`
 - `pnpm -C frontend typecheck`
-

@@ -1,6 +1,6 @@
 # UPSYNC-003: Unified error-policy parity for Gemini/Antigravity loops
 
-> Status: Active
+> Status: Completed
 > Priority: P0
 > Depends on: `UPSYNC-001`
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`
