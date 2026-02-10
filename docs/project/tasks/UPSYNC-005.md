@@ -1,6 +1,6 @@
 # UPSYNC-005: CRS sync preview + selective account sync
 
-> Status: Pending
+> Status: Active
 > Priority: P1
 > Depends on: `UPSYNC-001`
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`
@@ -33,4 +33,3 @@ Add CRS sync preview and selectable-account sync, not only one-click full sync.
 - `go test ./internal/service/... -run "CRS|Sync" -count=1`
 - `go test ./internal/handler/... -run "CRS|Sync" -count=1`
 - `pnpm -C frontend typecheck`
-
