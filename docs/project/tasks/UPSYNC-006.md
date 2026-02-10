@@ -1,6 +1,6 @@
 # UPSYNC-006: Upstream forwarding/passthrough hardening parity
 
-> Status: Pending
+> Status: Active
 > Priority: P1
 > Depends on: `UPSYNC-001`
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`
@@ -30,4 +30,3 @@ Close residual upstream forwarding edge cases with strict backward compatibility
 - `go test ./internal/service/... -run "Upstream|Forward|Passthrough" -count=1`
 - `go test ./internal/handler/... -run "Upstream|Forward" -count=1`
 - `go test ./...`
-

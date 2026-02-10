@@ -1,6 +1,6 @@
 # UPSYNC-005: CRS sync preview + selective account sync
 
-> Status: Active
+> Status: Completed
 > Priority: P1
 > Depends on: `UPSYNC-001`
 > Source: `docs/project/UPSTREAM_GAP_SSOT_2026-02-10.md`
