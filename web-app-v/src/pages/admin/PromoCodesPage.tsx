@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Tag,
   Plus,
@@ -22,14 +23,14 @@ import {
   Skeleton,
 } from '../../components/ui';
 
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, t: (key: string) => string) => {
   switch (status.toLowerCase()) {
     case 'active':
-      return <Badge variant="success">Active</Badge>;
+      return <Badge variant="success">{t('common:status.active')}</Badge>;
     case 'disabled':
-      return <Badge variant="danger">Disabled</Badge>;
+      return <Badge variant="danger">{t('common:status.disabled')}</Badge>;
     case 'expired':
-      return <Badge variant="info">Expired</Badge>;
+      return <Badge variant="info">{t('common:status.expired')}</Badge>;
     default:
       return <Badge variant="default">{status}</Badge>;
   }
@@ -59,6 +60,7 @@ interface PromoUsage {
 }
 
 export const PromoCodesPage: React.FC = () => {
+  const { t } = useTranslation('admin');
   const [loading, setLoading] = useState(true);
   const [codes, setCodes] = useState<PromoCode[]>([]);
   const [total, setTotal] = useState(0);
@@ -185,7 +187,7 @@ export const PromoCodesPage: React.FC = () => {
     setShowUsageModal(true);
     setUsageLoading(true);
     try {
-      const response = await adminPromoApi.getUsage(code.id, { page_size: 50 });
+      const response = await adminPromoApi.getUsages(code.id, { page_size: 50 });
       setUsages(response.items);
     } catch (error) {
       console.error('Failed to fetch usage:', error);
@@ -223,14 +225,14 @@ export const PromoCodesPage: React.FC = () => {
   const columns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('promoCodes.col.id'),
       render: (code: PromoCode) => (
         <span className="text-sm text-gray-400">#{code.id}</span>
       ),
     },
     {
       key: 'code',
-      title: 'Code',
+      title: t('promoCodes.col.code'),
       render: (code: PromoCode) => (
         <code className="text-sm font-mono text-cyan-400 bg-[#0A0A0C] px-2 py-1 rounded">
           {code.code}
@@ -239,7 +241,7 @@ export const PromoCodesPage: React.FC = () => {
     },
     {
       key: 'bonus',
-      title: 'Bonus',
+      title: t('promoCodes.col.bonus'),
       render: (code: PromoCode) => (
         <span className="text-sm text-emerald-400 font-medium">
           ${code.bonus_amount.toFixed(2)}
@@ -248,7 +250,7 @@ export const PromoCodesPage: React.FC = () => {
     },
     {
       key: 'usage',
-      title: 'Usage',
+      title: t('promoCodes.col.usage'),
       render: (code: PromoCode) => (
         <div className="text-sm">
           <span className="text-white">{code.used_count}</span>
@@ -258,41 +260,41 @@ export const PromoCodesPage: React.FC = () => {
     },
     {
       key: 'status',
-      title: 'Status',
-      render: (code: PromoCode) => getStatusBadge(code.status),
+      title: t('promoCodes.col.status'),
+      render: (code: PromoCode) => getStatusBadge(code.status, t),
     },
     {
       key: 'expires',
-      title: 'Expires',
+      title: t('promoCodes.col.expires'),
       render: (code: PromoCode) => (
         <span className="text-sm text-gray-400">
-          {code.expires_at ? formatDate(code.expires_at) : 'Never'}
+          {code.expires_at ? formatDate(code.expires_at) : t('promoCodes.never')}
         </span>
       ),
     },
     {
       key: 'created',
-      title: 'Created',
+      title: t('promoCodes.col.created'),
       render: (code: PromoCode) => (
         <span className="text-sm text-gray-400">{formatDate(code.created_at)}</span>
       ),
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('promoCodes.col.actions'),
       render: (code: PromoCode) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleViewUsage(code)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-cyan-400 transition-colors"
-            title="View Usage"
+            title={t('promoCodes.usageTitle', { code: code.code })}
           >
             <Users className="w-4 h-4" />
           </button>
           <button
             onClick={() => openEditModal(code)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="Edit Code"
+            title={t('promoCodes.editTitle')}
           >
             <Edit className="w-4 h-4" />
           </button>
@@ -302,7 +304,7 @@ export const PromoCodesPage: React.FC = () => {
               setShowDeleteModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-red-400 transition-colors"
-            title="Delete Code"
+            title={t('promoCodes.deleteTitle')}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -314,7 +316,7 @@ export const PromoCodesPage: React.FC = () => {
   const PromoForm = ({ isEdit = false }: { isEdit?: boolean }) => (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm text-gray-400 mb-1">Code *</label>
+        <label className="block text-sm text-gray-400 mb-1">{t('promoCodes.form.code')} *</label>
         <Input
           placeholder="PROMO2024"
           value={formData.code}
@@ -322,12 +324,12 @@ export const PromoCodesPage: React.FC = () => {
           disabled={isEdit}
         />
         {isEdit && (
-          <p className="text-xs text-gray-500 mt-1">Code cannot be changed after creation</p>
+          <p className="text-xs text-gray-500 mt-1">{t('promoCodes.form.codeReadonly')}</p>
         )}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Bonus Amount (USD) *</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('promoCodes.form.bonusAmount')} *</label>
           <Input
             type="number"
             min="0.01"
@@ -338,7 +340,7 @@ export const PromoCodesPage: React.FC = () => {
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Max Uses *</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('promoCodes.form.maxUses')} *</label>
           <Input
             type="number"
             min="1"
@@ -350,18 +352,18 @@ export const PromoCodesPage: React.FC = () => {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Status</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('promoCodes.form.status')}</label>
           <select
             value={formData.status}
             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
             className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
           >
-            <option value="active">Active</option>
-            <option value="disabled">Disabled</option>
+            <option value="active">{t('common:status.active')}</option>
+            <option value="disabled">{t('common:status.disabled')}</option>
           </select>
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Expires At</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('promoCodes.form.expiresAt')}</label>
           <Input
             type="date"
             value={formData.expires_at}
@@ -370,9 +372,9 @@ export const PromoCodesPage: React.FC = () => {
         </div>
       </div>
       <div>
-        <label className="block text-sm text-gray-400 mb-1">Notes</label>
+        <label className="block text-sm text-gray-400 mb-1">{t('promoCodes.form.notes')}</label>
         <Input
-          placeholder="Internal notes about this promo code"
+          placeholder={t('promoCodes.form.notesPlaceholder')}
           value={formData.notes}
           onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
         />
@@ -381,19 +383,23 @@ export const PromoCodesPage: React.FC = () => {
         <Button
           variant="secondary"
           onClick={() => {
-            isEdit ? setShowEditModal(false) : setShowCreateModal(false);
+            if (isEdit) {
+              setShowEditModal(false);
+            } else {
+              setShowCreateModal(false);
+            }
             resetForm();
             setSelectedCode(null);
           }}
         >
-          Cancel
+          {t('common:btn.cancel')}
         </Button>
         <Button
           onClick={isEdit ? handleUpdateCode : handleCreateCode}
           isLoading={actionLoading}
           disabled={!formData.code || !formData.bonus_amount || !formData.max_uses}
         >
-          {isEdit ? 'Update Code' : 'Create Code'}
+          {isEdit ? t('promoCodes.updateCode') : t('promoCodes.createCode')}
         </Button>
       </div>
     </div>
@@ -404,17 +410,17 @@ export const PromoCodesPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Promo Codes</h1>
-          <p className="text-gray-400">Create and manage promotional codes</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('promoCodes.title')}</h1>
+          <p className="text-gray-400">{t('promoCodes.subtitle')}</p>
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={handleViewStats}>
             <BarChart3 className="w-4 h-4 mr-2" />
-            Stats
+            {t('promoCodes.stats')}
           </Button>
           <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Create Code
+            {t('promoCodes.addCode')}
           </Button>
         </div>
       </div>
@@ -431,14 +437,14 @@ export const PromoCodesPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="disabled">Disabled</option>
-              <option value="expired">Expired</option>
+              <option value="">{t('promoCodes.filter.allStatus')}</option>
+              <option value="active">{t('common:status.active')}</option>
+              <option value="disabled">{t('common:status.disabled')}</option>
+              <option value="expired">{t('common:status.expired')}</option>
             </select>
             <div className="flex items-center gap-2 text-sm text-gray-400 ml-auto">
               <Tag className="w-4 h-4" />
-              <span>{total} total codes</span>
+              <span>{t('promoCodes.total', { count: total })}</span>
             </div>
           </div>
         </CardContent>
@@ -451,15 +457,14 @@ export const PromoCodesPage: React.FC = () => {
             columns={columns}
             data={codes}
             loading={loading}
-            emptyText="No promo codes found"
+            emptyText={t('promoCodes.empty')}
           />
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#2A2A30]">
               <p className="text-sm text-gray-400">
-                Showing {(page - 1) * pageSize + 1} to{' '}
-                {Math.min(page * pageSize, total)} of {total} codes
+                {t('common:table.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total), total })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -471,7 +476,7 @@ export const PromoCodesPage: React.FC = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm text-gray-400">
-                  Page {page} of {totalPages}
+                  {t('common:table.page', { current: page, total: totalPages })}
                 </span>
                 <Button
                   variant="secondary"
@@ -494,7 +499,7 @@ export const PromoCodesPage: React.FC = () => {
           setShowCreateModal(false);
           resetForm();
         }}
-        title="Create Promo Code"
+        title={t('promoCodes.createTitle')}
       >
         <PromoForm />
       </Modal>
@@ -507,7 +512,7 @@ export const PromoCodesPage: React.FC = () => {
           setSelectedCode(null);
           resetForm();
         }}
-        title="Edit Promo Code"
+        title={t('promoCodes.editTitle')}
       >
         <PromoForm isEdit />
       </Modal>
@@ -519,19 +524,15 @@ export const PromoCodesPage: React.FC = () => {
           setShowDeleteModal(false);
           setSelectedCode(null);
         }}
-        title="Delete Promo Code"
+        title={t('promoCodes.deleteTitle')}
       >
         {selectedCode && (
           <div className="space-y-4">
             <p className="text-gray-400">
-              Are you sure you want to delete promo code{' '}
-              <code className="text-cyan-400 bg-[#0A0A0C] px-2 py-1 rounded">
-                {selectedCode.code}
-              </code>
-              ?
+              {t('promoCodes.deleteConfirm', { code: selectedCode.code })}
             </p>
             <p className="text-sm text-red-400">
-              This action cannot be undone.
+              {t('promoCodes.deleteWarning')}
             </p>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -541,14 +542,14 @@ export const PromoCodesPage: React.FC = () => {
                   setSelectedCode(null);
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 variant="danger"
                 onClick={handleDeleteCode}
                 isLoading={actionLoading}
               >
-                Delete Code
+                {t('promoCodes.deleteCode')}
               </Button>
             </div>
           </div>
@@ -563,7 +564,7 @@ export const PromoCodesPage: React.FC = () => {
           setSelectedCode(null);
           setUsages([]);
         }}
-        title={`Usage: ${selectedCode?.code || ''}`}
+        title={t('promoCodes.usageTitle', { code: selectedCode?.code || '' })}
       >
         {usageLoading ? (
           <div className="space-y-4">
@@ -576,8 +577,8 @@ export const PromoCodesPage: React.FC = () => {
             <table className="w-full">
               <thead className="sticky top-0 bg-[#121215]">
                 <tr className="border-b border-[#2A2A30]">
-                  <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">User</th>
-                  <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">Used At</th>
+                  <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">{t('promoCodes.usageCol.user')}</th>
+                  <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">{t('promoCodes.usageCol.usedAt')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -596,7 +597,7 @@ export const PromoCodesPage: React.FC = () => {
             </table>
           </div>
         ) : (
-          <p className="text-gray-400 text-center py-8">No usage records found</p>
+          <p className="text-gray-400 text-center py-8">{t('promoCodes.noUsage')}</p>
         )}
       </Modal>
 
@@ -607,7 +608,7 @@ export const PromoCodesPage: React.FC = () => {
           setShowStatsModal(false);
           setStats(null);
         }}
-        title="Promo Code Statistics"
+        title={t('promoCodes.statsTitle')}
       >
         {statsLoading ? (
           <div className="space-y-4">
@@ -618,23 +619,23 @@ export const PromoCodesPage: React.FC = () => {
         ) : stats ? (
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Codes</p>
+              <p className="text-xs text-gray-500 mb-1">{t('promoCodes.stat.total')}</p>
               <p className="text-xl font-bold text-white">{stats.total_codes}</p>
             </div>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Active</p>
+              <p className="text-xs text-gray-500 mb-1">{t('promoCodes.stat.active')}</p>
               <p className="text-xl font-bold text-emerald-400">{stats.active_codes}</p>
             </div>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Expired</p>
+              <p className="text-xs text-gray-500 mb-1">{t('promoCodes.stat.expired')}</p>
               <p className="text-xl font-bold text-gray-400">{stats.expired_codes}</p>
             </div>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Uses</p>
+              <p className="text-xs text-gray-500 mb-1">{t('promoCodes.stat.totalUses')}</p>
               <p className="text-xl font-bold text-cyan-400">{stats.total_uses}</p>
             </div>
             <div className="col-span-2 p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Bonus Given</p>
+              <p className="text-xs text-gray-500 mb-1">{t('promoCodes.stat.totalBonus')}</p>
               <p className="text-xl font-bold text-emerald-400">
                 ${stats.total_bonus_given?.toFixed(2) || '0.00'}
               </p>

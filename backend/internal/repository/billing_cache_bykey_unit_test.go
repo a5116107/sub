@@ -66,4 +66,3 @@ func TestBillingCache_ReserveFinalize_ByKey_Idempotent(t *testing.T) {
 	require.InDelta(t, 0.0, got4.ReservedUsage, 0.00001)
 	require.InDelta(t, 0.25, got4.DailyUsage, 0.00001)
 }
-

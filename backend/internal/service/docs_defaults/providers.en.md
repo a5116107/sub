@@ -123,6 +123,16 @@ Which provider is used depends on **your API key’s group** (platform, allowed 
 ### OpenAI Responses (OpenAI groups only)
 
 - `POST /v1/responses` (also `POST /responses`)
+- `POST /v1/responses/compact` (also `POST /responses/compact`)
+- `POST /v1/responses/input_tokens` (also `POST /responses/input_tokens`)
+- `GET /v1/responses/{response_id}` (also `GET /responses/{response_id}`)
+- `DELETE /v1/responses/{response_id}` (also `DELETE /responses/{response_id}`)
+- `POST /v1/responses/{response_id}/cancel` (also `POST /responses/{response_id}/cancel`)
+- `GET /v1/responses/{response_id}/input_items` (also `GET /responses/{response_id}/input_items`)
+- `GET /v1/responses/{response_id}` (also `GET /responses/{response_id}`)
+- `DELETE /v1/responses/{response_id}` (also `DELETE /responses/{response_id}`)
+- `POST /v1/responses/{response_id}/cancel` (also `POST /responses/{response_id}/cancel`)
+- `GET /v1/responses/{response_id}/input_items` (also `GET /responses/{response_id}/input_items`)
 
 ```bash
 curl -sS -X POST "$BASE_URL/v1/responses" \
@@ -197,4 +207,3 @@ export ANTHROPIC_AUTH_TOKEN="$SUB2API_KEY"
 - `403`: insufficient balance / no active subscription / group disabled
 - `429`: rate limit / quota exceeded
 - `5xx`: upstream/network/account issues (retry later or contact admin)
-

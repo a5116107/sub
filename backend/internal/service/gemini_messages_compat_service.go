@@ -12,7 +12,6 @@ import (
 	"io"
 	"log"
 	"math"
-	mathrand "math/rand"
 	"net/http"
 	"regexp"
 	"strings"
@@ -842,6 +841,39 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 			tempMatched = s.rateLimitService.HandleTempUnschedulable(ctx, account, resp.StatusCode, respBody)
 		}
 		s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+
+		// 精确匹配服务端配置类 400 错误，触发同账号重试 + failover（避免频繁换号）。
+		if resp.StatusCode == http.StatusBadRequest {
+			msg := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
+			if isGoogleProjectConfigError(msg) {
+				upstreamReqID := resp.Header.Get(requestIDHeader)
+				if upstreamReqID == "" {
+					upstreamReqID = resp.Header.Get("x-goog-request-id")
+				}
+				upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
+				upstreamDetail := ""
+				if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+					maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+					if maxBytes <= 0 {
+						maxBytes = 2048
+					}
+					upstreamDetail = truncateString(string(respBody), maxBytes)
+				}
+				log.Printf("[Gemini] status=400 google_config_error failover=true upstream_message=%q account=%d", upstreamMsg, account.ID)
+				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+					Platform:           account.Platform,
+					AccountID:          account.ID,
+					AccountName:        account.Name,
+					UpstreamStatusCode: resp.StatusCode,
+					UpstreamRequestID:  upstreamReqID,
+					Kind:               "failover",
+					Message:            upstreamMsg,
+					Detail:             upstreamDetail,
+				})
+				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody, RetryableOnSameAccount: true}
+			}
+		}
+
 		if tempMatched {
 			upstreamReqID := resp.Header.Get(requestIDHeader)
 			if upstreamReqID == "" {
@@ -867,7 +899,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 				Message:            upstreamMsg,
 				Detail:             upstreamDetail,
 			})
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
 		}
 		if s.shouldFailoverGeminiUpstreamError(resp.StatusCode) {
 			upstreamReqID := resp.Header.Get(requestIDHeader)
@@ -894,7 +926,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 				Message:            upstreamMsg,
 				Detail:             upstreamDetail,
 			})
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
 		}
 		upstreamReqID := resp.Header.Get(requestIDHeader)
 		if upstreamReqID == "" {
@@ -1265,6 +1297,35 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 		}
 		s.handleGeminiUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
 
+		// 精确匹配服务端配置类 400 错误，触发同账号重试 + failover（避免频繁换号）。
+		if resp.StatusCode == http.StatusBadRequest {
+			evBody := unwrapIfNeeded(isOAuth, respBody)
+			upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(evBody))
+			upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+			if isGoogleProjectConfigError(strings.ToLower(upstreamMsg)) {
+				upstreamDetail := ""
+				if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+					maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+					if maxBytes <= 0 {
+						maxBytes = 2048
+					}
+					upstreamDetail = truncateString(string(evBody), maxBytes)
+				}
+				log.Printf("[Gemini] status=400 google_config_error failover=true upstream_message=%q account=%d", upstreamMsg, account.ID)
+				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+					Platform:           account.Platform,
+					AccountID:          account.ID,
+					AccountName:        account.Name,
+					UpstreamStatusCode: resp.StatusCode,
+					UpstreamRequestID:  requestID,
+					Kind:               "failover",
+					Message:            upstreamMsg,
+					Detail:             upstreamDetail,
+				})
+				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: evBody, RetryableOnSameAccount: true}
+			}
+		}
+
 		// Best-effort fallback for OAuth tokens missing AI Studio scopes when calling countTokens.
 		// This avoids Gemini SDKs failing hard during preflight token counting.
 		if action == "countTokens" && isOAuth && isGeminiInsufficientScope(resp.Header, respBody) {
@@ -1302,7 +1363,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				Message:            upstreamMsg,
 				Detail:             upstreamDetail,
 			})
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: evBody}
 		}
 		if s.shouldFailoverGeminiUpstreamError(resp.StatusCode) {
 			evBody := unwrapIfNeeded(isOAuth, respBody)
@@ -1326,7 +1387,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				Message:            upstreamMsg,
 				Detail:             upstreamDetail,
 			})
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: evBody}
 		}
 
 		respBody = unwrapIfNeeded(isOAuth, respBody)
@@ -1445,14 +1506,10 @@ func (s *GeminiMessagesCompatService) shouldFailoverGeminiUpstreamError(statusCo
 }
 
 func sleepGeminiBackoff(attempt int) {
-	delay := geminiRetryBaseDelay * time.Duration(1<<uint(attempt-1))
-	if delay > geminiRetryMaxDelay {
-		delay = geminiRetryMaxDelay
-	}
+	delay := boundedExponentialBackoff(geminiRetryBaseDelay, geminiRetryMaxDelay, attempt)
 
 	// +/- 20% jitter
-	r := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
-	jitter := time.Duration(float64(delay) * 0.2 * (r.Float64()*2 - 1))
+	jitter := time.Duration(float64(delay) * 0.2 * (cryptoRandUnitFloat64()*2 - 1))
 	sleepFor := delay + jitter
 	if sleepFor < 0 {
 		sleepFor = 0

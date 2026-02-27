@@ -24,11 +24,11 @@ export const adminUsersApi = {
 
   // Create user
   createUser: (data: Partial<User>) =>
-    api.post<User>('/admin/users', data),
+    api.post<AdminUser>('/admin/users', data),
 
   // Update user
   updateUser: (id: number, data: Partial<User>) =>
-    api.put<User>(`/admin/users/${id}`, data),
+    api.put<AdminUser>(`/admin/users/${id}`, data),
 
   // Delete user
   deleteUser: (id: number) =>
@@ -43,15 +43,15 @@ export const adminUsersApi = {
 
   // Set user groups
   setUserGroups: (id: number, groupIds: number[]) =>
-    api.put<void>(`/admin/users/${id}/groups`, { group_ids: groupIds }),
+    api.put<AdminUser>(`/admin/users/${id}`, { allowed_groups: groupIds }),
 
   // Set user role
   setUserRole: (id: number, role: string) =>
-    api.put<void>(`/admin/users/${id}/role`, { role }),
+    api.put<AdminUser>(`/admin/users/${id}`, { role } as unknown as Partial<User>),
 
   // Set user status
   setUserStatus: (id: number, status: string) =>
-    api.put<void>(`/admin/users/${id}/status`, { status }),
+    api.put<AdminUser>(`/admin/users/${id}`, { status }),
 
   // Get user usage stats
   getUserUsage: (id: number, params?: { start_date?: string; end_date?: string }) =>
@@ -68,13 +68,16 @@ export const adminUsersApi = {
     }>(`/admin/users/${id}/usage`, { params }),
 
   // Get user API keys
-  getUserKeys: (id: number) =>
+  getUserApiKeys: (id: number) =>
     api.get<Array<{
       id: number;
       name: string;
+      key: string;
       status: string;
+      group_id?: number;
+      group_name?: string;
       created_at: string;
-    }>>(`/admin/users/${id}/keys`),
+    }>>(`/admin/users/${id}/api-keys`),
 
   // Get user subscriptions
   getUserSubscriptions: (id: number) =>
@@ -84,4 +87,20 @@ export const adminUsersApi = {
       status: string;
       expires_at: string;
     }>>(`/admin/users/${id}/subscriptions`),
+
+  // Get user attributes
+  getUserAttributes: (id: number) =>
+    api.get<Array<{
+      id: number;
+      attribute_id: number;
+      attribute_name: string;
+      attribute_key: string;
+      value: string;
+      created_at: string;
+      updated_at: string;
+    }>>(`/admin/users/${id}/attributes`),
+
+  // Update user attributes
+  updateUserAttributes: (id: number, data: { attributes: Array<{ attribute_id: number; value: string }> }) =>
+    api.put<void>(`/admin/users/${id}/attributes`, data),
 };

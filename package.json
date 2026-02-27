@@ -1,4 +1,11 @@
 {
+  "scripts": {
+    "build:frontend": "pnpm --dir frontend run build",
+    "build:frontend:v2": "pnpm --dir web-app-v run build",
+    "audit:contracts": "python tools/audit_api_contracts.py --strict",
+    "verify:embed-assets": "node tools/verify-embed-assets.mjs",
+    "build:embed-assets": "pnpm run build:frontend && pnpm run build:frontend:v2 && pnpm run verify:embed-assets"
+  },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "axios": "^1.13.4",

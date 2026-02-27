@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, Gift, Ticket } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/useAuth';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { Button, Input, Card, CardContent } from '../../components/ui';
 
 export const RegisterPage: React.FC = () => {
+  const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const { register, isLoading, error, clearError } = useAuth();
+  const settings = useSettingsStore((s) => s.settings);
+  const siteName = settings?.site_name || 'NEXUS';
+  const registrationEnabled = settings?.registration_enabled ?? true;
 
   const [formData, setFormData] = useState({
     username: '',
@@ -33,12 +39,12 @@ export const RegisterPage: React.FC = () => {
     setValidationError('');
 
     if (formData.password !== formData.confirmPassword) {
-      setValidationError('Passwords do not match');
+      setValidationError(t('register.passwordMismatch'));
       return;
     }
 
     if (formData.password.length < 8) {
-      setValidationError('Password must be at least 8 characters');
+      setValidationError(t('register.passwordTooShort'));
       return;
     }
 
@@ -57,11 +63,14 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0C] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] flex items-center justify-center p-4">
       {/* Background Effects */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#00F0FF]/5 rounded-full blur-[120px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[#7000FF]/5 rounded-full blur-[120px]" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[var(--accent-soft)] rounded-full blur-[120px]" />
+        <div
+          className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full blur-[120px]"
+          style={{ background: 'color-mix(in oklab, var(--accent-secondary) 16%, transparent)' }}
+        />
       </div>
 
       <div className="relative w-full max-w-md">
@@ -70,54 +79,60 @@ export const RegisterPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <div className="relative w-10 h-10 flex items-center justify-center">
               <div className="absolute inset-0 bg-gradient-to-tr from-[#00F0FF] to-[#7000FF] rounded-lg blur-[2px] opacity-70" />
-              <div className="relative w-full h-full bg-[#0A0A0C] rounded-lg border border-white/10 flex items-center justify-center">
+              <div className="relative w-full h-full bg-[var(--bg-card)] rounded-lg border border-[var(--border-color-subtle)] flex items-center justify-center">
                 <div className="w-3 h-3 bg-gradient-to-tr from-[#00F0FF] to-white rounded-sm rotate-45" />
               </div>
             </div>
-            <span className="text-xl font-bold text-white">NEXUS</span>
+            <span className="text-xl font-bold text-[var(--text-primary)]">{siteName}</span>
           </div>
         </div>
 
         <Card variant="glass" padding="lg" glow>
           <CardContent>
             <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-white mb-2">Create Account</h1>
-              <p className="text-gray-400">
-                Sign up to get started with NEXUS
+              <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">{t('register.title')}</h1>
+              <p className="text-[var(--text-secondary)]">
+                {t('register.subtitle', { siteName })}
               </p>
             </div>
 
             {(error || validationError) && (
-              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/25 text-red-600 dark:text-red-400 text-sm">
                 {error || validationError}
               </div>
             )}
 
+            {!registrationEnabled ? (
+              <div className="text-center py-4">
+                <p className="text-[var(--text-secondary)] mb-2">{t('register.disabled')}</p>
+                <p className="text-sm text-[var(--text-muted)]">{t('register.contactAdmin')}</p>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <Input
-                label="Username"
+                label={t('register.username')}
                 name="username"
                 type="text"
                 value={formData.username}
                 onChange={handleChange}
                 leftIcon={<User className="w-4 h-4" />}
-                placeholder="Choose a username"
+                placeholder={t('register.usernamePlaceholder')}
                 required
               />
 
               <Input
-                label="Email"
+                label={t('register.email')}
                 name="email"
                 type="email"
                 value={formData.email}
                 onChange={handleChange}
                 leftIcon={<Mail className="w-4 h-4" />}
-                placeholder="Enter your email"
+                placeholder={t('register.emailPlaceholder')}
                 required
               />
 
               <Input
-                label="Password"
+                label={t('register.password')}
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 value={formData.password}
@@ -127,7 +142,7 @@ export const RegisterPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="text-gray-500 hover:text-gray-300"
+                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -136,12 +151,12 @@ export const RegisterPage: React.FC = () => {
                     )}
                   </button>
                 }
-                placeholder="Create a password"
+                placeholder={t('register.passwordPlaceholder')}
                 required
               />
 
               <Input
-                label="Confirm Password"
+                label={t('register.confirmPassword')}
                 name="confirmPassword"
                 type={showConfirmPassword ? 'text' : 'password'}
                 value={formData.confirmPassword}
@@ -151,7 +166,7 @@ export const RegisterPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="text-gray-500 hover:text-gray-300"
+                    className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
                   >
                     {showConfirmPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -160,30 +175,30 @@ export const RegisterPage: React.FC = () => {
                     )}
                   </button>
                 }
-                placeholder="Confirm your password"
+                placeholder={t('register.confirmPasswordPlaceholder')}
                 required
               />
 
-              <div className="pt-2 border-t border-[#2A2A30]">
+              <div className="pt-2 border-t border-[var(--border-color)]">
                 <Input
-                  label="Invite Code (Optional)"
+                  label={t('register.inviteCode')}
                   name="inviteCode"
                   type="text"
                   value={formData.inviteCode}
                   onChange={handleChange}
                   leftIcon={<Ticket className="w-4 h-4" />}
-                  placeholder="Enter invite code"
+                  placeholder={t('register.inviteCodePlaceholder')}
                 />
               </div>
 
               <Input
-                label="Promo Code (Optional)"
+                label={t('register.promoCode')}
                 name="promoCode"
                 type="text"
                 value={formData.promoCode}
                 onChange={handleChange}
                 leftIcon={<Gift className="w-4 h-4" />}
-                placeholder="Enter promo code"
+                placeholder={t('register.promoCodePlaceholder')}
               />
 
               <Button
@@ -193,18 +208,19 @@ export const RegisterPage: React.FC = () => {
                 isLoading={isLoading}
                 className="w-full mt-6"
               >
-                Create Account
+                {t('register.createAccount')}
               </Button>
             </form>
+            )}
 
             <div className="mt-6 text-center">
-              <p className="text-gray-400 text-sm">
-                Already have an account?{' '}
+              <p className="text-[var(--text-secondary)] text-sm">
+                {t('register.hasAccount')}{' '}
                 <Link
                   to="/login"
-                  className="text-[#00F0FF] hover:underline font-medium"
+                  className="text-[var(--accent-primary)] hover:underline font-medium"
                 >
-                  Sign in
+                  {t('register.signIn')}
                 </Link>
               </p>
             </div>

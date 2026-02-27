@@ -9,38 +9,11 @@ import (
 )
 
 // GetClientIP 从 Gin Context 中提取客户端真实 IP 地址。
-// 按以下优先级检查 Header：
-// 1. CF-Connecting-IP (Cloudflare)
-// 2. X-Real-IP (Nginx)
-// 3. X-Forwarded-For (取第一个非私有 IP)
-// 4. c.ClientIP() (Gin 内置方法)
+//
+// 安全说明：
+// - 仅使用 Gin 的 c.ClientIP()，由 Gin 根据 trusted_proxies 配置判断是否信任转发头。
+// - 不直接读取 CF-Connecting-IP / X-Real-IP / X-Forwarded-For，避免头部伪造绕过 IP 白名单/黑名单。
 func GetClientIP(c *gin.Context) string {
-	// 1. Cloudflare
-	if ip := c.GetHeader("CF-Connecting-IP"); ip != "" {
-		return normalizeIP(ip)
-	}
-
-	// 2. Nginx X-Real-IP
-	if ip := c.GetHeader("X-Real-IP"); ip != "" {
-		return normalizeIP(ip)
-	}
-
-	// 3. X-Forwarded-For (多个 IP 时取第一个公网 IP)
-	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
-		ips := strings.Split(xff, ",")
-		for _, ip := range ips {
-			ip = strings.TrimSpace(ip)
-			if ip != "" && !isPrivateIP(ip) {
-				return normalizeIP(ip)
-			}
-		}
-		// 如果都是私有 IP，返回第一个
-		if len(ips) > 0 {
-			return normalizeIP(strings.TrimSpace(ips[0]))
-		}
-	}
-
-	// 4. Gin 内置方法
 	return normalizeIP(c.ClientIP())
 }
 
@@ -55,34 +28,6 @@ func normalizeIP(ip string) string {
 }
 
 // isPrivateIP 检查 IP 是否为私有地址。
-func isPrivateIP(ipStr string) bool {
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		return false
-	}
-
-	// 私有 IP 范围
-	privateBlocks := []string{
-		"10.0.0.0/8",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"127.0.0.0/8",
-		"::1/128",
-		"fc00::/7",
-	}
-
-	for _, block := range privateBlocks {
-		_, cidr, err := net.ParseCIDR(block)
-		if err != nil {
-			continue
-		}
-		if cidr.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
 // MatchesPattern 检查 IP 是否匹配指定的模式（支持单个 IP 或 CIDR）。
 // pattern 可以是：
 // - 单个 IP: "192.168.1.100"

@@ -170,6 +170,14 @@ const handlePageChange = (p: number) => { pagination.page = p; loadLogs() }
 const handlePageSizeChange = (s: number) => { pagination.page_size = s; pagination.page = 1; loadLogs() }
 const cancelExport = () => exportAbortController?.abort()
 const openCleanupDialog = () => { cleanupDialogVisible.value = true }
+const csvEscape = (value: unknown): string => {
+  if (value === null || value === undefined) return ''
+  const text = String(value)
+  const safeText = /^[=+\-@]/.test(text) || /^\t/.test(text) ? `'${text}` : text
+  if (/[",\r\n]/.test(safeText)) return `"${safeText.replace(/"/g, '""')}"`
+  return safeText
+}
+const matrixToCSV = (matrix: unknown[][]): string => `\uFEFF${matrix.map((row) => row.map(csvEscape).join(',')).join('\r\n')}`
 
 const exportToExcel = async () => {
   if (exporting.value) return; exporting.value = true; exportProgress.show = true
@@ -184,7 +192,6 @@ const exportToExcel = async () => {
       if (all.length >= total || res.items.length < 100) break; p++
     }
     if(!c.signal.aborted) {
-      const XLSX = await import('xlsx')
       const headers = [
         t('usage.time'), t('admin.usage.user'), t('usage.apiKeyFilter'),
         t('admin.usage.account'), t('usage.model'), t('admin.usage.group'),
@@ -224,10 +231,8 @@ const exportToExcel = async () => {
         log.user_agent || '',
         log.ip_address || ''
       ])
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Usage')
-      saveAs(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `usage_${filters.value.start_date}_to_${filters.value.end_date}.xlsx`)
+      const csvContent = matrixToCSV([headers, ...rows])
+      saveAs(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }), `usage_${filters.value.start_date}_to_${filters.value.end_date}.csv`)
       appStore.showSuccess(t('usage.exportSuccess'))
     }
   } catch (error) { console.error('Failed to export:', error); appStore.showError('Export Failed') }

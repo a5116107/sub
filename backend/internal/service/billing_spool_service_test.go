@@ -136,4 +136,3 @@ func TestBillingSpoolService_Drain_ApplyFailureMovesBackToPending(t *testing.T) 
 		t.Fatalf("done=%d, want 0", len(done))
 	}
 }
-

@@ -6,21 +6,32 @@ import type {
   ForgotPasswordRequest,
   ResetPasswordRequest,
   User,
-  TOTPSetupResponse,
 } from '../types';
+
+interface BackendAuthResponse {
+  token?: string;
+  access_token?: string;
+  token_type?: string;
+  user: User;
+}
+
+const normalizeAuthResponse = (response: BackendAuthResponse): LoginResponse => ({
+  token: response.token || response.access_token || '',
+  user: response.user,
+});
 
 export const authApi = {
   // Login
-  login: (data: LoginRequest) =>
-    api.post<LoginResponse>('/auth/login', data),
+  login: async (data: LoginRequest) =>
+    normalizeAuthResponse(await api.post<BackendAuthResponse>('/auth/login', data)),
 
   // Login with 2FA
-  loginWith2FA: (data: { email: string; password: string; code: string }) =>
-    api.post<LoginResponse>('/auth/login/2fa', data),
+  loginWith2FA: async (data: { email: string; password: string; code: string }) =>
+    normalizeAuthResponse(await api.post<BackendAuthResponse>('/auth/login/2fa', data)),
 
   // Register
-  register: (data: RegisterRequest) =>
-    api.post<LoginResponse>('/auth/register', data),
+  register: async (data: RegisterRequest) =>
+    normalizeAuthResponse(await api.post<BackendAuthResponse>('/auth/register', data)),
 
   // Get current user
   getMe: () =>
@@ -42,27 +53,17 @@ export const authApi = {
   validatePromoCode: (code: string) =>
     api.post<{ valid: boolean; bonus_amount: number }>('/auth/validate-promo-code', { code }),
 
-  // OAuth - LinuxDo
-  getLinuxDoAuthUrl: () =>
-    api.get<{ url: string }>('/auth/oauth/linuxdo/start'),
+  // OAuth - LinuxDo (backend endpoint returns 302 redirect, not JSON)
+  getLinuxDoAuthStartUrl: (redirectPath?: string) => {
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+    const startURL = new URL(`${baseURL.replace(/\/$/, '')}/auth/oauth/linuxdo/start`, window.location.origin);
+    if (redirectPath) {
+      startURL.searchParams.set('redirect', redirectPath);
+    }
+    return startURL.toString();
+  },
 
-  // Change password
-  changePassword: (data: { old_password: string; new_password: string }) =>
-    api.post<void>('/auth/change-password', data),
-
-  // TOTP Setup
-  setupTOTP: () =>
-    api.post<TOTPSetupResponse>('/auth/totp/setup', {}),
-
-  // Enable TOTP
-  enableTOTP: (data: { code: string; secret: string }) =>
-    api.post<void>('/auth/totp/enable', data),
-
-  // Disable TOTP
-  disableTOTP: (data: { code: string; password: string }) =>
-    api.post<void>('/auth/totp/disable', data),
-
-  // Verify TOTP
-  verifyTOTP: (code: string) =>
-    api.post<void>('/auth/totp/verify', { code }),
+  startLinuxDoOAuth: (redirectPath?: string) => {
+    window.location.href = authApi.getLinuxDoAuthStartUrl(redirectPath);
+  },
 };

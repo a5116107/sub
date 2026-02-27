@@ -112,6 +112,8 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 	filter.Source = strings.TrimSpace(c.Query("error_source"))
 	filter.Query = strings.TrimSpace(c.Query("q"))
 	filter.UserQuery = strings.TrimSpace(c.Query("user_query"))
+	filter.FailoverCategory = strings.TrimSpace(c.Query("failover_category"))
+	filter.FailoverKeyword = strings.TrimSpace(c.Query("failover_keyword"))
 
 	// Force request errors: client-visible status >= 400.
 	// buildOpsErrorLogsWhere already applies this for non-upstream phase.
@@ -213,6 +215,8 @@ func (h *OpsHandler) ListRequestErrors(c *gin.Context) {
 	filter.Source = strings.TrimSpace(c.Query("error_source"))
 	filter.Query = strings.TrimSpace(c.Query("q"))
 	filter.UserQuery = strings.TrimSpace(c.Query("user_query"))
+	filter.FailoverCategory = strings.TrimSpace(c.Query("failover_category"))
+	filter.FailoverKeyword = strings.TrimSpace(c.Query("failover_keyword"))
 
 	// Force request errors: client-visible status >= 400.
 	// buildOpsErrorLogsWhere already applies this for non-upstream phase.
@@ -498,6 +502,8 @@ func (h *OpsHandler) ListUpstreamErrors(c *gin.Context) {
 	filter.Owner = "provider"
 	filter.Source = strings.TrimSpace(c.Query("error_source"))
 	filter.Query = strings.TrimSpace(c.Query("q"))
+	filter.FailoverCategory = strings.TrimSpace(c.Query("failover_category"))
+	filter.FailoverKeyword = strings.TrimSpace(c.Query("failover_keyword"))
 
 	if platform := strings.TrimSpace(c.Query("platform")); platform != "" {
 		filter.Platform = platform

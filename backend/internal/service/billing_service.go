@@ -35,8 +35,8 @@ type ModelPricing struct {
 	OutputPricePerToken        float64 // 每token输出价格 (USD)
 	CacheCreationPricePerToken float64 // 缓存创建每token价格 (USD)
 	CacheReadPricePerToken     float64 // 缓存读取每token价格 (USD)
-	CacheCreation5mPrice       float64 // 5分钟缓存创建价格（每百万token）- 仅用于硬编码回退
-	CacheCreation1hPrice       float64 // 1小时缓存创建价格（每百万token）- 仅用于硬编码回退
+	CacheCreation5mPrice       float64 // 5分钟缓存创建每token价格 (USD)
+	CacheCreation1hPrice       float64 // 1小时缓存创建每token价格 (USD)
 	SupportsCacheBreakdown     bool    // 是否支持详细的缓存分类
 }
 
@@ -137,6 +137,18 @@ func (s *BillingService) initFallbackPricing() {
 		CacheReadPricePerToken:     0.03e-6, // $0.03 per MTok
 		SupportsCacheBreakdown:     false,
 	}
+
+	// Claude 4.6 Opus (与4.5同价)
+	s.fallbackPrices["claude-opus-4.6"] = s.fallbackPrices["claude-opus-4.5"]
+
+	// Gemini 3.1 Pro
+	s.fallbackPrices["gemini-3.1-pro"] = &ModelPricing{
+		InputPricePerToken:         2e-6,   // $2 per MTok
+		OutputPricePerToken:        12e-6,  // $12 per MTok
+		CacheCreationPricePerToken: 2e-6,   // $2 per MTok
+		CacheReadPricePerToken:     0.2e-6, // $0.20 per MTok
+		SupportsCacheBreakdown:     false,
+	}
 }
 
 // getFallbackPricing 根据模型系列获取回退价格
@@ -145,6 +157,9 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 
 	// 按模型系列匹配
 	if strings.Contains(modelLower, "opus") {
+		if strings.Contains(modelLower, "4.6") || strings.Contains(modelLower, "4-6") {
+			return s.fallbackPrices["claude-opus-4.6"]
+		}
 		if strings.Contains(modelLower, "4.5") || strings.Contains(modelLower, "4-5") {
 			return s.fallbackPrices["claude-opus-4.5"]
 		}
@@ -162,6 +177,9 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 		}
 		return s.fallbackPrices["claude-3-haiku"]
 	}
+	if strings.Contains(modelLower, "gemini-3.1-pro") || strings.Contains(modelLower, "gemini-3-1-pro") {
+		return s.fallbackPrices["gemini-3.1-pro"]
+	}
 
 	// 默认使用Sonnet价格
 	return s.fallbackPrices["claude-sonnet-4"]
@@ -176,12 +194,20 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 	if s.pricingService != nil {
 		litellmPricing := s.pricingService.GetModelPricing(model)
 		if litellmPricing != nil {
+			// 启用 5m/1h 分类计费的条件：
+			// 1. 存在 1h 价格
+			// 2. 1h 价格 > 5m 价格（防止 LiteLLM 数据错误导致少收费）
+			price5m := litellmPricing.CacheCreationInputTokenCost
+			price1h := litellmPricing.CacheCreationInputTokenCostAbove1hr
+			enableBreakdown := price1h > 0 && price1h > price5m
 			return &ModelPricing{
 				InputPricePerToken:         litellmPricing.InputCostPerToken,
 				OutputPricePerToken:        litellmPricing.OutputCostPerToken,
 				CacheCreationPricePerToken: litellmPricing.CacheCreationInputTokenCost,
 				CacheReadPricePerToken:     litellmPricing.CacheReadInputTokenCost,
-				SupportsCacheBreakdown:     false,
+				CacheCreation5mPrice:       price5m,
+				CacheCreation1hPrice:       price1h,
+				SupportsCacheBreakdown:     enableBreakdown,
 			}, nil
 		}
 	}
@@ -234,9 +260,14 @@ func (s *BillingService) CalculateCost(model string, tokens UsageTokens, rateMul
 
 	// 计算缓存费用
 	if pricing.SupportsCacheBreakdown && (pricing.CacheCreation5mPrice > 0 || pricing.CacheCreation1hPrice > 0) {
-		// 支持详细缓存分类的模型（5分钟/1小时缓存）
-		breakdown.CacheCreationCost = float64(tokens.CacheCreation5mTokens)/1_000_000*pricing.CacheCreation5mPrice +
-			float64(tokens.CacheCreation1hTokens)/1_000_000*pricing.CacheCreation1hPrice
+		// 支持详细缓存分类的模型（5分钟/1小时缓存，价格为 per-token）
+		if tokens.CacheCreation5mTokens == 0 && tokens.CacheCreation1hTokens == 0 && tokens.CacheCreationTokens > 0 {
+			// API 未返回 ephemeral 明细，回退到全部按 5m 单价计费
+			breakdown.CacheCreationCost = float64(tokens.CacheCreationTokens) * pricing.CacheCreation5mPrice
+		} else {
+			breakdown.CacheCreationCost = float64(tokens.CacheCreation5mTokens)*pricing.CacheCreation5mPrice +
+				float64(tokens.CacheCreation1hTokens)*pricing.CacheCreation1hPrice
+		}
 	} else {
 		// 标准缓存创建价格（per-token）
 		breakdown.CacheCreationCost = float64(tokens.CacheCreationTokens) * pricing.CacheCreationPricePerToken

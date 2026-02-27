@@ -29,13 +29,6 @@ import (
 // 匹配格式: /Users/xxx/.gemini/tmp/[64位十六进制哈希]
 var geminiCLITmpDirRegex = regexp.MustCompile(`/\.gemini/tmp/([A-Fa-f0-9]{64})`)
 
-func isGeminiCLIRequest(c *gin.Context, body []byte) bool {
-	if strings.TrimSpace(c.GetHeader("x-gemini-api-privileged-user-id")) != "" {
-		return true
-	}
-	return geminiCLITmpDirRegex.Match(body)
-}
-
 // GeminiV1BetaListModels proxies:
 // GET /v1beta/models
 func (h *GatewayHandler) GeminiV1BetaListModels(c *gin.Context) {
@@ -256,7 +249,6 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	if sessionKey != "" {
 		sessionBoundAccountID, _ = h.gatewayService.GetCachedSessionAccountID(c.Request.Context(), apiKey.GroupID, sessionKey)
 	}
-	isCLI := isGeminiCLIRequest(c, body)
 	cleanedForUnknownBinding := false
 	// Apply generic payload rules (safe subset) before billing reservation, so reservation reflects the final payload.
 	if h.payloadRulesEngine != nil && h.payloadRulesEngine.HasRules() {
@@ -329,20 +321,38 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		return
 	}
 
-	maxAccountSwitches := h.maxAccountSwitchesGemini
-	switchCount := 0
-	failedAccountIDs := make(map[int64]struct{})
-	lastFailoverStatus := 0
+	fs := NewFailoverState(h.maxAccountSwitchesGemini, false)
+
+	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
+	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设长 cooldown，导致后续请求连续快速失败。
+	if h.gatewayService.IsSingleAntigravityAccountGroup(c.Request.Context(), apiKey.GroupID) {
+		ctx := context.WithValue(c.Request.Context(), ctxkey.SingleAccountRetry, true)
+		c.Request = c.Request.WithContext(ctx)
+	}
 
 	for {
-		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, modelName, failedAccountIDs, "") // Gemini 不使用会话限制
+		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, modelName, fs.FailedAccountIDs, "") // Gemini 不使用会话限制
 		if err != nil {
-			if len(failedAccountIDs) == 0 {
+			if len(fs.FailedAccountIDs) == 0 {
 				googleError(c, http.StatusServiceUnavailable, "No available Gemini accounts: "+err.Error())
 				return
 			}
-			handleGeminiFailoverExhausted(c, lastFailoverStatus)
-			return
+			action := fs.HandleSelectionExhausted(c.Request.Context())
+			switch action {
+			case FailoverContinue:
+				ctx := context.WithValue(c.Request.Context(), ctxkey.SingleAccountRetry, true)
+				c.Request = c.Request.WithContext(ctx)
+				continue
+			case FailoverCanceled:
+				return
+			default: // FailoverExhausted
+				statusCode := http.StatusBadGateway
+				if fs.LastFailoverErr != nil && fs.LastFailoverErr.StatusCode > 0 {
+					statusCode = fs.LastFailoverErr.StatusCode
+				}
+				handleGeminiFailoverExhausted(c, statusCode)
+				return
+			}
 		}
 		account := selection.Account
 		setOpsSelectedAccount(c, account.ID)
@@ -353,10 +363,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			log.Printf("[Gemini] Sticky session account switched: %d -> %d, cleaning thoughtSignature", sessionBoundAccountID, account.ID)
 			body = service.CleanGeminiNativeThoughtSignatures(body)
 			sessionBoundAccountID = account.ID
-		} else if sessionKey != "" && sessionBoundAccountID == 0 && isCLI && !cleanedForUnknownBinding && bytes.Contains(body, []byte(`"thoughtSignature"`)) {
-			// 无缓存绑定但请求里已有 thoughtSignature：常见于缓存丢失/TTL 过期后，CLI 继续携带旧签名。
+		} else if sessionKey != "" && sessionBoundAccountID == 0 && !cleanedForUnknownBinding && bytes.Contains(body, []byte(`"thoughtSignature"`)) {
+			// 无缓存绑定但请求里已有 thoughtSignature：常见于缓存丢失/TTL 过期后，客户端继续携带旧签名。
 			// 为避免第一次转发就 400，这里做一次确定性清理，让新账号重新生成签名链路。
-			log.Printf("[Gemini] Sticky session binding missing for CLI request, cleaning thoughtSignature proactively")
+			log.Printf("[Gemini] Sticky session binding missing, cleaning thoughtSignature proactively")
 			body = service.CleanGeminiNativeThoughtSignatures(body)
 			cleanedForUnknownBinding = true
 			sessionBoundAccountID = account.ID
@@ -426,16 +436,20 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
-				failedAccountIDs[account.ID] = struct{}{}
-				if switchCount >= maxAccountSwitches {
-					lastFailoverStatus = failoverErr.StatusCode
-					handleGeminiFailoverExhausted(c, lastFailoverStatus)
+				action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
+				switch action {
+				case FailoverContinue:
+					continue
+				case FailoverCanceled:
+					return
+				default: // FailoverExhausted
+					statusCode := http.StatusBadGateway
+					if failoverErr != nil && failoverErr.StatusCode > 0 {
+						statusCode = failoverErr.StatusCode
+					}
+					handleGeminiFailoverExhausted(c, statusCode)
 					return
 				}
-				lastFailoverStatus = failoverErr.StatusCode
-				switchCount++
-				log.Printf("Gemini account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
-				continue
 			}
 			// ForwardNative already wrote the response
 			log.Printf("Gemini native forward failed: %v", err)

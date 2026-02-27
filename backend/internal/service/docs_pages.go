@@ -42,7 +42,7 @@ type DocsPageMeta struct {
 }
 
 type docsIndexV1 struct {
-	Version int           `json:"version"`
+	Version int            `json:"version"`
 	Pages   []DocsPageMeta `json:"pages"`
 }
 
@@ -405,10 +405,10 @@ func (s *SettingService) GetDocsPage(ctx context.Context, docKey, lang string) (
 	if err != nil {
 		if errors.Is(err, ErrSettingNotFound) {
 			return &DocsPage{
-				Key:     slug,
-				Lang:    lang,
-				Title:   titleForLang(*meta, lang),
-				Format:  normalizeDocsFormat(meta.Format),
+				Key:      slug,
+				Lang:     lang,
+				Title:    titleForLang(*meta, lang),
+				Format:   normalizeDocsFormat(meta.Format),
 				Markdown: defaultDocsMarkdown(slug, lang),
 			}, nil
 		}
@@ -448,10 +448,10 @@ func (s *SettingService) GetDocsPageForAdmin(ctx context.Context, docKey, lang s
 	if err != nil {
 		if errors.Is(err, ErrSettingNotFound) {
 			return &DocsPage{
-				Key:     slug,
-				Lang:    lang,
-				Title:   titleForLang(*meta, lang),
-				Format:  normalizeDocsFormat(meta.Format),
+				Key:      slug,
+				Lang:     lang,
+				Title:    titleForLang(*meta, lang),
+				Format:   normalizeDocsFormat(meta.Format),
 				Markdown: defaultDocsMarkdown(slug, lang),
 			}, nil
 		}

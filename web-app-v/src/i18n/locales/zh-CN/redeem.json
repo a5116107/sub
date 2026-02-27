@@ -1,0 +1,23 @@
+{
+  "title": "兑换码",
+  "subtitle": "输入兑换码以添加余额或激活订阅",
+  "form.title": "输入兑换码",
+  "form.placeholder": "XXXX-XXXX-XXXX-XXXX",
+  "form.redeem": "兑换",
+  "form.redeeming": "兑换中...",
+  "form.enterCode": "请输入兑换码",
+  "form.helpText": "兑换码不区分大小写。如果您的兑换码有问题，请联系客服。",
+  "result.success": "成功！",
+  "result.failed": "失败",
+  "result.addedBalance": "已添加 ${{value}} 到您的余额",
+  "result.activated": "已激活 {{type}}：{{value}}",
+  "history.title": "兑换记录",
+  "history.empty": "暂无兑换记录",
+  "history.col.code": "兑换码",
+  "history.col.type": "类型",
+  "history.col.value": "数值",
+  "history.col.redeemedAt": "兑换时间",
+  "type.balance": "余额",
+  "type.subscription": "订阅",
+  "type.quota": "配额"
+}

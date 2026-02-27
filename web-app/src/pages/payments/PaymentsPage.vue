@@ -4,8 +4,7 @@ import { useI18n } from 'vue-i18n'
 import {
   usePaymentProvidersQuery,
   usePaymentOrdersQuery,
-  useCreateOrderMutation,
-  useCancelOrderMutation
+  useCreateOrderMutation
 } from '~/entities/payment'
 import type { PaymentProvider, PaymentChannel, PaymentOrder } from '~/entities/payment'
 import { Button, Input, Card, Badge, Dialog, Skeleton } from '~/shared/ui'
@@ -32,7 +31,6 @@ const { data: ordersData, isLoading: ordersLoading } = usePaymentOrdersQuery({
 
 // Mutations
 const createOrderMutation = useCreateOrderMutation()
-const cancelOrderMutation = useCancelOrderMutation()
 
 // Computed
 const providers = computed(() => providersData.value?.filter(p => p.enabled) || [])
@@ -80,17 +78,6 @@ async function handleCreateOrder() {
     toast.success(t('payments.orderCreated', 'Order created successfully'))
   } catch (error: any) {
     toast.error(error.message || t('payments.errors.createFailed', 'Failed to create order'))
-  }
-}
-
-async function handleCancelOrder(order: PaymentOrder) {
-  if (order.status !== 'pending') return
-
-  try {
-    await cancelOrderMutation.mutateAsync(order.id)
-    toast.success(t('payments.orderCanceled', 'Order canceled successfully'))
-  } catch (error: any) {
-    toast.error(error.message || t('payments.errors.cancelFailed', 'Failed to cancel order'))
   }
 }
 
@@ -230,15 +217,6 @@ function formatAmount(amount: number, currency: string = 'USD'): string {
                   @click="handlePay(order)"
                 >
                   {{ t('payments.pay', 'Pay') }}
-                </Button>
-                <Button
-                  v-if="order.status === 'pending'"
-                  variant="ghost"
-                  size="sm"
-                  :loading="cancelOrderMutation.isPending.value"
-                  @click="handleCancelOrder(order)"
-                >
-                  {{ t('payments.cancel', 'Cancel') }}
                 </Button>
               </div>
             </div>

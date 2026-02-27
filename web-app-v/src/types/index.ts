@@ -215,6 +215,8 @@ export interface RedeemHistory {
   code: string;
   type: string;
   value: number;
+  group_id?: number;
+  validity_days?: number;
   used_at: string;
 }
 
@@ -259,9 +261,15 @@ export interface PaymentProvider {
 export interface Order {
   id: number;
   user_id: number;
+  order_no?: string;
   amount: number;
+  currency?: string;
+  channel?: string;
+  description?: string;
   status: string;
   provider: string;
+  paid_at?: string;
+  expires_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -278,11 +286,13 @@ export interface Announcement {
   id: number;
   title: string;
   content: string;
-  type: string;
-  status: string;
+  type?: string;
+  status?: string;
+  starts_at?: string;
+  ends_at?: string;
   created_at: string;
   updated_at: string;
-  is_read?: boolean;
+  read_at?: string | null;
 }
 
 // ==================== Admin Types ====================
@@ -499,4 +509,204 @@ export interface UsageStat {
   cost: string;
   duration: string;
   time: string;
+}
+
+// ==================== TOTP Types ====================
+
+export interface TOTPStatus {
+  enabled: boolean;
+  verified: boolean;
+}
+
+export interface TOTPVerificationMethod {
+  method: 'email' | 'totp';
+}
+
+// ==================== Dashboard Types ====================
+
+export interface DashboardStats {
+  total_requests: number;
+  total_tokens: number;
+  total_cost: number;
+  today_requests: number;
+  today_cost: number;
+  active_keys: number;
+}
+
+export interface DashboardTrendPoint {
+  timestamp: string;
+  requests: number;
+  tokens: number;
+  cost: number;
+}
+
+export interface DashboardModelStat {
+  model: string;
+  requests: number;
+  tokens: number;
+  cost: number;
+}
+
+export interface DashboardApiKeyUsage {
+  api_key_id: number;
+  api_key_name: string;
+  total_requests: number;
+  total_tokens: number;
+  total_cost: number;
+}
+
+// ==================== Subscription Summary Types ====================
+
+export interface SubscriptionSummary {
+  active_count: number;
+  total_used_usd: number;
+  subscriptions: UserSubscription[];
+}
+
+// ==================== Admin Ops Types ====================
+
+export interface AlertRule {
+  id: number;
+  name: string;
+  description?: string;
+  type: string;
+  condition: string;
+  threshold: number;
+  severity: 'info' | 'warning' | 'error' | 'critical';
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlertSilence {
+  id: number;
+  rule_id?: number;
+  duration_minutes: number;
+  reason?: string;
+  created_by: number;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface OpsDashboardOverview {
+  total_requests_24h: number;
+  total_errors_24h: number;
+  avg_latency_ms: number;
+  active_accounts: number;
+  qps: number;
+  error_rate: number;
+}
+
+export interface AdvancedSettings {
+  max_retries: number;
+  retry_delay_ms: number;
+  timeout_seconds: number;
+  enable_circuit_breaker: boolean;
+  circuit_breaker_threshold: number;
+  circuit_breaker_timeout_ms: number;
+}
+
+export interface EmailNotificationConfig {
+  enabled: boolean;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  from_address?: string;
+  to_addresses?: string[];
+}
+
+export interface RuntimeAlertConfig {
+  enabled: boolean;
+  webhook_url?: string;
+  alert_on_error_rate?: number;
+  alert_on_latency_ms?: number;
+}
+
+export interface MetricThresholds {
+  cpu_threshold: number;
+  memory_threshold: number;
+  disk_threshold: number;
+  error_rate_threshold: number;
+  latency_threshold_ms: number;
+}
+
+// ==================== Admin Account Types ====================
+
+export interface AccountTodayStats {
+  requests: number;
+  tokens: number;
+  cost: number;
+  errors: number;
+}
+
+export interface BatchOperationResult {
+  success_count: number;
+  failed_count: number;
+  errors?: string[];
+}
+
+// ==================== OAuth Types ====================
+
+export interface OAuthUrlResponse {
+  url: string;
+  state: string;
+}
+
+export interface OpenAITokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+}
+
+export interface QwenDeviceAuthResponse {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  expires_in: number;
+  interval: number;
+}
+
+export interface GeminiCapabilitiesResponse {
+  models: string[];
+  features: string[];
+}
+
+// ==================== Cleanup Task Types ====================
+
+export interface CleanupTask {
+  id: number;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  before_date: string;
+  dry_run: boolean;
+  deleted_count: number;
+  error_message?: string;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  created_by: number;
+}
+
+// ==================== Model Pricing Types ====================
+
+export interface ModelPricingStatus {
+  last_sync_at?: string;
+  sync_status: string;
+  pending_changes: number;
+}
+
+// ==================== System Version Types ====================
+
+export interface SystemVersion {
+  version: string;
+  build_time: string;
+  git_commit: string;
+  go_version: string;
+}
+
+export interface SystemUpdateInfo {
+  has_update: boolean;
+  latest_version?: string;
+  release_notes?: string;
+  download_url?: string;
 }

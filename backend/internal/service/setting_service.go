@@ -349,6 +349,10 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 
 	// Gateway runtime toggles
 	updates[SettingKeyGatewayFixOrphanedToolResults] = strconv.FormatBool(settings.GatewayFixOrphanedToolResults)
+	updates[SettingKeyGatewayFailoverSensitive400Keywords] = marshalStringListSetting(settings.GatewayFailoverSensitive400Keywords)
+	updates[SettingKeyGatewayFailoverTemporary400Keywords] = marshalStringListSetting(settings.GatewayFailoverTemporary400Keywords)
+	updates[SettingKeyGatewayFailoverRequestErrorKeywords] = marshalStringListSetting(settings.GatewayFailoverRequestErrorKeywords)
+	updates[SettingKeyGatewayCodexModelAliases] = marshalStringMapSetting(settings.GatewayCodexModelAliases)
 
 	// Ops monitoring (vNext)
 	updates[SettingKeyOpsMonitoringEnabled] = strconv.FormatBool(settings.OpsMonitoringEnabled)
@@ -359,6 +363,23 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	}
 
 	err := s.settingRepo.SetMultiple(ctx, updates)
+	if err == nil {
+		// Apply Codex model aliases immediately (runtime effect, no restart required).
+		//
+		// Semantics:
+		// - config.gateway.codex_model_aliases provides a baseline
+		// - DB setting gateway_codex_model_aliases (this update) overlays it
+		mergedAliases := make(map[string]string)
+		if s != nil && s.cfg != nil && len(s.cfg.Gateway.CodexModelAliases) > 0 {
+			for key, value := range s.cfg.Gateway.CodexModelAliases {
+				mergedAliases[key] = value
+			}
+		}
+		for key, value := range settings.GatewayCodexModelAliases {
+			mergedAliases[key] = value
+		}
+		ConfigureCodexModelAliases(mergedAliases)
+	}
 	if err == nil && s.onUpdate != nil {
 		s.onUpdate() // Invalidate cache after settings update
 	}
@@ -541,7 +562,11 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyIdentityPatchPrompt: "",
 
 		// Gateway runtime toggles
-		SettingKeyGatewayFixOrphanedToolResults: strconv.FormatBool(s.cfg.Gateway.FixOrphanedToolResults),
+		SettingKeyGatewayFixOrphanedToolResults:       strconv.FormatBool(s.cfg.Gateway.FixOrphanedToolResults),
+		SettingKeyGatewayFailoverSensitive400Keywords: marshalStringListSetting(s.defaultGatewayFailoverSensitive400Keywords()),
+		SettingKeyGatewayFailoverTemporary400Keywords: marshalStringListSetting(s.defaultGatewayFailoverTemporary400Keywords()),
+		SettingKeyGatewayFailoverRequestErrorKeywords: marshalStringListSetting(s.defaultGatewayFailoverRequestErrorKeywords()),
+		SettingKeyGatewayCodexModelAliases:            marshalStringMapSetting(s.defaultGatewayCodexModelAliases()),
 
 		// Ops monitoring defaults (vNext)
 		SettingKeyOpsMonitoringEnabled:         "true",
@@ -693,6 +718,26 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	} else {
 		result.GatewayFixOrphanedToolResults = true
 	}
+	result.GatewayFailoverSensitive400Keywords = s.parseStringListSetting(
+		settings,
+		SettingKeyGatewayFailoverSensitive400Keywords,
+		s.defaultGatewayFailoverSensitive400Keywords(),
+	)
+	result.GatewayFailoverTemporary400Keywords = s.parseStringListSetting(
+		settings,
+		SettingKeyGatewayFailoverTemporary400Keywords,
+		s.defaultGatewayFailoverTemporary400Keywords(),
+	)
+	result.GatewayFailoverRequestErrorKeywords = s.parseStringListSetting(
+		settings,
+		SettingKeyGatewayFailoverRequestErrorKeywords,
+		s.defaultGatewayFailoverRequestErrorKeywords(),
+	)
+	result.GatewayCodexModelAliases = s.parseStringMapSetting(
+		settings,
+		SettingKeyGatewayCodexModelAliases,
+		s.defaultGatewayCodexModelAliases(),
+	)
 
 	// Ops monitoring settings (default: enabled, fail-open)
 	result.OpsMonitoringEnabled = !isFalseSettingValue(settings[SettingKeyOpsMonitoringEnabled])
@@ -721,6 +766,200 @@ func isFalseSettingValue(value string) bool {
 	default:
 		return false
 	}
+}
+
+func cloneStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	cloned := make([]string, len(values))
+	copy(cloned, values)
+	return cloned
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return map[string]string{}
+	}
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func normalizeStringMapSetting(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return map[string]string{}
+	}
+
+	normalized := make(map[string]string, len(values))
+	for key, value := range values {
+		k := strings.ToLower(strings.TrimSpace(key))
+		v := strings.TrimSpace(value)
+		if k == "" || v == "" {
+			continue
+		}
+		normalized[k] = v
+	}
+	if len(normalized) == 0 {
+		return map[string]string{}
+	}
+	return normalized
+}
+
+func normalizeStringListSetting(values []string) []string {
+	normalized := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, trimmed)
+	}
+	return normalized
+}
+
+func marshalStringListSetting(values []string) string {
+	normalized := normalizeStringListSetting(values)
+	if normalized == nil {
+		normalized = []string{}
+	}
+	data, err := json.Marshal(normalized)
+	if err != nil {
+		return "[]"
+	}
+	return string(data)
+}
+
+func marshalStringMapSetting(values map[string]string) string {
+	normalized := normalizeStringMapSetting(values)
+	data, err := json.Marshal(normalized)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+func parseStringListSettingValue(raw string) ([]string, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, false
+	}
+
+	var parsed []string
+	if err := json.Unmarshal([]byte(trimmed), &parsed); err == nil {
+		return normalizeStringListSetting(parsed), true
+	}
+
+	normalized := normalizeStringListSetting(strings.Split(trimmed, ","))
+	if len(normalized) == 0 {
+		return nil, false
+	}
+	return normalized, true
+}
+
+func parseStringMapSettingValue(raw string) (map[string]string, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, false
+	}
+
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(trimmed), &parsed); err != nil {
+		return nil, false
+	}
+
+	normalized := normalizeStringMapSetting(parsed)
+	return normalized, true
+}
+
+func (s *SettingService) parseStringListSetting(settings map[string]string, key string, fallback []string) []string {
+	raw, ok := settings[key]
+	if !ok {
+		return cloneStringSlice(fallback)
+	}
+	parsed, valid := parseStringListSettingValue(raw)
+	if !valid {
+		return cloneStringSlice(fallback)
+	}
+	return parsed
+}
+
+func (s *SettingService) getStringListSetting(ctx context.Context, key string, fallback []string) []string {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	raw, err := s.settingRepo.GetValue(ctx, key)
+	if err != nil {
+		return cloneStringSlice(fallback)
+	}
+	parsed, valid := parseStringListSettingValue(raw)
+	if !valid {
+		return cloneStringSlice(fallback)
+	}
+	return parsed
+}
+
+func (s *SettingService) parseStringMapSetting(settings map[string]string, key string, fallback map[string]string) map[string]string {
+	raw, ok := settings[key]
+	if !ok {
+		return cloneStringMap(fallback)
+	}
+	parsed, valid := parseStringMapSettingValue(raw)
+	if !valid {
+		return cloneStringMap(fallback)
+	}
+	return parsed
+}
+
+func (s *SettingService) getStringMapSetting(ctx context.Context, key string, fallback map[string]string) map[string]string {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	raw, err := s.settingRepo.GetValue(ctx, key)
+	if err != nil {
+		return cloneStringMap(fallback)
+	}
+	parsed, valid := parseStringMapSettingValue(raw)
+	if !valid {
+		return cloneStringMap(fallback)
+	}
+	return parsed
+}
+
+func (s *SettingService) defaultGatewayFailoverSensitive400Keywords() []string {
+	if s != nil && s.cfg != nil && len(s.cfg.Gateway.FailoverSensitive400Keywords) > 0 {
+		return cloneStringSlice(s.cfg.Gateway.FailoverSensitive400Keywords)
+	}
+	return cloneStringSlice(defaultFailoverSensitive400Keywords)
+}
+
+func (s *SettingService) defaultGatewayFailoverTemporary400Keywords() []string {
+	if s != nil && s.cfg != nil && len(s.cfg.Gateway.FailoverTemporary400Keywords) > 0 {
+		return cloneStringSlice(s.cfg.Gateway.FailoverTemporary400Keywords)
+	}
+	return cloneStringSlice(defaultFailoverTemporary400Keywords)
+}
+
+func (s *SettingService) defaultGatewayFailoverRequestErrorKeywords() []string {
+	if s != nil && s.cfg != nil && len(s.cfg.Gateway.FailoverRequestErrorKeywords) > 0 {
+		return cloneStringSlice(s.cfg.Gateway.FailoverRequestErrorKeywords)
+	}
+	return cloneStringSlice(defaultFailoverRequestErrorKeywords)
+}
+
+func (s *SettingService) defaultGatewayCodexModelAliases() map[string]string {
+	if s != nil && s.cfg != nil && len(s.cfg.Gateway.CodexModelAliases) > 0 {
+		return normalizeStringMapSetting(s.cfg.Gateway.CodexModelAliases)
+	}
+	return map[string]string{}
 }
 
 // getStringOrDefault 获取字符串值或默认值
@@ -773,6 +1012,38 @@ func (s *SettingService) IsGatewayFixOrphanedToolResultsEnabled(ctx context.Cont
 		return true
 	}
 	return value == "true"
+}
+
+func (s *SettingService) GetGatewayFailoverSensitive400Keywords(ctx context.Context) []string {
+	return s.getStringListSetting(
+		ctx,
+		SettingKeyGatewayFailoverSensitive400Keywords,
+		s.defaultGatewayFailoverSensitive400Keywords(),
+	)
+}
+
+func (s *SettingService) GetGatewayFailoverTemporary400Keywords(ctx context.Context) []string {
+	return s.getStringListSetting(
+		ctx,
+		SettingKeyGatewayFailoverTemporary400Keywords,
+		s.defaultGatewayFailoverTemporary400Keywords(),
+	)
+}
+
+func (s *SettingService) GetGatewayFailoverRequestErrorKeywords(ctx context.Context) []string {
+	return s.getStringListSetting(
+		ctx,
+		SettingKeyGatewayFailoverRequestErrorKeywords,
+		s.defaultGatewayFailoverRequestErrorKeywords(),
+	)
+}
+
+func (s *SettingService) GetGatewayCodexModelAliases(ctx context.Context) map[string]string {
+	return s.getStringMapSetting(
+		ctx,
+		SettingKeyGatewayCodexModelAliases,
+		s.defaultGatewayCodexModelAliases(),
+	)
 }
 
 // GetIdentityPatchPrompt 获取自定义身份补丁提示词（为空表示使用内置默认模板）

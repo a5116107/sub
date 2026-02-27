@@ -242,7 +242,6 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 	backoff := initialBackoff
 	timer := time.NewTimer(backoff)
 	defer timer.Stop()
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for {
 		select {
@@ -284,7 +283,7 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 			if result.Acquired {
 				return result.ReleaseFunc, nil
 			}
-			backoff = nextBackoff(backoff, rng)
+			backoff = nextBackoff(backoff, nil)
 			timer.Reset(backoff)
 		}
 	}
@@ -311,13 +310,5 @@ func nextBackoff(current time.Duration, rng *rand.Rand) time.Duration {
 	}
 	// 添加 ±20% 的随机抖动（jitter 范围 0.8 ~ 1.2）
 	// 抖动可以分散多个请求的重试时间点，避免同时冲击 Redis
-	jitter := 0.8 + rng.Float64()*0.4
-	jittered := time.Duration(float64(next) * jitter)
-	if jittered < initialBackoff {
-		return initialBackoff
-	}
-	if jittered > maxBackoff {
-		return maxBackoff
-	}
-	return jittered
+	return next
 }

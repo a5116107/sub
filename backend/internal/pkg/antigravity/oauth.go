@@ -16,13 +16,16 @@ import (
 const (
 	// Google OAuth 端点
 	AuthorizeURL = "https://accounts.google.com/o/oauth2/v2/auth"
-	TokenURL     = "https://oauth2.googleapis.com/token"
-	UserInfoURL  = "https://www.googleapis.com/oauth2/v2/userinfo"
+	// #nosec G101 -- OAuth token endpoint URL, not a credential.
+	TokenURL    = "https://oauth2.googleapis.com/token"
+	UserInfoURL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 	// Antigravity OAuth 客户端凭证
-	ClientID     = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+	// #nosec G101 -- Public OAuth client identifier; secret is loaded from env at runtime.
+	ClientID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
 
 	// Client secret must be provided at runtime; it must not be committed.
+	// #nosec G101 -- Environment variable name only, not a secret value.
 	AntigravityOAuthClientSecretEnvVar = "ANTIGRAVITY_OAUTH_CLIENT_SECRET"
 
 	// Optional override for client_id (defaults to ClientID).
@@ -58,7 +61,7 @@ func oauthClientID() string {
 func oauthClientSecret() (string, error) {
 	secret := strings.TrimSpace(os.Getenv(AntigravityOAuthClientSecretEnvVar))
 	if secret == "" {
-		return "", fmt.Errorf("Antigravity OAuth client secret not configured: please set %s", AntigravityOAuthClientSecretEnvVar)
+		return "", fmt.Errorf("antigravity OAuth client secret not configured: please set %s", AntigravityOAuthClientSecretEnvVar)
 	}
 	return secret, nil
 }

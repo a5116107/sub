@@ -401,6 +401,7 @@ func (r *usageLogRepository) fillDashboardEntityStats(ctx context.Context, stats
 		return err
 	}
 
+	// #nosec G101 -- SQL for API key aggregate stats; no credentials embedded.
 	apiKeyStatsQuery := `
 		SELECT
 			COUNT(*) as total_api_keys,
@@ -2204,6 +2205,10 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 	); err != nil {
 		return nil, err
 	}
+	if billingType < -128 || billingType > 127 {
+		return nil, fmt.Errorf("billing_type out of int8 range: %d", billingType)
+	}
+	billingTypeValue := int8(billingType)
 
 	log := &service.UsageLog{
 		ID:                    id,
@@ -2225,7 +2230,7 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		ActualCost:            actualCost,
 		RateMultiplier:        rateMultiplier,
 		AccountRateMultiplier: nullFloat64Ptr(accountRateMultiplier),
-		BillingType:           int8(billingType),
+		BillingType:           billingTypeValue,
 		Stream:                stream,
 		ImageCount:            imageCount,
 		CreatedAt:             createdAt,

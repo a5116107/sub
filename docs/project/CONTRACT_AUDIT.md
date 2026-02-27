@@ -63,3 +63,15 @@
 - 前端：`pnpm -C frontend test:run`、`pnpm -C frontend build`
 - 运行态：`docker compose -f deploy/docker-compose.dev.yml ps`、`GET /health`、`POST /api/v1/auth/login`
 
+## Contract Gate（当前）
+
+- 本地审计命令：
+  - `python tools/audit_api_contracts.py --strict`
+  - `python tools/audit_api_contracts.py --include-mocks --strict`
+- CI 门禁：
+  - `.github/workflows/backend-ci.yml` 中 `contract-audit` job
+- 分支保护勾选清单：
+  - `docs/project/BRANCH_PROTECTION_REQUIRED_CHECKS.md`
+- 分支保护实施步骤（runbook）：
+  - `docs/project/BRANCH_PROTECTION_APPLY_RUNBOOK.md`
+

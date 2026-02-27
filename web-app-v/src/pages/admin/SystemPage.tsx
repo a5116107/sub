@@ -17,6 +17,7 @@ import {
   Terminal,
   Trash2,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { adminSystemApi } from '../../api/admin/system';
 import {
   Button,
@@ -75,6 +76,7 @@ interface ErrorLog {
 }
 
 export const SystemPage: React.FC = () => {
+  const { t } = useTranslation('admin');
   // Data states
   const [version, setVersion] = useState<SystemVersion | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -238,8 +240,8 @@ export const SystemPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">System Management</h1>
-          <p className="text-gray-400">Manage system updates, restarts, and monitor health</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('system.title')}</h1>
+          <p className="text-gray-400">{t('system.subtitle')}</p>
         </div>
         <div className="flex gap-3">
           <Button
@@ -248,14 +250,14 @@ export const SystemPage: React.FC = () => {
             isLoading={checkingUpdate}
           >
             <Download className="w-4 h-4 mr-2" />
-            Check Updates
+            {t('system.checkUpdates')}
           </Button>
           <Button
             variant="danger"
             onClick={() => setShowRestartModal(true)}
           >
             <Power className="w-4 h-4 mr-2" />
-            Restart
+            {t('system.restart')}
           </Button>
         </div>
       </div>
@@ -290,36 +292,36 @@ export const SystemPage: React.FC = () => {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <GitCommit className="w-5 h-5 text-cyan-400" />
-              Version Information
+              {t('system.versionInfo')}
             </CardTitle>
             {updateInfo?.has_update && (
-              <Badge variant="warning">Update Available</Badge>
+              <Badge variant="warning">{t('system.updateAvailable')}</Badge>
             )}
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-[#0A0A0C] rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Current Version</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('system.currentVersion')}</p>
                   <p className="text-lg font-mono font-semibold text-white">
                     {version?.version || 'Unknown'}
                   </p>
                 </div>
                 <div className="p-3 bg-[#0A0A0C] rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Go Version</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('system.goVersion')}</p>
                   <p className="text-lg font-mono font-semibold text-white">
                     {version?.go_version || 'Unknown'}
                   </p>
                 </div>
               </div>
               <div className="p-3 bg-[#0A0A0C] rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Git Commit</p>
+                <p className="text-xs text-gray-500 mb-1">{t('system.gitCommit')}</p>
                 <p className="text-sm font-mono text-gray-300 truncate">
                   {version?.git_commit || 'Unknown'}
                 </p>
               </div>
               <div className="p-3 bg-[#0A0A0C] rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Build Time</p>
+                <p className="text-xs text-gray-500 mb-1">{t('system.buildTime')}</p>
                 <p className="text-sm text-gray-300">
                   {version?.build_time ? new Date(version.build_time).toLocaleString() : 'Unknown'}
                 </p>
@@ -333,7 +335,7 @@ export const SystemPage: React.FC = () => {
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Activity className="w-5 h-5 text-emerald-400" />
-              System Status
+              {t('system.systemStatus')}
             </CardTitle>
             <Badge variant={status?.status === 'healthy' ? 'success' : 'danger'}>
               {status?.status || 'Unknown'}
@@ -343,14 +345,14 @@ export const SystemPage: React.FC = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-[#0A0A0C] rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Uptime</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('system.uptime')}</p>
                   <p className="text-sm font-semibold text-white flex items-center gap-2">
                     <Clock className="w-4 h-4 text-amber-400" />
                     {status?.uptime ? formatDuration(status.uptime) : 'Unknown'}
                   </p>
                 </div>
                 <div className="p-3 bg-[#0A0A0C] rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Goroutines</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('system.goroutines')}</p>
                   <p className="text-sm font-semibold text-white">
                     {status?.goroutines?.toLocaleString() || '0'}
                   </p>
@@ -358,7 +360,7 @@ export const SystemPage: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-[#0A0A0C] rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Database</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('system.database')}</p>
                   <Badge
                     variant={status?.database_status === 'connected' ? 'success' : 'danger'}
                     className="text-xs"
@@ -367,7 +369,7 @@ export const SystemPage: React.FC = () => {
                   </Badge>
                 </div>
                 <div className="p-3 bg-[#0A0A0C] rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">Cache</p>
+                  <p className="text-xs text-gray-500 mb-1">{t('system.cache')}</p>
                   <Badge
                     variant={status?.cache_status === 'connected' ? 'success' : 'danger'}
                     className="text-xs"
@@ -385,7 +387,7 @@ export const SystemPage: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Cpu className="w-5 h-5 text-purple-400" />
-              System Metrics
+              {t('system.systemMetrics')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -395,7 +397,7 @@ export const SystemPage: React.FC = () => {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <Cpu className="w-4 h-4 text-blue-400" />
-                    <span className="text-sm text-gray-400">CPU Usage</span>
+                    <span className="text-sm text-gray-400">{t('system.cpuUsage')}</span>
                   </div>
                   <span className="text-sm font-semibold text-white">
                     {metrics?.cpu_usage?.toFixed(1) || '0'}%
@@ -414,7 +416,7 @@ export const SystemPage: React.FC = () => {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <MemoryStick className="w-4 h-4 text-purple-400" />
-                    <span className="text-sm text-gray-400">Memory Usage</span>
+                    <span className="text-sm text-gray-400">{t('system.memoryUsage')}</span>
                   </div>
                   <span className="text-sm font-semibold text-white">
                     {metrics?.memory_usage?.toFixed(1) || '0'}%
@@ -433,7 +435,7 @@ export const SystemPage: React.FC = () => {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <HardDrive className="w-4 h-4 text-amber-400" />
-                    <span className="text-sm text-gray-400">Disk Usage</span>
+                    <span className="text-sm text-gray-400">{t('system.diskUsage')}</span>
                   </div>
                   <span className="text-sm font-semibold text-white">
                     {metrics?.disk_usage?.toFixed(1) || '0'}%
@@ -450,22 +452,22 @@ export const SystemPage: React.FC = () => {
               {/* Memory Details */}
               {status?.memory_usage && (
                 <div className="mt-4 pt-4 border-t border-[#2A2A30]">
-                  <p className="text-xs text-gray-500 mb-2">Memory Details</p>
+                  <p className="text-xs text-gray-500 mb-2">{t('system.memoryDetails')}</p>
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div className="p-2 bg-[#0A0A0C] rounded">
-                      <p className="text-gray-500">Allocated</p>
+                      <p className="text-gray-500">{t('system.allocated')}</p>
                       <p className="text-white font-mono">
                         {formatBytes(status.memory_usage.allocated)}
                       </p>
                     </div>
                     <div className="p-2 bg-[#0A0A0C] rounded">
-                      <p className="text-gray-500">Total</p>
+                      <p className="text-gray-500">{t('system.total')}</p>
                       <p className="text-white font-mono">
                         {formatBytes(status.memory_usage.total)}
                       </p>
                     </div>
                     <div className="p-2 bg-[#0A0A0C] rounded">
-                      <p className="text-gray-500">System</p>
+                      <p className="text-gray-500">{t('system.system')}</p>
                       <p className="text-white font-mono">
                         {formatBytes(status.memory_usage.system)}
                       </p>
@@ -482,7 +484,7 @@ export const SystemPage: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Server className="w-5 h-5 text-red-400" />
-              Maintenance Actions
+              {t('system.maintenanceActions')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -494,8 +496,8 @@ export const SystemPage: React.FC = () => {
                       <RefreshCw className="w-5 h-5 text-blue-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-white">Check for Updates</p>
-                      <p className="text-xs text-gray-500">Verify if a new version is available</p>
+                      <p className="text-sm font-medium text-white">{t('system.checkForUpdates')}</p>
+                      <p className="text-xs text-gray-500">{t('system.checkForUpdatesDesc')}</p>
                     </div>
                   </div>
                   <Button
@@ -504,7 +506,7 @@ export const SystemPage: React.FC = () => {
                     onClick={handleCheckUpdates}
                     isLoading={checkingUpdate}
                   >
-                    Check
+                    {t('system.checkUpdates')}
                   </Button>
                 </div>
               </div>
@@ -516,8 +518,8 @@ export const SystemPage: React.FC = () => {
                       <RotateCcw className="w-5 h-5 text-amber-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-white">Rollback</p>
-                      <p className="text-xs text-gray-500">Revert to previous version</p>
+                      <p className="text-sm font-medium text-white">{t('system.rollback')}</p>
+                      <p className="text-xs text-gray-500">{t('system.rollbackDesc')}</p>
                     </div>
                   </div>
                   <Button
@@ -525,7 +527,7 @@ export const SystemPage: React.FC = () => {
                     size="sm"
                     onClick={() => setShowRollbackModal(true)}
                   >
-                    Rollback
+                    {t('system.rollback')}
                   </Button>
                 </div>
               </div>
@@ -537,8 +539,8 @@ export const SystemPage: React.FC = () => {
                       <Terminal className="w-5 h-5 text-purple-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-white">Error Logs</p>
-                      <p className="text-xs text-gray-500">View system error logs</p>
+                      <p className="text-sm font-medium text-white">{t('system.errorLogs')}</p>
+                      <p className="text-xs text-gray-500">{t('system.errorLogsDesc')}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -547,7 +549,7 @@ export const SystemPage: React.FC = () => {
                       size="sm"
                       onClick={handleViewErrorLogs}
                     >
-                      View
+                      {t('system.view')}
                     </Button>
                     <Button
                       variant="danger"
@@ -568,8 +570,8 @@ export const SystemPage: React.FC = () => {
                       <Power className="w-5 h-5 text-red-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-white">Restart Service</p>
-                      <p className="text-xs text-gray-500">Restart the entire application</p>
+                      <p className="text-sm font-medium text-white">{t('system.restartService')}</p>
+                      <p className="text-xs text-gray-500">{t('system.restartServiceDesc')}</p>
                     </div>
                   </div>
                   <Button
@@ -577,7 +579,7 @@ export const SystemPage: React.FC = () => {
                     size="sm"
                     onClick={() => setShowRestartModal(true)}
                   >
-                    Restart
+                    {t('system.restart')}
                   </Button>
                 </div>
               </div>
@@ -590,22 +592,22 @@ export const SystemPage: React.FC = () => {
       <Modal
         isOpen={showUpdateModal}
         onClose={() => setShowUpdateModal(false)}
-        title="System Update Available"
+        title={t('system.updateAvailableTitle')}
       >
         <div className="space-y-4">
           <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
             <Download className="w-6 h-6 text-emerald-400" />
             <div>
               <p className="text-sm font-medium text-emerald-400">
-                New Version: {updateInfo?.latest_version}
+                {t('system.newVersion')}: {updateInfo?.latest_version}
               </p>
-              <p className="text-xs text-gray-400">Current: {version?.version}</p>
+              <p className="text-xs text-gray-400">{t('system.current')}: {version?.version}</p>
             </div>
           </div>
 
           {updateInfo?.release_notes && (
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-sm text-gray-400 mb-2">Release Notes:</p>
+              <p className="text-sm text-gray-400 mb-2">{t('system.releaseNotes')}:</p>
               <p className="text-sm text-gray-300 whitespace-pre-wrap">
                 {updateInfo.release_notes}
               </p>
@@ -615,17 +617,17 @@ export const SystemPage: React.FC = () => {
           <div className="flex items-start gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
             <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-amber-400">
-              The system will restart automatically after the update. All active connections will be interrupted.
+              {t('system.updateWarning')}
             </p>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" onClick={() => setShowUpdateModal(false)}>
-              Cancel
+              {t('common:btn.cancel')}
             </Button>
             <Button onClick={handleUpdate} isLoading={updating}>
               <Download className="w-4 h-4 mr-2" />
-              Update Now
+              {t('system.updateNow')}
             </Button>
           </div>
         </div>
@@ -635,27 +637,26 @@ export const SystemPage: React.FC = () => {
       <Modal
         isOpen={showRestartModal}
         onClose={() => setShowRestartModal(false)}
-        title="Restart System"
+        title={t('system.restartTitle')}
       >
         <div className="space-y-4">
           <div className="flex items-start gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
             <AlertTriangle className="w-6 h-6 text-red-400 flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium text-red-400">Warning</p>
+              <p className="text-sm font-medium text-red-400">{t('common:modal.confirmTitle')}</p>
               <p className="text-sm text-gray-400 mt-1">
-                Restarting the system will interrupt all active connections and temporarily make the service unavailable.
-                This action cannot be undone.
+                {t('system.restartWarning')}
               </p>
             </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" onClick={() => setShowRestartModal(false)}>
-              Cancel
+              {t('common:btn.cancel')}
             </Button>
             <Button variant="danger" onClick={handleRestart} isLoading={restarting}>
               <Power className="w-4 h-4 mr-2" />
-              Confirm Restart
+              {t('system.confirmRestart')}
             </Button>
           </div>
         </div>
@@ -665,27 +666,26 @@ export const SystemPage: React.FC = () => {
       <Modal
         isOpen={showRollbackModal}
         onClose={() => setShowRollbackModal(false)}
-        title="Rollback System"
+        title={t('system.rollbackTitle')}
       >
         <div className="space-y-4">
           <div className="flex items-start gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
             <AlertTriangle className="w-6 h-6 text-amber-400 flex-shrink-0" />
             <div>
-              <p className="text-sm font-medium text-amber-400">Warning</p>
+              <p className="text-sm font-medium text-amber-400">{t('common:modal.confirmTitle')}</p>
               <p className="text-sm text-gray-400 mt-1">
-                Rolling back will revert the system to the previous version.
-                The service will restart and all active connections will be interrupted.
+                {t('system.rollbackWarning')}
               </p>
             </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" onClick={() => setShowRollbackModal(false)}>
-              Cancel
+              {t('common:btn.cancel')}
             </Button>
             <Button variant="danger" onClick={handleRollback} isLoading={rollingBack}>
               <RotateCcw className="w-4 h-4 mr-2" />
-              Confirm Rollback
+              {t('system.confirmRollback')}
             </Button>
           </div>
         </div>
@@ -695,14 +695,14 @@ export const SystemPage: React.FC = () => {
       <Modal
         isOpen={showErrorLogsModal}
         onClose={() => setShowErrorLogsModal(false)}
-        title="Error Logs"
+        title={t('system.errorLogsTitle')}
         size="lg"
       >
         <div className="space-y-4">
           {errorLogs.length === 0 ? (
             <div className="text-center py-8">
               <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
-              <p className="text-gray-400">No error logs found</p>
+              <p className="text-gray-400">{t('system.noErrorLogs')}</p>
             </div>
           ) : (
             <div className="max-h-96 overflow-y-auto space-y-2">
@@ -747,10 +747,10 @@ export const SystemPage: React.FC = () => {
               disabled={errorLogs.length === 0}
             >
               <Trash2 className="w-4 h-4 mr-2" />
-              Clear All Logs
+              {t('system.clearAllLogs')}
             </Button>
             <Button variant="secondary" onClick={() => setShowErrorLogsModal(false)}>
-              Close
+              {t('common:btn.close')}
             </Button>
           </div>
         </div>

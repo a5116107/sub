@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
@@ -96,7 +97,7 @@ func (c *githubReleaseClient) DownloadFile(ctx context.Context, url, dest string
 		return fmt.Errorf("file too large: %d bytes (max %d)", resp.ContentLength, maxSize)
 	}
 
-	out, err := os.Create(dest)
+	out, err := createScopedFile(dest)
 	if err != nil {
 		return err
 	}
@@ -140,4 +141,26 @@ func (c *githubReleaseClient) FetchChecksumFile(ctx context.Context, url string)
 	}
 
 	return readAllWithLimit(resp.Body, maxGitHubChecksumBytes)
+}
+
+func createScopedFile(path string) (*os.File, error) {
+	cleanPath := filepath.Clean(path)
+	fileName := filepath.Base(cleanPath)
+	if fileName == "" || fileName == "." || fileName == string(filepath.Separator) {
+		return nil, fmt.Errorf("invalid destination path: %s", path)
+	}
+	root, err := os.OpenRoot(filepath.Dir(cleanPath))
+	if err != nil {
+		return nil, err
+	}
+	file, createErr := root.Create(fileName)
+	closeErr := root.Close()
+	if createErr != nil {
+		return nil, createErr
+	}
+	if closeErr != nil {
+		_ = file.Close()
+		return nil, closeErr
+	}
+	return file, nil
 }

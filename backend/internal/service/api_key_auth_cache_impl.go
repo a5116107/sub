@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -22,12 +20,6 @@ type apiKeyAuthCacheConfig struct {
 	jitterPercent int
 	singleflight  bool
 }
-
-var (
-	jitterRandMu sync.Mutex
-	// 认证缓存抖动使用独立随机源，避免全局 Seed
-	jitterRand = rand.New(rand.NewSource(time.Now().UnixNano()))
-)
 
 func newAPIKeyAuthCacheConfig(cfg *config.Config) apiKeyAuthCacheConfig {
 	if cfg == nil {
@@ -68,9 +60,7 @@ func (c apiKeyAuthCacheConfig) jitterTTL(ttl time.Duration) time.Duration {
 		percent = 100
 	}
 	delta := float64(percent) / 100
-	jitterRandMu.Lock()
-	randVal := jitterRand.Float64()
-	jitterRandMu.Unlock()
+	randVal := cryptoRandUnitFloat64()
 	factor := 1 - delta + randVal*(2*delta)
 	if factor <= 0 {
 		return ttl
@@ -207,18 +197,18 @@ func (s *APIKeyService) snapshotFromAPIKey(apiKey *APIKey) *APIKeyAuthSnapshot {
 		return nil
 	}
 	snapshot := &APIKeyAuthSnapshot{
-		APIKeyID:    apiKey.ID,
-		UserID:      apiKey.UserID,
-		GroupID:     apiKey.GroupID,
-		Status:      apiKey.Status,
-		IPWhitelist: apiKey.IPWhitelist,
-		IPBlacklist: apiKey.IPBlacklist,
-		AllowBalance:      apiKey.AllowBalance,
-		AllowSubscription: apiKey.AllowSubscription,
+		APIKeyID:           apiKey.ID,
+		UserID:             apiKey.UserID,
+		GroupID:            apiKey.GroupID,
+		Status:             apiKey.Status,
+		IPWhitelist:        apiKey.IPWhitelist,
+		IPBlacklist:        apiKey.IPBlacklist,
+		AllowBalance:       apiKey.AllowBalance,
+		AllowSubscription:  apiKey.AllowSubscription,
 		SubscriptionStrict: apiKey.SubscriptionStrict,
-		ExpiresAt:         apiKey.ExpiresAt,
-		QuotaLimitUSD:     apiKey.QuotaLimitUSD,
-		QuotaUsedUSD:      apiKey.QuotaUsedUSD,
+		ExpiresAt:          apiKey.ExpiresAt,
+		QuotaLimitUSD:      apiKey.QuotaLimitUSD,
+		QuotaUsedUSD:       apiKey.QuotaUsedUSD,
 		User: APIKeyAuthUserSnapshot{
 			ID:            apiKey.User.ID,
 			Status:        apiKey.User.Status,
@@ -258,19 +248,19 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		return nil
 	}
 	apiKey := &APIKey{
-		ID:          snapshot.APIKeyID,
-		UserID:      snapshot.UserID,
-		GroupID:     snapshot.GroupID,
-		Key:         key,
-		Status:      snapshot.Status,
-		IPWhitelist: snapshot.IPWhitelist,
-		IPBlacklist: snapshot.IPBlacklist,
-		AllowBalance:      snapshot.AllowBalance,
-		AllowSubscription: snapshot.AllowSubscription,
+		ID:                 snapshot.APIKeyID,
+		UserID:             snapshot.UserID,
+		GroupID:            snapshot.GroupID,
+		Key:                key,
+		Status:             snapshot.Status,
+		IPWhitelist:        snapshot.IPWhitelist,
+		IPBlacklist:        snapshot.IPBlacklist,
+		AllowBalance:       snapshot.AllowBalance,
+		AllowSubscription:  snapshot.AllowSubscription,
 		SubscriptionStrict: snapshot.SubscriptionStrict,
-		ExpiresAt:         snapshot.ExpiresAt,
-		QuotaLimitUSD:     snapshot.QuotaLimitUSD,
-		QuotaUsedUSD:      snapshot.QuotaUsedUSD,
+		ExpiresAt:          snapshot.ExpiresAt,
+		QuotaLimitUSD:      snapshot.QuotaLimitUSD,
+		QuotaUsedUSD:       snapshot.QuotaUsedUSD,
 		User: &User{
 			ID:            snapshot.User.ID,
 			Status:        snapshot.User.Status,

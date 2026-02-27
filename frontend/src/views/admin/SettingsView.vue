@@ -376,6 +376,127 @@
                   </div>
                   <Toggle v-model="form.gateway_fix_orphaned_tool_results" />
                 </div>
+
+                <div class="space-y-2 border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <div class="flex justify-end">
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      @click="resetGatewayFailoverKeywordsToDefault"
+                    >
+                      {{ t('admin.settings.gateway.restoreDefaults') }}
+                    </button>
+                  </div>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.gateway.defaultKeywordCount', gatewayDefaultKeywordCounts) }}
+                  </p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.gateway.currentKeywordCount', gatewayCurrentKeywordCounts) }}
+                  </p>
+                  <div ref="gatewayStatusHelpRef" class="space-y-1">
+                    <div class="flex items-center gap-2">
+                      <p
+                        class="flex items-center gap-1.5 text-xs font-medium"
+                        :class="{
+                          'text-green-600 dark:text-green-400': gatewayKeywordStatus.tone === 'green',
+                          'text-amber-600 dark:text-amber-400': gatewayKeywordStatus.tone === 'yellow',
+                          'text-gray-500 dark:text-gray-300': gatewayKeywordStatus.tone === 'gray'
+                        }"
+                      >
+                        <span
+                          class="h-2 w-2 rounded-full"
+                          :class="{
+                            'bg-green-500 dark:bg-green-400': gatewayKeywordStatus.tone === 'green',
+                            'bg-amber-500 dark:bg-amber-400': gatewayKeywordStatus.tone === 'yellow',
+                            'bg-gray-400 dark:bg-gray-500': gatewayKeywordStatus.tone === 'gray'
+                          }"
+                        ></span>
+                        {{ gatewayKeywordStatus.text }}
+                      </p>
+                      <button
+                        type="button"
+                        class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-[11px] font-semibold text-gray-500 transition-colors hover:bg-gray-100 dark:border-dark-600 dark:text-gray-300 dark:hover:bg-dark-700"
+                        :aria-expanded="gatewayStatusHelpOpen"
+                        :aria-controls="gatewayStatusHelpId"
+                        :aria-label="gatewayKeywordStatus.tooltip"
+                        @click="toggleGatewayStatusHelp"
+                      >
+                        ?
+                      </button>
+                    </div>
+                    <p
+                      v-if="gatewayStatusHelpOpen"
+                      :id="gatewayStatusHelpId"
+                      class="rounded-md border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300"
+                    >
+                      {{ gatewayKeywordStatus.tooltip }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <label class="mb-2 block font-medium text-gray-900 dark:text-white">
+                    {{ t('admin.settings.gateway.failoverSensitive400Keywords') }}
+                  </label>
+                  <textarea
+                    :value="keywordListToTextarea(form.gateway_failover_sensitive_400_keywords)"
+                    rows="4"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.gateway.keywordsPlaceholder')"
+                    @input="onGatewayKeywordInput('gateway_failover_sensitive_400_keywords', $event)"
+                  ></textarea>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.gateway.failoverSensitive400KeywordsHint') }}
+                  </p>
+                </div>
+
+                <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <label class="mb-2 block font-medium text-gray-900 dark:text-white">
+                    {{ t('admin.settings.gateway.failoverTemporary400Keywords') }}
+                  </label>
+                  <textarea
+                    :value="keywordListToTextarea(form.gateway_failover_temporary_400_keywords)"
+                    rows="4"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.gateway.keywordsPlaceholder')"
+                    @input="onGatewayKeywordInput('gateway_failover_temporary_400_keywords', $event)"
+                  ></textarea>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.gateway.failoverTemporary400KeywordsHint') }}
+                  </p>
+                </div>
+
+                <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <label class="mb-2 block font-medium text-gray-900 dark:text-white">
+                    {{ t('admin.settings.gateway.failoverRequestErrorKeywords') }}
+                  </label>
+                  <textarea
+                    :value="keywordListToTextarea(form.gateway_failover_request_error_keywords)"
+                    rows="4"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.gateway.keywordsPlaceholder')"
+                    @input="onGatewayKeywordInput('gateway_failover_request_error_keywords', $event)"
+                  ></textarea>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.gateway.failoverRequestErrorKeywordsHint') }}
+                  </p>
+                </div>
+
+                <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <label class="mb-2 block font-medium text-gray-900 dark:text-white">
+                    {{ t('admin.settings.gateway.codexModelAliases') }}
+                  </label>
+                  <textarea
+                    :value="gatewayCodexAliasesRaw"
+                    rows="6"
+                    class="input font-mono text-sm"
+                    :placeholder="t('admin.settings.gateway.codexModelAliasesPlaceholder')"
+                    @input="onGatewayCodexAliasesInput($event)"
+                  ></textarea>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.gateway.codexModelAliasesHint', { count: gatewayCodexAliasCount }) }}
+                  </p>
+                </div>
               </div>
             </div>
           </section>
@@ -1960,6 +2081,9 @@ const siteSettingsTab = ref<'general' | 'home' | 'subscriptions'>('general')
 const sectionQuery = ref('')
 const activeSectionId = ref<SectionId>(SECTION_IDS.adminApiKey)
 const mobileSectionJump = ref<SectionId>(SECTION_IDS.adminApiKey)
+const gatewayStatusHelpOpen = ref(false)
+const gatewayStatusHelpId = 'gateway-keyword-status-help'
+const gatewayStatusHelpRef = ref<HTMLElement | null>(null)
 
 type EditableLandingPricingPlan = {
   id: string
@@ -2225,6 +2349,68 @@ type SettingsForm = SystemSettings & {
   linuxdo_connect_client_secret: string
 }
 
+type GatewayKeywordField =
+  | 'gateway_failover_sensitive_400_keywords'
+  | 'gateway_failover_temporary_400_keywords'
+  | 'gateway_failover_request_error_keywords'
+
+type GatewayKeywordSnapshot = {
+  sensitive: string[]
+  temporary: string[]
+  request: string[]
+}
+
+const DEFAULT_GATEWAY_FAILOVER_SENSITIVE_400_KEYWORDS = [
+  'insufficient balance',
+  'insufficient credit',
+  'insufficient credits',
+  'credit balance',
+  'out of quota',
+  'quota exceeded',
+  'payment required',
+  'billing issue',
+  '余额不足',
+  '积分不足',
+  '额度不足',
+  '配额不足'
+]
+
+const DEFAULT_GATEWAY_FAILOVER_TEMPORARY_400_KEYWORDS = [
+  'temporarily unavailable',
+  'service unavailable',
+  'under maintenance',
+  'maintenance',
+  'try again later',
+  'server overloaded',
+  'overloaded',
+  '服务暂时不可用',
+  '服务不可用',
+  '维护中',
+  '稍后重试',
+  '暂时不可用'
+]
+
+const DEFAULT_GATEWAY_FAILOVER_REQUEST_ERROR_KEYWORDS = [
+  'eof',
+  ': eof',
+  'connection reset by peer',
+  'broken pipe',
+  'tls:',
+  'handshake failure',
+  'http2: client connection lost',
+  'dial tcp',
+  'no such host',
+  'i/o timeout',
+  'timeout awaiting response headers',
+  'server misbehaving'
+]
+
+const gatewayDefaultKeywordCounts = {
+  sensitive: DEFAULT_GATEWAY_FAILOVER_SENSITIVE_400_KEYWORDS.length,
+  temporary: DEFAULT_GATEWAY_FAILOVER_TEMPORARY_400_KEYWORDS.length,
+  request: DEFAULT_GATEWAY_FAILOVER_REQUEST_ERROR_KEYWORDS.length
+}
+
 const form = reactive<SettingsForm>({
   registration_enabled: true,
   email_verify_enabled: false,
@@ -2280,6 +2466,10 @@ const form = reactive<SettingsForm>({
   identity_patch_prompt: '',
   // Gateway runtime toggles
   gateway_fix_orphaned_tool_results: true,
+  gateway_failover_sensitive_400_keywords: [],
+  gateway_failover_temporary_400_keywords: [],
+  gateway_failover_request_error_keywords: [],
+  gateway_codex_model_aliases: {},
   // Ops monitoring (vNext)
   ops_monitoring_enabled: true,
   ops_realtime_monitoring_enabled: true,
@@ -2376,9 +2566,30 @@ watch(
 
 onBeforeUnmount(() => {
   sectionObserver?.disconnect()
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('keydown', onWindowKeydown)
+    window.removeEventListener('click', onWindowClickCapture, true)
+  }
 })
 
+function onWindowKeydown(event: KeyboardEvent) {
+  if (!gatewayStatusHelpOpen.value) return
+  if (event.key === 'Escape') {
+    closeGatewayStatusHelp()
+  }
+}
+
+function onWindowClickCapture(event: MouseEvent) {
+  if (!gatewayStatusHelpOpen.value) return
+  const root = gatewayStatusHelpRef.value
+  if (!root) return
+  if (root.contains(event.target as Node | null)) return
+  closeGatewayStatusHelp()
+}
+
 const initialSettingsState = ref<string | null>(null)
+const initialGatewayKeywordSnapshot = ref<GatewayKeywordSnapshot | null>(null)
+const gatewayCodexAliasesRaw = ref('')
 
 function stableJsonStringify(value: any): string {
   if (value === undefined) return 'null'
@@ -2401,6 +2612,190 @@ function normalizeLandingPricingConfigSnapshot(raw: string): string {
   } catch {
     return trimmed
   }
+}
+
+function normalizeKeywordList(raw: string): string[] {
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  for (const entry of raw.split(/\r?\n/)) {
+    const trimmed = entry.trim()
+    if (!trimmed) continue
+    const dedupeKey = trimmed.toLowerCase()
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+    normalized.push(trimmed)
+  }
+  return normalized
+}
+
+function keywordListToTextarea(keywords: string[] | undefined): string {
+  if (!Array.isArray(keywords) || keywords.length === 0) return ''
+  return keywords.join('\n')
+}
+
+function onGatewayKeywordInput(field: GatewayKeywordField, event: Event) {
+  const target = event.target as HTMLTextAreaElement | null
+  const raw = target?.value ?? ''
+  const normalized = normalizeKeywordList(raw)
+  form[field] = normalized
+}
+
+function codexAliasesToTextarea(aliases: Record<string, string> | undefined): string {
+  if (!aliases || typeof aliases !== 'object') return ''
+  const entries = Object.entries(aliases)
+    .map(([key, value]) => [key.trim(), value.trim()] as const)
+    .filter(([key, value]) => !!key && !!value)
+    .sort(([a], [b]) => a.localeCompare(b))
+  if (!entries.length) return ''
+  return entries.map(([key, value]) => `${key}=${value}`).join('\n')
+}
+
+function normalizeCodexAliasMap(raw: string): Record<string, string> {
+  const normalized: Record<string, string> = {}
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    if (trimmed.startsWith('#')) continue
+
+    let sepIndex = trimmed.indexOf('->')
+    let sepLen = 2
+    if (sepIndex < 0) {
+      sepIndex = trimmed.indexOf('=')
+      sepLen = 1
+    }
+    if (sepIndex < 0) {
+      sepIndex = trimmed.indexOf(':')
+      sepLen = 1
+    }
+    if (sepIndex <= 0) continue
+
+    const key = trimmed.slice(0, sepIndex).trim().toLowerCase()
+    const value = trimmed.slice(sepIndex + sepLen).trim()
+    if (!key || !value) continue
+
+    normalized[key] = value
+  }
+  return normalized
+}
+
+function onGatewayCodexAliasesInput(event: Event) {
+  const target = event.target as HTMLTextAreaElement | null
+  const raw = target?.value ?? ''
+  gatewayCodexAliasesRaw.value = raw
+  form.gateway_codex_model_aliases = normalizeCodexAliasMap(raw)
+}
+
+const gatewayCodexAliasCount = computed(() => {
+  const aliases = form.gateway_codex_model_aliases
+  if (!aliases || typeof aliases !== 'object') return 0
+  return Object.keys(aliases).length
+})
+
+const gatewayCurrentKeywordCounts = computed(() => ({
+  sensitive: form.gateway_failover_sensitive_400_keywords.length,
+  temporary: form.gateway_failover_temporary_400_keywords.length,
+  request: form.gateway_failover_request_error_keywords.length
+}))
+
+function currentGatewayKeywordSnapshot(): GatewayKeywordSnapshot {
+  return {
+    sensitive: [...form.gateway_failover_sensitive_400_keywords],
+    temporary: [...form.gateway_failover_temporary_400_keywords],
+    request: [...form.gateway_failover_request_error_keywords]
+  }
+}
+
+function markGatewayKeywordSnapshotSaved() {
+  initialGatewayKeywordSnapshot.value = currentGatewayKeywordSnapshot()
+}
+
+function keywordSet(values: string[]): Set<string> {
+  return new Set(values.map((item) => item.trim().toLowerCase()).filter((item) => !!item))
+}
+
+function keywordListsEquivalent(left: string[], right: string[]): boolean {
+  const leftSet = keywordSet(left)
+  const rightSet = keywordSet(right)
+  if (leftSet.size !== rightSet.size) {
+    return false
+  }
+  for (const item of rightSet) {
+    if (!leftSet.has(item)) {
+      return false
+    }
+  }
+  return true
+}
+
+function keywordListMatchesDefault(current: string[], defaults: string[]): boolean {
+  return keywordListsEquivalent(current, defaults)
+}
+
+const gatewayKeywordsMatchDefaults = computed(() => {
+  return (
+    keywordListMatchesDefault(
+      form.gateway_failover_sensitive_400_keywords,
+      DEFAULT_GATEWAY_FAILOVER_SENSITIVE_400_KEYWORDS
+    ) &&
+    keywordListMatchesDefault(
+      form.gateway_failover_temporary_400_keywords,
+      DEFAULT_GATEWAY_FAILOVER_TEMPORARY_400_KEYWORDS
+    ) &&
+    keywordListMatchesDefault(
+      form.gateway_failover_request_error_keywords,
+      DEFAULT_GATEWAY_FAILOVER_REQUEST_ERROR_KEYWORDS
+    )
+  )
+})
+
+const gatewayKeywordsDirty = computed(() => {
+  const initial = initialGatewayKeywordSnapshot.value
+  if (!initial) {
+    return false
+  }
+  const current = currentGatewayKeywordSnapshot()
+  return !(
+    keywordListsEquivalent(current.sensitive, initial.sensitive) &&
+    keywordListsEquivalent(current.temporary, initial.temporary) &&
+    keywordListsEquivalent(current.request, initial.request)
+  )
+})
+
+const gatewayKeywordStatus = computed(() => {
+  if (gatewayKeywordsMatchDefaults.value) {
+    return {
+      tone: 'green' as const,
+      text: t('admin.settings.gateway.matchesDefaults'),
+      tooltip: t('admin.settings.gateway.matchesDefaultsTooltip')
+    }
+  }
+  if (gatewayKeywordsDirty.value) {
+    return {
+      tone: 'yellow' as const,
+      text: t('admin.settings.gateway.modifiedUnsaved'),
+      tooltip: t('admin.settings.gateway.modifiedUnsavedTooltip')
+    }
+  }
+  return {
+    tone: 'gray' as const,
+    text: t('admin.settings.gateway.savedCustom'),
+    tooltip: t('admin.settings.gateway.savedCustomTooltip')
+  }
+})
+
+function toggleGatewayStatusHelp() {
+  gatewayStatusHelpOpen.value = !gatewayStatusHelpOpen.value
+}
+
+function closeGatewayStatusHelp() {
+  gatewayStatusHelpOpen.value = false
+}
+
+function resetGatewayFailoverKeywordsToDefault() {
+  form.gateway_failover_sensitive_400_keywords = [...DEFAULT_GATEWAY_FAILOVER_SENSITIVE_400_KEYWORDS]
+  form.gateway_failover_temporary_400_keywords = [...DEFAULT_GATEWAY_FAILOVER_TEMPORARY_400_KEYWORDS]
+  form.gateway_failover_request_error_keywords = [...DEFAULT_GATEWAY_FAILOVER_REQUEST_ERROR_KEYWORDS]
+  appStore.showSuccess(t('admin.settings.gateway.defaultsApplied'))
 }
 
 function buildUpdateSettingsPayload(): UpdateSettingsRequest {
@@ -2454,7 +2849,11 @@ function buildUpdateSettingsPayload(): UpdateSettingsRequest {
     fallback_model_antigravity: form.fallback_model_antigravity,
     enable_identity_patch: form.enable_identity_patch,
     identity_patch_prompt: form.identity_patch_prompt,
-    gateway_fix_orphaned_tool_results: form.gateway_fix_orphaned_tool_results
+    gateway_fix_orphaned_tool_results: form.gateway_fix_orphaned_tool_results,
+    gateway_failover_sensitive_400_keywords: form.gateway_failover_sensitive_400_keywords,
+    gateway_failover_temporary_400_keywords: form.gateway_failover_temporary_400_keywords,
+    gateway_failover_request_error_keywords: form.gateway_failover_request_error_keywords,
+    gateway_codex_model_aliases: form.gateway_codex_model_aliases
   }
 }
 
@@ -3023,6 +3422,8 @@ async function loadSettings() {
     }
     syncLandingPricingDraftFromJson()
     initialSettingsState.value = settingsPayloadSnapshot()
+    markGatewayKeywordSnapshotSaved()
+    gatewayCodexAliasesRaw.value = codexAliasesToTextarea(form.gateway_codex_model_aliases)
   } catch (error: any) {
     appStore.showError(
       t('admin.settings.failedToLoad') + ': ' + (error.message || t('common.unknownError'))
@@ -3053,6 +3454,8 @@ async function saveSettings() {
     form.linuxdo_connect_client_secret = ''
     syncLandingPricingDraftFromJson()
     initialSettingsState.value = settingsPayloadSnapshot()
+    markGatewayKeywordSnapshotSaved()
+    gatewayCodexAliasesRaw.value = codexAliasesToTextarea(form.gateway_codex_model_aliases)
     // Refresh cached public settings so sidebar/header update immediately
     await appStore.fetchPublicSettings(true)
     appStore.showSuccess(t('admin.settings.settingsSaved'))
@@ -3228,6 +3631,10 @@ async function saveStreamTimeoutSettings(options?: { silent?: boolean }) {
 }
 
 onMounted(() => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', onWindowKeydown)
+    window.addEventListener('click', onWindowClickCapture, true)
+  }
   loadSettings()
   loadPricingGroups()
   loadAdminApiKey()

@@ -1265,6 +1265,14 @@ export default {
         fallbackHint: '非 Claude Code 请求将使用此分组，留空则直接拒绝',
         noFallback: '不降级（直接拒绝）'
       },
+      copyAccounts: {
+        title: '从分组复制账号',
+        tooltip: '选择一个或多个相同平台的分组，创建后会自动将这些分组的所有账号绑定到新分组（去重）。',
+        tooltipEdit: '选择一个或多个相同平台的分组，保存后当前分组的账号会被替换为这些分组的账号（去重）。',
+        selectPlaceholder: '选择分组以复制其账号...',
+        hint: '可选多个分组，账号会自动去重',
+        hintEdit: '⚠️ 注意：这会替换当前分组的所有账号绑定'
+      },
       modelRouting: {
         title: '模型路由配置',
         tooltip: '配置特定模型请求优先路由到指定账号。支持通配符匹配，如 claude-opus-* 匹配所有 opus 模型。',
@@ -2503,6 +2511,8 @@ export default {
       inputTokens: '输入 Token',
       outputTokens: '输出 Token',
       cacheCreationTokens: '缓存创建 Token',
+      cacheCreation5mTokens: '缓存创建',
+      cacheCreation1hTokens: '缓存创建',
       cacheReadTokens: '缓存读取 Token',
       cacheHitRate: '缓存命中率',
       failedToLoad: '加载使用记录失败',
@@ -2726,6 +2736,7 @@ export default {
         accountId: '账号 ID',
         status: '状态码',
         message: '响应内容',
+        failoverMatch: '切换命中',
         latency: '请求时长',
         action: '操作',
         noErrors: '该窗口内暂无错误。',
@@ -2748,6 +2759,9 @@ export default {
         resolved: '已解决',
         viewErrors: '错误',
         viewExcluded: '排除项',
+        failoverMatchAll: '切换命中: 全部',
+        failoverMatchSensitive: '切换命中: 敏感',
+        failoverMatchTemporary: '切换命中: 临时',
         statusCodeOther: '其他',
         owner: {
           provider: '服务商',
@@ -2795,10 +2809,12 @@ export default {
           detail: '详情',
           upstreamErrors: '上游错误列表'
         },
+        upstreamAttempts: '上游尝试',
         upstreamEvent: {
           account: '账号',
           status: '状态码',
-          requestId: '请求ID'
+          requestId: '请求ID',
+          failoverMatch: '切换命中'
         },
         responsePreview: {
           expand: '响应内容（点击展开）',
@@ -3618,7 +3634,33 @@ export default {
         description: 'LLM 网关兼容性与自动修复',
         fixOrphanedToolResults: '自动清理孤儿 tool_result',
         fixOrphanedToolResultsHint:
-          '当消息历史包含引用不存在 tool_use 的 tool_result 时自动移除，避免 Claude 400；如发现兼容性问题可关闭兜底'
+          '当消息历史包含引用不存在 tool_use 的 tool_result 时自动移除，避免 Claude 400；如发现兼容性问题可关闭兜底',
+        failoverSensitive400Keywords: '敏感/额度类 400 自动切换关键词',
+        failoverSensitive400KeywordsHint:
+          '当 400 错误命中以下任一关键词（余额/积分/额度等）时，网关会自动切换账号或链路。',
+        failoverTemporary400Keywords: '临时不可用类 400 自动切换关键词',
+        failoverTemporary400KeywordsHint:
+          '当 400 错误体现上游临时不可用/维护中时，网关会自动切换账号或链路。',
+        failoverRequestErrorKeywords: '请求层错误自动切换关键词',
+        failoverRequestErrorKeywordsHint:
+          '当请求错误（EOF/连接重置/超时等）命中以下任一关键词时，网关会自动切换账号或链路。',
+        codexModelAliases: 'Codex 模型别名映射',
+        codexModelAliasesPlaceholder: '每行一个：alias=target（也支持 alias->target / alias:target）',
+        codexModelAliasesHint:
+          '用于兼容上游新模型名，alias 会自动转小写处理。当前 {count} 条。',
+        keywordsPlaceholder: '每行一个关键词',
+        restoreDefaults: '恢复默认关键词',
+        defaultsApplied: '已回填网关默认切换关键词（尚未保存）',
+        defaultKeywordCount:
+          '默认关键词数：敏感/额度 {sensitive}，临时不可用 {temporary}，请求错误 {request}',
+        currentKeywordCount:
+          '当前关键词数：敏感/额度 {sensitive}，临时不可用 {temporary}，请求错误 {request}',
+        matchesDefaults: '已与默认关键词一致',
+        matchesDefaultsTooltip: '三组关键词都与内置默认值一致（忽略大小写与顺序）。',
+        modifiedUnsaved: '关键词已修改（未保存）',
+        modifiedUnsavedTooltip: '当前修改仅在表单中，点击“保存设置”后才会写入并生效。',
+        savedCustom: '已保存自定义关键词（非默认）',
+        savedCustomTooltip: '当前关键词与默认不一致，且已保存并应用到运行时。'
       },
       saveSettings: '保存设置',
       saving: '保存中...',

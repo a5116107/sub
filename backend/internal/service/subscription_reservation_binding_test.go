@@ -76,12 +76,12 @@ func TestGatewayService_FinalizeReservation_BindsToUsageLogID(t *testing.T) {
 	}
 
 	input := &RecordUsageInput{
-		Result:            result,
-		APIKey:            apiKey,
-		User:              user,
-		Account:           account,
-		Subscription:      sub,
-		ReservedUSD:       0.5,
+		Result:             result,
+		APIKey:             apiKey,
+		User:               user,
+		Account:            account,
+		Subscription:       sub,
+		ReservedUSD:        0.5,
 		ReservedUsageLogID: 999, // mismatched on purpose
 	}
 	require.NoError(t, svc.RecordUsage(context.Background(), input))
@@ -136,12 +136,12 @@ func TestOpenAIGatewayService_FinalizeReservation_BindsToUsageLogID(t *testing.T
 	}
 
 	input := &OpenAIRecordUsageInput{
-		Result:            result,
-		APIKey:            apiKey,
-		User:              user,
-		Account:           account,
-		Subscription:      sub,
-		ReservedUSD:       0.5,
+		Result:             result,
+		APIKey:             apiKey,
+		User:               user,
+		Account:            account,
+		Subscription:       sub,
+		ReservedUSD:        0.5,
 		ReservedUsageLogID: 999, // mismatched on purpose
 	}
 	require.NoError(t, svc.RecordUsage(context.Background(), input))
@@ -149,4 +149,3 @@ func TestOpenAIGatewayService_FinalizeReservation_BindsToUsageLogID(t *testing.T
 	require.Equal(t, int64(100), result.UsageLogID)
 	require.Len(t, cacheSpy.calls, 0)
 }
-

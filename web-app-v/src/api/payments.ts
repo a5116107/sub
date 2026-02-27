@@ -6,9 +6,10 @@ import type {
 } from '../types';
 
 export const paymentsApi = {
-  // Get payment providers
+  // Get payment providers (response is wrapped: { providers: [...] })
   getProviders: () =>
-    api.get<PaymentProvider[]>('/payments/providers'),
+    api.get<{ providers: PaymentProvider[] }>('/payments/providers')
+      .then(res => res.providers || []),
 
   // Create order
   createOrder: (data: CreateOrderRequest) =>
@@ -21,12 +22,4 @@ export const paymentsApi = {
   // Get order details
   getOrder: (id: number) =>
     api.get<Order>(`/payments/orders/${id}`),
-
-  // Get order status
-  getOrderStatus: (id: number) =>
-    api.get<{ status: string; paid_at?: string }>(`/payments/orders/${id}/status`),
-
-  // Get user orders
-  getOrders: () =>
-    api.get<Order[]>('/payments/orders'),
 };

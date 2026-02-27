@@ -161,10 +161,7 @@ func (s *AntigravityOAuthService) RefreshToken(ctx context.Context, refreshToken
 
 	for attempt := 0; attempt <= 3; attempt++ {
 		if attempt > 0 {
-			backoff := time.Duration(1<<uint(attempt-1)) * time.Second
-			if backoff > 30*time.Second {
-				backoff = 30 * time.Second
-			}
+			backoff := boundedExponentialBackoff(1*time.Second, 30*time.Second, attempt)
 			time.Sleep(backoff)
 		}
 
@@ -266,10 +263,7 @@ func (s *AntigravityOAuthService) loadProjectIDWithRetry(ctx context.Context, ac
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			// 指数退避：1s, 2s, 4s
-			backoff := time.Duration(1<<uint(attempt-1)) * time.Second
-			if backoff > 8*time.Second {
-				backoff = 8 * time.Second
-			}
+			backoff := boundedExponentialBackoff(1*time.Second, 8*time.Second, attempt)
 			time.Sleep(backoff)
 		}
 

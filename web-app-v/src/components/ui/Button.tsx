@@ -27,6 +27,7 @@ export const Button: React.FC<ButtonProps> = ({
     font-semibold transition-all duration-200
     active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
     rounded-lg overflow-hidden group
+    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)]
   `;
 
   const sizeStyles = {
@@ -37,33 +38,36 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variantStyles = {
     primary: `
-      bg-gradient-to-r from-[#00F0FF] to-[#0088FF]
-      text-black hover:shadow-lg
+      bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)]
+      text-white dark:text-black
+      shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-lg)]
+      hover:brightness-105
     `,
     secondary: `
-      bg-white/5 text-white
-      border border-white/10
-      hover:bg-white/10 hover:border-white/20
+      bg-[var(--bg-card-alpha)] text-[var(--text-primary)]
+      border border-[var(--border-color)]
+      shadow-[var(--shadow-sm)]
+      hover:bg-[var(--bg-card)] hover:border-[var(--accent-primary)] hover:shadow-[var(--shadow-md)]
       backdrop-blur-md
     `,
     ghost: `
-      bg-transparent text-gray-400
-      hover:text-white hover:bg-white/5
+      bg-transparent text-[var(--text-secondary)]
+      hover:text-[var(--text-primary)] hover:bg-[var(--accent-soft)]
     `,
     danger: `
-      bg-red-500/10 text-red-400
-      border border-red-500/20
-      hover:bg-red-500/20
+      bg-red-500/10 text-red-600 dark:text-red-400
+      border border-red-500/25
+      hover:bg-red-500/15
     `,
     outline: `
-      bg-transparent text-white
-      border border-[#2A2A30]
-      hover:border-[#00F0FF]/50 hover:text-[#00F0FF]
+      bg-transparent text-[var(--text-primary)]
+      border border-[var(--border-color)]
+      hover:border-[var(--accent-primary)] hover:text-[var(--accent-primary)] hover:bg-[var(--accent-soft)]
     `,
   };
 
   const glowStyles = glow
-    ? 'shadow-[0_0_20px_rgba(0,240,255,0.3)] hover:shadow-[0_0_30px_rgba(0,240,255,0.5)]'
+    ? 'ring-1 ring-[var(--accent-soft)] shadow-[var(--shadow-lg)] hover:shadow-[var(--shadow-xl)]'
     : '';
 
   return (

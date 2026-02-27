@@ -18,16 +18,16 @@ import (
 )
 
 var (
-	ErrAPIKeyNotFound     = infraerrors.NotFound("API_KEY_NOT_FOUND", "api key not found")
-	ErrGroupNotAllowed    = infraerrors.Forbidden("GROUP_NOT_ALLOWED", "user is not allowed to bind this group")
-	ErrAPIKeyExists       = infraerrors.Conflict("API_KEY_EXISTS", "api key already exists")
-	ErrAPIKeyTooShort     = infraerrors.BadRequest("API_KEY_TOO_SHORT", "api key must be at least 16 characters")
-	ErrAPIKeyInvalidChars = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
-	ErrAPIKeyRateLimited  = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
-	ErrInvalidIPPattern   = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
-	ErrGroupIDRequired    = infraerrors.BadRequest("GROUP_ID_REQUIRED", "group_id is required")
-	ErrInvalidQuotaLimit  = infraerrors.BadRequest("INVALID_QUOTA_LIMIT", "quota_limit_usd must be >= 0")
-	ErrInvalidExpiresAt   = infraerrors.BadRequest("INVALID_EXPIRES_AT", "expires_at must be in the future")
+	ErrAPIKeyNotFound            = infraerrors.NotFound("API_KEY_NOT_FOUND", "api key not found")
+	ErrGroupNotAllowed           = infraerrors.Forbidden("GROUP_NOT_ALLOWED", "user is not allowed to bind this group")
+	ErrAPIKeyExists              = infraerrors.Conflict("API_KEY_EXISTS", "api key already exists")
+	ErrAPIKeyTooShort            = infraerrors.BadRequest("API_KEY_TOO_SHORT", "api key must be at least 16 characters")
+	ErrAPIKeyInvalidChars        = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
+	ErrAPIKeyRateLimited         = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
+	ErrInvalidIPPattern          = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
+	ErrGroupIDRequired           = infraerrors.BadRequest("GROUP_ID_REQUIRED", "group_id is required")
+	ErrInvalidQuotaLimit         = infraerrors.BadRequest("INVALID_QUOTA_LIMIT", "quota_limit_usd must be >= 0")
+	ErrInvalidExpiresAt          = infraerrors.BadRequest("INVALID_EXPIRES_AT", "expires_at must be in the future")
 	ErrInvalidSubscriptionStrict = infraerrors.BadRequest("INVALID_SUBSCRIPTION_STRICT", "subscription_strict requires allow_subscription=true")
 )
 
@@ -85,32 +85,32 @@ type APIKeyAuthCacheInvalidator interface {
 
 // CreateAPIKeyRequest 创建API Key请求
 type CreateAPIKeyRequest struct {
-	Name             string     `json:"name"`
-	GroupID          *int64     `json:"group_id"`
-	CustomKey        *string    `json:"custom_key"`   // 可选的自定义key
-	IPWhitelist      []string   `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist      []string   `json:"ip_blacklist"` // IP 黑名单
-	AllowBalance     *bool      `json:"allow_balance"`
-	AllowSubscription *bool     `json:"allow_subscription"`
-	SubscriptionStrict *bool    `json:"subscription_strict"`
-	ExpiresAt        *time.Time `json:"expires_at"`
-	QuotaLimitUSD    *float64   `json:"quota_limit_usd"`
+	Name               string     `json:"name"`
+	GroupID            *int64     `json:"group_id"`
+	CustomKey          *string    `json:"custom_key"`   // 可选的自定义key
+	IPWhitelist        []string   `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist        []string   `json:"ip_blacklist"` // IP 黑名单
+	AllowBalance       *bool      `json:"allow_balance"`
+	AllowSubscription  *bool      `json:"allow_subscription"`
+	SubscriptionStrict *bool      `json:"subscription_strict"`
+	ExpiresAt          *time.Time `json:"expires_at"`
+	QuotaLimitUSD      *float64   `json:"quota_limit_usd"`
 }
 
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
-	Name              *string    `json:"name"`
-	GroupID           *int64     `json:"group_id"`
-	Status            *string    `json:"status"`
-	IPWhitelist       []string   `json:"ip_whitelist"` // IP 白名单（空数组清空）
-	IPBlacklist       []string   `json:"ip_blacklist"` // IP 黑名单（空数组清空）
-	AllowBalance      *bool      `json:"allow_balance"`
-	AllowSubscription *bool      `json:"allow_subscription"`
-	SubscriptionStrict *bool     `json:"subscription_strict"`
-	ExpiresAt         *time.Time `json:"expires_at"`
-	ClearExpiresAt    bool       `json:"clear_expires_at"`
-	QuotaLimitUSD     *float64   `json:"quota_limit_usd"`
-	ClearQuotaLimitUSD bool      `json:"clear_quota_limit_usd"`
+	Name               *string    `json:"name"`
+	GroupID            *int64     `json:"group_id"`
+	Status             *string    `json:"status"`
+	IPWhitelist        []string   `json:"ip_whitelist"` // IP 白名单（空数组清空）
+	IPBlacklist        []string   `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	AllowBalance       *bool      `json:"allow_balance"`
+	AllowSubscription  *bool      `json:"allow_subscription"`
+	SubscriptionStrict *bool      `json:"subscription_strict"`
+	ExpiresAt          *time.Time `json:"expires_at"`
+	ClearExpiresAt     bool       `json:"clear_expires_at"`
+	QuotaLimitUSD      *float64   `json:"quota_limit_usd"`
+	ClearQuotaLimitUSD bool       `json:"clear_quota_limit_usd"`
 }
 
 // APIKeyService API Key服务
@@ -324,18 +324,18 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	}
 
 	apiKey := &APIKey{
-		UserID:      userID,
-		Key:         key,
-		Name:        req.Name,
-		GroupID:     req.GroupID,
-		Status:      StatusActive,
-		IPWhitelist: req.IPWhitelist,
-		IPBlacklist: req.IPBlacklist,
-		AllowBalance:      allowBalance,
-		AllowSubscription: allowSubscription,
+		UserID:             userID,
+		Key:                key,
+		Name:               req.Name,
+		GroupID:            req.GroupID,
+		Status:             StatusActive,
+		IPWhitelist:        req.IPWhitelist,
+		IPBlacklist:        req.IPBlacklist,
+		AllowBalance:       allowBalance,
+		AllowSubscription:  allowSubscription,
 		SubscriptionStrict: subscriptionStrict,
-		ExpiresAt:         req.ExpiresAt,
-		QuotaLimitUSD:     req.QuotaLimitUSD,
+		ExpiresAt:          req.ExpiresAt,
+		QuotaLimitUSD:      req.QuotaLimitUSD,
 	}
 
 	if err := s.apiKeyRepo.Create(ctx, apiKey); err != nil {

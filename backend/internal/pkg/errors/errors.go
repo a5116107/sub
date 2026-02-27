@@ -3,6 +3,7 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 )
 
@@ -74,13 +75,21 @@ func (e *ApplicationError) WithMetadata(md map[string]string) *ApplicationError 
 
 // New returns an error object for the code, message.
 func New(code int, reason, message string) *ApplicationError {
+	code32 := normalizeStatusCode(code)
 	return &ApplicationError{
 		Status: Status{
-			Code:    int32(code),
+			Code:    code32,
 			Message: message,
 			Reason:  reason,
 		},
 	}
+}
+
+func normalizeStatusCode(code int) int32 {
+	if code < math.MinInt32 || code > math.MaxInt32 {
+		return int32(UnknownCode)
+	}
+	return int32(code)
 }
 
 // Newf New(code fmt.Sprintf(format, a...))

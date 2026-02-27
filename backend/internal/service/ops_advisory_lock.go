@@ -4,13 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"hash/fnv"
+	"math/big"
 	"time"
 )
 
 func hashAdvisoryLockID(key string) int64 {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(key))
-	return int64(h.Sum64())
+	sum := h.Sum(nil)
+	if len(sum) > 0 {
+		sum[0] &= 0x7F
+	}
+	return new(big.Int).SetBytes(sum).Int64()
 }
 
 func tryAcquireDBAdvisoryLock(ctx context.Context, db *sql.DB, lockID int64) (func(), bool) {

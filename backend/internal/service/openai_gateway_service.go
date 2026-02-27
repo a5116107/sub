@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
@@ -35,6 +36,7 @@ const (
 	// OpenAI Platform API for API Key accounts (fallback)
 	openaiPlatformAPIURL          = "https://api.openai.com/v1/responses"
 	defaultOpenAIStickySessionTTL = time.Hour // 粘性会话TTL
+	openAIResponsesPath           = "/responses"
 )
 
 // openaiSSEDataRe matches SSE data lines with optional whitespace after colon.
@@ -213,6 +215,34 @@ func NewOpenAIGatewayService(
 	openAITokenProvider *OpenAITokenProvider,
 	entClient *dbent.Client,
 ) *OpenAIGatewayService {
+	ConfigureCodexModelAliases(nil)
+	mergedAliases := make(map[string]string)
+	configAliasCount := 0
+	settingsAliasCount := 0
+
+	if cfg != nil && len(cfg.Gateway.CodexModelAliases) > 0 {
+		configAliasCount = len(cfg.Gateway.CodexModelAliases)
+		for key, value := range cfg.Gateway.CodexModelAliases {
+			mergedAliases[key] = value
+		}
+	}
+
+	// DB-backed runtime settings override (if present).
+	if rateLimitService != nil && rateLimitService.settingService != nil {
+		aliases := rateLimitService.settingService.GetGatewayCodexModelAliases(context.Background())
+		settingsAliasCount = len(aliases)
+		for key, value := range aliases {
+			mergedAliases[key] = value
+		}
+	}
+
+	ConfigureCodexModelAliases(mergedAliases)
+	if settingsAliasCount > 0 {
+		log.Printf("[OpenAI] Loaded codex model aliases from settings: %d (merged total=%d)", settingsAliasCount, len(mergedAliases))
+	} else if configAliasCount > 0 {
+		log.Printf("[OpenAI] Loaded codex model aliases from config: %d", configAliasCount)
+	}
+
 	return &OpenAIGatewayService{
 		accountRepo:         accountRepo,
 		usageLogRepo:        usageLogRepo,
@@ -232,6 +262,18 @@ func NewOpenAIGatewayService(
 		openAITokenProvider: openAITokenProvider,
 		toolCorrector:       NewCodexToolCorrector(),
 	}
+}
+
+// RefreshCodexModelAliases reloads Codex model aliases from runtime settings (DB-backed).
+//
+// This enables operators to update Codex mappings from the Admin UI without restarting the service.
+func (s *OpenAIGatewayService) RefreshCodexModelAliases(ctx context.Context) {
+	if s == nil || s.rateLimitService == nil || s.rateLimitService.settingService == nil {
+		return
+	}
+	aliases := s.rateLimitService.settingService.GetGatewayCodexModelAliases(ctx)
+	ConfigureCodexModelAliases(aliases)
+	log.Printf("[OpenAI] Refreshed codex model aliases from settings: %d", len(aliases))
 }
 
 func (s *OpenAIGatewayService) ApplyRateMultiplierToSubscription() bool {
@@ -981,6 +1023,16 @@ func (s *OpenAIGatewayService) schedulingConfig() config.GatewaySchedulingConfig
 	}
 }
 
+// SchedulingConfig exposes gateway scheduling config for handler-level coordination.
+func (s *OpenAIGatewayService) SchedulingConfig() config.GatewaySchedulingConfig {
+	return s.schedulingConfig()
+}
+
+// GetSchedulableAccountByID returns the account snapshot by id.
+func (s *OpenAIGatewayService) GetSchedulableAccountByID(ctx context.Context, accountID int64) (*Account, error) {
+	return s.getSchedulableAccount(ctx, accountID)
+}
+
 // GetAccessToken gets the access token for an OpenAI account
 func (s *OpenAIGatewayService) GetAccessToken(ctx context.Context, account *Account) (string, string, error) {
 	switch account.Type {
@@ -1019,13 +1071,86 @@ func (s *OpenAIGatewayService) shouldFailoverUpstreamError(statusCode int) bool 
 	}
 }
 
+func matchFailoverOnOpenAI400(respBody []byte) *Failover400KeywordMatch {
+	return matchFailoverOn400WithKeywords(
+		respBody,
+		defaultFailoverSensitive400Keywords,
+		defaultFailoverTemporary400Keywords,
+	)
+}
+
+func shouldFailoverOnOpenAI400(respBody []byte) bool {
+	return matchFailoverOnOpenAI400(respBody) != nil
+}
+
+func shouldFailoverOnOpenAIRequestError(errMsg string) bool {
+	return shouldFailoverOnRequestErrorWithKeywords(errMsg, defaultFailoverRequestErrorKeywords)
+}
+
+func (s *OpenAIGatewayService) matchFailoverOnOpenAI400(respBody []byte) *Failover400KeywordMatch {
+	return matchFailoverOn400WithKeywords(
+		respBody,
+		s.failoverSensitive400Keywords(),
+		s.failoverTemporary400Keywords(),
+	)
+}
+
+func (s *OpenAIGatewayService) shouldFailoverOnOpenAI400(respBody []byte) bool {
+	return s.matchFailoverOnOpenAI400(respBody) != nil
+}
+
+func (s *OpenAIGatewayService) shouldFailoverOnOpenAIRequestError(errMsg string) bool {
+	return shouldFailoverOnRequestErrorWithKeywords(errMsg, s.failoverRequestErrorKeywords())
+}
+
+func (s *OpenAIGatewayService) failoverSensitive400Keywords() []string {
+	if s != nil && s.rateLimitService != nil && s.rateLimitService.settingService != nil {
+		return s.rateLimitService.settingService.GetGatewayFailoverSensitive400Keywords(context.Background())
+	}
+	if s != nil && s.cfg != nil && len(s.cfg.Gateway.FailoverSensitive400Keywords) > 0 {
+		return s.cfg.Gateway.FailoverSensitive400Keywords
+	}
+	return defaultFailoverSensitive400Keywords
+}
+
+func (s *OpenAIGatewayService) failoverTemporary400Keywords() []string {
+	if s != nil && s.rateLimitService != nil && s.rateLimitService.settingService != nil {
+		return s.rateLimitService.settingService.GetGatewayFailoverTemporary400Keywords(context.Background())
+	}
+	if s != nil && s.cfg != nil && len(s.cfg.Gateway.FailoverTemporary400Keywords) > 0 {
+		return s.cfg.Gateway.FailoverTemporary400Keywords
+	}
+	return defaultFailoverTemporary400Keywords
+}
+
+func (s *OpenAIGatewayService) failoverRequestErrorKeywords() []string {
+	if s != nil && s.rateLimitService != nil && s.rateLimitService.settingService != nil {
+		return s.rateLimitService.settingService.GetGatewayFailoverRequestErrorKeywords(context.Background())
+	}
+	if s != nil && s.cfg != nil && len(s.cfg.Gateway.FailoverRequestErrorKeywords) > 0 {
+		return s.cfg.Gateway.FailoverRequestErrorKeywords
+	}
+	return defaultFailoverRequestErrorKeywords
+}
+
 func (s *OpenAIGatewayService) handleFailoverSideEffects(ctx context.Context, resp *http.Response, account *Account) {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
 }
 
-// Forward forwards request to OpenAI API
+// Forward forwards request to OpenAI API (default: /responses).
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
+	return s.forwardWithPath(ctx, c, account, body, openAIResponsesPath)
+}
+
+// ForwardWithPath forwards request to OpenAI API with a custom responses path.
+// Example paths: /responses/compact, /responses/input_tokens.
+func (s *OpenAIGatewayService) ForwardWithPath(ctx context.Context, c *gin.Context, account *Account, body []byte, pathSuffix string) (*OpenAIForwardResult, error) {
+	return s.forwardWithPath(ctx, c, account, body, pathSuffix)
+}
+
+// forwardWithPath forwards request to OpenAI API with a custom responses path.
+func (s *OpenAIGatewayService) forwardWithPath(ctx context.Context, c *gin.Context, account *Account, body []byte, pathSuffix string) (*OpenAIForwardResult, error) {
 	startTime := time.Now()
 
 	// Parse request body once (avoid multiple parse/serialize cycles)
@@ -1177,7 +1302,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 
 	// Build upstream request
-	upstreamReq, err := s.buildUpstreamRequest(ctx, c, account, body, token, reqStream, promptCacheKey, isCodexCLI)
+	upstreamReq, err := s.buildUpstreamRequest(ctx, c, account, http.MethodPost, body, token, reqStream, promptCacheKey, isCodexCLI, pathSuffix)
 	if err != nil {
 		return nil, err
 	}
@@ -1210,9 +1335,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			Kind:               "request_error",
 			Message:            safeErr,
 		})
-		if strings.TrimSpace(proxyURL) != "" {
-			// Proxy request errors are often transient per-exit; allow handler to failover to another account/proxy.
-			log.Printf("OpenAI account %d: upstream request error via proxy, triggering failover: %s", account.ID, safeErr)
+		if strings.TrimSpace(proxyURL) != "" || s.shouldFailoverOnOpenAIRequestError(safeErr) {
+			// Request-layer transient failures should switch account to reduce user-visible failures.
+			log.Printf("OpenAI account %d: transient upstream request error, triggering failover: %s", account.ID, safeErr)
 			return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
 		}
 
@@ -1230,6 +1355,72 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 	// Handle error response
 	if resp.StatusCode >= 400 {
+		if resp.StatusCode == http.StatusBadRequest {
+			respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+			if readErr == nil {
+				_ = resp.Body.Close()
+				resp.Body = io.NopCloser(bytes.NewReader(respBody))
+
+				if match := s.matchFailoverOnOpenAI400(respBody); match != nil {
+					upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+					upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+					upstreamDetail := ""
+					if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+						maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+						if maxBytes <= 0 {
+							maxBytes = 2048
+						}
+						upstreamDetail = truncateString(string(respBody), maxBytes)
+					}
+
+					matchInfo := fmt.Sprintf("failover_400_match category=%s keyword=%q", match.Category, match.Keyword)
+					if upstreamDetail != "" {
+						upstreamDetail = matchInfo + "\n" + upstreamDetail
+					} else {
+						upstreamDetail = matchInfo
+					}
+
+					kind := "failover_on_400_sensitive"
+					if match.Category == Failover400KeywordCategoryTemporary {
+						kind = "failover_on_400_temporary"
+					}
+
+					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+						Platform:              account.Platform,
+						AccountID:             account.ID,
+						AccountName:           account.Name,
+						FailoverMatchCategory: match.Category,
+						FailoverMatchKeyword:  match.Keyword,
+						UpstreamStatusCode:    resp.StatusCode,
+						UpstreamRequestID:     resp.Header.Get("x-request-id"),
+						Kind:                  kind,
+						Message:               upstreamMsg,
+						Detail:                upstreamDetail,
+					})
+
+					if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+						log.Printf(
+							"OpenAI account %d: 400 keyword match category=%s keyword=%q, attempting failover: %s",
+							account.ID,
+							match.Category,
+							match.Keyword,
+							truncateForLog(respBody, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes),
+						)
+					} else {
+						log.Printf(
+							"OpenAI account %d: 400 keyword match category=%s keyword=%q, attempting failover",
+							account.ID,
+							match.Category,
+							match.Keyword,
+						)
+					}
+
+					s.handleFailoverSideEffects(ctx, resp, account)
+					return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+				}
+			}
+		}
+
 		if s.shouldFailoverUpstreamError(resp.StatusCode) {
 			respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 			_ = resp.Body.Close()
@@ -1257,7 +1448,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			})
 
 			s.handleFailoverSideEffects(ctx, resp, account)
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
 		}
 		return s.handleErrorResponse(ctx, resp, c, account)
 	}
@@ -1297,30 +1488,64 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}, nil
 }
 
-func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token string, isStream bool, promptCacheKey string, isCodexCLI bool) (*http.Request, error) {
+func normalizeOpenAIPath(pathSuffix string) string {
+	path := strings.TrimSpace(pathSuffix)
+	if path == "" {
+		path = openAIResponsesPath
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return path
+}
+
+func joinOpenAIPath(baseURL, pathSuffix string) string {
+	base := strings.TrimSuffix(strings.TrimSpace(baseURL), "/")
+	path := normalizeOpenAIPath(pathSuffix)
+	if strings.HasSuffix(base, openAIResponsesPath) && strings.HasPrefix(path, openAIResponsesPath) {
+		base = strings.TrimSuffix(base, openAIResponsesPath)
+	}
+	return base + path
+}
+
+func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Context, account *Account, method string, body []byte, token string, isStream bool, promptCacheKey string, isCodexCLI bool, pathSuffix string) (*http.Request, error) {
 	// Determine target URL based on account type
 	var targetURL string
 	switch account.Type {
 	case AccountTypeOAuth:
 		// OAuth accounts use ChatGPT internal API
-		targetURL = chatgptCodexURL
+		targetURL = joinOpenAIPath(chatgptCodexURL, pathSuffix)
 	case AccountTypeAPIKey:
 		// API Key accounts use Platform API or custom base URL
 		baseURL := account.GetOpenAIBaseURL()
 		if baseURL == "" {
-			targetURL = openaiPlatformAPIURL
+			targetURL = joinOpenAIPath(openaiPlatformAPIURL, pathSuffix)
 		} else {
 			validatedURL, err := s.validateUpstreamBaseURL(baseURL)
 			if err != nil {
 				return nil, err
 			}
-			targetURL = validatedURL + "/responses"
+			targetURL = joinOpenAIPath(validatedURL, pathSuffix)
 		}
 	default:
-		targetURL = openaiPlatformAPIURL
+		targetURL = joinOpenAIPath(openaiPlatformAPIURL, pathSuffix)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
+	if c != nil {
+		if q := strings.TrimSpace(c.Request.URL.RawQuery); q != "" {
+			if strings.Contains(targetURL, "?") {
+				targetURL = targetURL + "&" + q
+			} else {
+				targetURL = targetURL + "?" + q
+			}
+		}
+	}
+
+	var bodyReader io.Reader
+	if len(body) > 0 {
+		bodyReader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, targetURL, bodyReader)
 	if err != nil {
 		return nil, err
 	}
@@ -1376,6 +1601,158 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	return req, nil
 }
 
+func openAIResponseIDPath(responseID, suffix string) (string, error) {
+	id := strings.TrimSpace(responseID)
+	if id == "" {
+		return "", errors.New("response_id is required")
+	}
+	suffix = strings.TrimSpace(suffix)
+	if suffix != "" && !strings.HasPrefix(suffix, "/") {
+		suffix = "/" + suffix
+	}
+	return openAIResponsesPath + "/" + url.PathEscape(id) + suffix, nil
+}
+
+// ForwardResponseByID forwards OpenAI responses/{id} style endpoints without billing.
+func (s *OpenAIGatewayService) ForwardResponseByID(ctx context.Context, c *gin.Context, account *Account, method, responseID, suffix string) error {
+	if account == nil {
+		if c != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"error": gin.H{
+					"type":    "upstream_error",
+					"message": "Missing upstream account context",
+				},
+			})
+		}
+		return fmt.Errorf("missing upstream account context")
+	}
+
+	pathSuffix, err := openAIResponseIDPath(responseID, suffix)
+	if err != nil {
+		return err
+	}
+
+	token, _, err := s.GetAccessToken(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	isCodexCLI := false
+	if c != nil {
+		isCodexCLI = openai.IsCodexCLIRequest(c.GetHeader("User-Agent"))
+	}
+
+	upstreamReq, err := s.buildUpstreamRequest(ctx, c, account, method, nil, token, false, "", isCodexCLI, pathSuffix)
+	if err != nil {
+		return err
+	}
+
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
+	}
+
+	if c != nil {
+		c.Set(OpsUpstreamRequestBodyKey, "")
+	}
+
+	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
+	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		safeErr := sanitizeUpstreamErrorMessage(err.Error())
+		setOpsUpstreamError(c, 0, safeErr, "")
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: 0,
+			Kind:               "request_error",
+			Message:            safeErr,
+		})
+		if strings.TrimSpace(proxyURL) != "" || s.shouldFailoverOnOpenAIRequestError(safeErr) {
+			return &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
+		}
+		if c != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"error": gin.H{
+					"type":    "upstream_error",
+					"message": "Upstream request failed",
+				},
+			})
+		}
+		return fmt.Errorf("upstream request failed: %s", safeErr)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode >= 400 {
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		_ = resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(respBody))
+
+		// Not found is ambiguous across accounts; trigger failover.
+		if resp.StatusCode == http.StatusNotFound {
+			upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+			upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+			setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, "")
+			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				Platform:           account.Platform,
+				AccountID:          account.ID,
+				AccountName:        account.Name,
+				UpstreamStatusCode: resp.StatusCode,
+				UpstreamRequestID:  resp.Header.Get("x-request-id"),
+				Kind:               "failover",
+				Message:            upstreamMsg,
+			})
+			return &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
+		}
+
+		_, err = s.handleErrorResponse(ctx, resp, c, account)
+		return err
+	}
+
+	body, err := readAllWithLimit(resp.Body, maxUpstreamNonStreamingBodyBytes)
+	if err != nil {
+		safeErr := sanitizeUpstreamErrorMessage(err.Error())
+		setOpsUpstreamError(c, resp.StatusCode, safeErr, "")
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: resp.StatusCode,
+			UpstreamRequestID:  resp.Header.Get("x-request-id"),
+			Kind:               "response_read_error",
+			Message:            safeErr,
+		})
+		hasProxy := account.ProxyID != nil && account.Proxy != nil && strings.TrimSpace(account.Proxy.URL()) != ""
+		if hasProxy || s.shouldFailoverOnOpenAIRequestError(safeErr) {
+			return &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
+		}
+		if c != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"error": gin.H{
+					"type":    "upstream_error",
+					"message": "Failed to read upstream response",
+				},
+			})
+		}
+		return fmt.Errorf("read upstream response failed: %w", err)
+	}
+
+	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.cfg.Security.ResponseHeaders)
+
+	contentType := "application/json"
+	if s.cfg != nil && !s.cfg.Security.ResponseHeaders.Enabled {
+		if upstreamType := resp.Header.Get("Content-Type"); upstreamType != "" {
+			contentType = upstreamType
+		}
+	}
+	c.Data(resp.StatusCode, contentType, body)
+
+	return nil
+}
+
 func (s *OpenAIGatewayService) handleErrorResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account) (*OpenAIForwardResult, error) {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 
@@ -1391,6 +1768,28 @@ func (s *OpenAIGatewayService) handleErrorResponse(ctx context.Context, resp *ht
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 
+	requestID := strings.TrimSpace(resp.Header.Get("x-request-id"))
+	if upstreamMsg != "" {
+		log.Printf(
+			"OpenAI upstream error status=%d account=%d platform=%s type=%s request_id=%s message=%s",
+			resp.StatusCode,
+			account.ID,
+			account.Platform,
+			account.Type,
+			requestID,
+			truncateString(upstreamMsg, 512),
+		)
+	} else {
+		log.Printf(
+			"OpenAI upstream error status=%d account=%d platform=%s type=%s request_id=%s",
+			resp.StatusCode,
+			account.ID,
+			account.Platform,
+			account.Type,
+			requestID,
+		)
+	}
+
 	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
 		log.Printf(
 			"OpenAI upstream error %d (account=%d platform=%s type=%s): %s",
@@ -1400,6 +1799,30 @@ func (s *OpenAIGatewayService) handleErrorResponse(ctx context.Context, resp *ht
 			account.Type,
 			truncateForLog(body, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes),
 		)
+	}
+
+	if status, errType, errMsg, matched := applyErrorPassthroughRule(
+		c,
+		PlatformOpenAI,
+		resp.StatusCode,
+		body,
+		http.StatusBadGateway,
+		"upstream_error",
+		"Upstream request failed",
+	); matched {
+		c.JSON(status, gin.H{
+			"error": gin.H{
+				"type":    errType,
+				"message": errMsg,
+			},
+		})
+		if upstreamMsg == "" {
+			upstreamMsg = errMsg
+		}
+		if upstreamMsg == "" {
+			return nil, fmt.Errorf("upstream error: %d (passthrough rule matched)", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("upstream error: %d (passthrough rule matched) message=%s", resp.StatusCode, upstreamMsg)
 	}
 
 	// Check custom error codes
@@ -1446,7 +1869,7 @@ func (s *OpenAIGatewayService) handleErrorResponse(ctx context.Context, resp *ht
 		Detail:             upstreamDetail,
 	})
 	if shouldDisable {
-		return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+		return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: body}
 	}
 
 	// Return appropriate error response
@@ -1601,6 +2024,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	}
 
 	needModelReplace := originalModel != mappedModel
+	var storedResponseID string
 
 	for {
 		select {
@@ -1648,6 +2072,12 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 					firstTokenMs = &ms
 				}
 				s.parseSSEUsage(data, usage)
+				if storedResponseID == "" {
+					if responseID := extractResponseIDFromSSEData(data); responseID != "" {
+						storedResponseID = responseID
+						s.RememberResponseAccountID(ctx, responseID, account.ID)
+					}
+				}
 			} else {
 				// Forward non-data lines as-is
 				if _, err := fmt.Fprintf(w, "%s\n", line); err != nil {
@@ -1758,16 +2188,113 @@ func (s *OpenAIGatewayService) parseSSEUsage(data string, usage *OpenAIUsage) {
 	}
 }
 
+func extractResponseIDFromBody(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var resp struct {
+		ID       string `json:"id"`
+		Response struct {
+			ID string `json:"id"`
+		} `json:"response"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return ""
+	}
+	if strings.TrimSpace(resp.Response.ID) != "" {
+		return strings.TrimSpace(resp.Response.ID)
+	}
+	return strings.TrimSpace(resp.ID)
+}
+
+func extractResponseIDFromSSEData(data string) string {
+	if data == "" || data == "[DONE]" {
+		return ""
+	}
+	var event struct {
+		ID       string `json:"id"`
+		Response struct {
+			ID string `json:"id"`
+		} `json:"response"`
+	}
+	if err := json.Unmarshal([]byte(data), &event); err != nil {
+		return ""
+	}
+	if strings.TrimSpace(event.Response.ID) != "" {
+		return strings.TrimSpace(event.Response.ID)
+	}
+	return strings.TrimSpace(event.ID)
+}
+
+func extractResponseIDFromSSEBody(body string) string {
+	if strings.TrimSpace(body) == "" {
+		return ""
+	}
+	scanner := bufio.NewScanner(strings.NewReader(body))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !openaiSSEDataRe.MatchString(line) {
+			continue
+		}
+		data := openaiSSEDataRe.ReplaceAllString(line, "")
+		if id := extractResponseIDFromSSEData(data); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
 func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*OpenAIUsage, error) {
+	if account == nil {
+		if c != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"error": gin.H{
+					"type":    "upstream_error",
+					"message": "Missing upstream account context",
+				},
+			})
+		}
+		return nil, fmt.Errorf("missing upstream account context")
+	}
+
 	body, err := readAllWithLimit(resp.Body, maxUpstreamNonStreamingBodyBytes)
 	if err != nil {
-		return nil, err
+		safeErr := sanitizeUpstreamErrorMessage(err.Error())
+		// Best-effort: record the upstream attempt so ops can see "covered" instability even if
+		// the handler retries via account failover.
+		setOpsUpstreamError(c, resp.StatusCode, safeErr, "")
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: resp.StatusCode,
+			UpstreamRequestID:  resp.Header.Get("x-request-id"),
+			Kind:               "response_read_error",
+			Message:            safeErr,
+		})
+
+		hasProxy := account.ProxyID != nil && account.Proxy != nil && strings.TrimSpace(account.Proxy.URL()) != ""
+		if hasProxy || s.shouldFailoverOnOpenAIRequestError(safeErr) {
+			log.Printf("OpenAI account %d: upstream response read error, triggering failover: %s", account.ID, safeErr)
+			return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
+		}
+
+		// Ensure the client receives an error response (handlers assume Forward writes on non-failover errors).
+		if c != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"error": gin.H{
+					"type":    "upstream_error",
+					"message": "Failed to read upstream response",
+				},
+			})
+		}
+		return nil, fmt.Errorf("read upstream response failed: %w", err)
 	}
 
 	if account.Type == AccountTypeOAuth {
 		bodyLooksLikeSSE := bytes.Contains(body, []byte("data:")) || bytes.Contains(body, []byte("event:"))
 		if isEventStreamResponse(resp.Header) || bodyLooksLikeSSE {
-			return s.handleOAuthSSEToJSON(resp, c, body, originalModel, mappedModel)
+			return s.handleOAuthSSEToJSON(ctx, resp, c, account, body, originalModel, mappedModel)
 		}
 	}
 
@@ -1782,6 +2309,25 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		} `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
+		safeErr := sanitizeUpstreamErrorMessage(err.Error())
+		setOpsUpstreamError(c, resp.StatusCode, safeErr, "")
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: resp.StatusCode,
+			UpstreamRequestID:  resp.Header.Get("x-request-id"),
+			Kind:               "response_parse_error",
+			Message:            safeErr,
+		})
+		if c != nil {
+			c.JSON(http.StatusBadGateway, gin.H{
+				"error": gin.H{
+					"type":    "upstream_error",
+					"message": "Failed to parse upstream response",
+				},
+			})
+		}
 		return nil, fmt.Errorf("parse response: %w", err)
 	}
 
@@ -1789,6 +2335,10 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		InputTokens:          response.Usage.InputTokens,
 		OutputTokens:         response.Usage.OutputTokens,
 		CacheReadInputTokens: response.Usage.InputTokenDetails.CachedTokens,
+	}
+
+	if responseID := extractResponseIDFromBody(body); responseID != "" {
+		s.RememberResponseAccountID(ctx, responseID, account.ID)
 	}
 
 	// Replace model in response if needed
@@ -1815,7 +2365,7 @@ func isEventStreamResponse(header http.Header) bool {
 	return strings.Contains(contentType, "text/event-stream")
 }
 
-func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.Context, body []byte, originalModel, mappedModel string) (*OpenAIUsage, error) {
+func (s *OpenAIGatewayService) handleOAuthSSEToJSON(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, body []byte, originalModel, mappedModel string) (*OpenAIUsage, error) {
 	bodyText := string(body)
 	finalResponse, ok := extractCodexFinalResponse(bodyText)
 
@@ -1836,6 +2386,9 @@ func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.
 			usage.CacheReadInputTokens = response.Usage.InputTokenDetails.CachedTokens
 		}
 		body = finalResponse
+		if responseID := extractResponseIDFromBody(body); responseID != "" {
+			s.RememberResponseAccountID(ctx, responseID, account.ID)
+		}
 		if originalModel != mappedModel {
 			body = s.replaceModelInResponseBody(body, mappedModel, originalModel)
 		}
@@ -1843,6 +2396,9 @@ func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.
 		body = s.correctToolCallsInResponseBody(body)
 	} else {
 		usage = s.parseSSEUsageFromBody(bodyText)
+		if responseID := extractResponseIDFromSSEBody(bodyText); responseID != "" {
+			s.RememberResponseAccountID(ctx, responseID, account.ID)
+		}
 		if originalModel != mappedModel {
 			bodyText = s.replaceModelInSSEBody(bodyText, mappedModel, originalModel)
 		}

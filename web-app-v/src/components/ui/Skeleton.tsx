@@ -14,7 +14,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   style,
   ...props
 }) => {
-  const baseStyles = 'bg-[#2A2A30] animate-pulse';
+  const baseStyles = 'bg-[var(--bg-secondary)] border border-[var(--border-color-subtle)] animate-pulse';
   const shapeStyles = circle ? 'rounded-full' : 'rounded-lg';
 
   const customStyles: React.CSSProperties = {
@@ -53,7 +53,7 @@ export const SkeletonCard: React.FC<{ className?: string }> = ({
   className = '',
 }) => {
   return (
-    <div className={`bg-[#121215] border border-[#2A2A30] rounded-xl p-4 ${className}`}>
+    <div className={`bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl p-4 ${className}`}>
       <div className="flex items-center gap-3 mb-4">
         <Skeleton circle width={40} height={40} />
         <div className="flex-1">

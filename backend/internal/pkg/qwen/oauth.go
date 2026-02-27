@@ -12,7 +12,8 @@ import (
 // OAuth constants (aligned with CLIProxyAPI reference implementation).
 const (
 	OAuthDeviceCodeURL = "https://chat.qwen.ai/api/v1/oauth2/device/code"
-	OAuthTokenURL      = "https://chat.qwen.ai/api/v1/oauth2/token"
+	// #nosec G101 -- OAuth token endpoint URL, not a credential.
+	OAuthTokenURL = "https://chat.qwen.ai/api/v1/oauth2/token"
 
 	OAuthClientID  = "f0304373b74a44d2b584a3fb70ca9e56"
 	OAuthScope     = "openid profile email model.completion"

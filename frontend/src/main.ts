@@ -5,6 +5,23 @@ import router from './router'
 import i18n from './i18n'
 import './style.css'
 
+const preloadReloadKey = 'vite_preload_reload_attempted'
+
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault()
+
+  const lastReload = sessionStorage.getItem(preloadReloadKey)
+  const now = Date.now()
+
+  if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
+    sessionStorage.setItem(preloadReloadKey, now.toString())
+    window.location.reload()
+    return
+  }
+
+  console.error('Preload CSS/asset error persists after reload. Please clear browser cache.')
+})
+
 const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)

@@ -184,6 +184,8 @@ func (s *OpsService) RecordError(ctx context.Context, entry *OpsInsertErrorLogIn
 			out.Platform = strings.TrimSpace(out.Platform)
 			out.UpstreamRequestID = truncateString(strings.TrimSpace(out.UpstreamRequestID), 128)
 			out.Kind = truncateString(strings.TrimSpace(out.Kind), 64)
+			out.FailoverMatchCategory = truncateString(strings.TrimSpace(out.FailoverMatchCategory), 32)
+			out.FailoverMatchKeyword = truncateString(strings.TrimSpace(out.FailoverMatchKeyword), 128)
 
 			if out.AccountID < 0 {
 				out.AccountID = 0

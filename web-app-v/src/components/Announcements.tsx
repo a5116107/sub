@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Megaphone, X, ChevronRight, Bell } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { announcementsApi } from '../api/announcements';
 import type { Announcement } from '../types';
 import { Badge } from './ui';
@@ -9,12 +10,13 @@ interface AnnouncementsProps {
 }
 
 export const Announcements: React.FC<AnnouncementsProps> = ({ onUnreadCountChange }) => {
+  const { t } = useTranslation('common');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<number[]>([]);
 
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = useCallback(async () => {
     try {
       const data = await announcementsApi.getAnnouncements({ unread_only: true });
       // Ensure data is an array
@@ -27,14 +29,14 @@ export const Announcements: React.FC<AnnouncementsProps> = ({ onUnreadCountChang
     } finally {
       setLoading(false);
     }
-  };
+  }, [onUnreadCountChange]);
 
   useEffect(() => {
     fetchAnnouncements();
     // Refresh every 5 minutes
     const interval = setInterval(fetchAnnouncements, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchAnnouncements]);
 
   const handleMarkAsRead = async (id: number) => {
     try {
@@ -72,7 +74,7 @@ export const Announcements: React.FC<AnnouncementsProps> = ({ onUnreadCountChang
             )}
           </div>
           <span className="text-sm text-gray-300">
-            {visibleAnnouncements.length} announcement{visibleAnnouncements.length !== 1 ? 's' : ''}
+            {t('announcements.count', { count: visibleAnnouncements.length })}
           </span>
           <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-red-400 transition-colors" />
         </button>
@@ -87,7 +89,7 @@ export const Announcements: React.FC<AnnouncementsProps> = ({ onUnreadCountChang
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#2A2A30]">
           <div className="flex items-center gap-2">
             <Megaphone className="w-5 h-5 text-red-400" />
-            <span className="font-medium text-white">Announcements</span>
+            <span className="font-medium text-white">{t('announcements.title')}</span>
             <Badge variant="danger" className="text-xs">
               {visibleAnnouncements.length}
             </Badge>
@@ -129,7 +131,7 @@ export const Announcements: React.FC<AnnouncementsProps> = ({ onUnreadCountChang
                 <button
                   onClick={() => handleDismiss(announcement.id)}
                   className="p-1 text-gray-500 hover:text-white transition-colors"
-                  title="Dismiss"
+                  title={t('announcements.dismiss')}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -138,7 +140,7 @@ export const Announcements: React.FC<AnnouncementsProps> = ({ onUnreadCountChang
                 onClick={() => handleMarkAsRead(announcement.id)}
                 className="mt-3 text-xs text-red-400 hover:text-red-300 transition-colors"
               >
-                Mark as read
+                {t('announcements.markAsRead')}
               </button>
             </div>
           ))}
@@ -152,7 +154,7 @@ export const Announcements: React.FC<AnnouncementsProps> = ({ onUnreadCountChang
             }}
             className="text-xs text-gray-500 hover:text-white transition-colors"
           >
-            Mark all as read
+            {t('announcements.markAllRead')}
           </button>
         </div>
       </div>

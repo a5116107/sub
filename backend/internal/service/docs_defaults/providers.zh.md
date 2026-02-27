@@ -166,6 +166,16 @@ Sub2API 的 API Key 绑定了一个“分组”，分组会决定：
 如果你的分组平台是 `openai`，还可以用：
 
 - `POST /v1/responses`（也有别名 `POST /responses`）
+- `POST /v1/responses/compact`（也有别名 `POST /responses/compact`）
+- `POST /v1/responses/input_tokens`（也有别名 `POST /responses/input_tokens`）
+- `GET /v1/responses/{response_id}`（也有别名 `GET /responses/{response_id}`）
+- `DELETE /v1/responses/{response_id}`（也有别名 `DELETE /responses/{response_id}`）
+- `POST /v1/responses/{response_id}/cancel`（也有别名 `POST /responses/{response_id}/cancel`）
+- `GET /v1/responses/{response_id}/input_items`（也有别名 `GET /responses/{response_id}/input_items`）
+- `GET /v1/responses/{response_id}`（也有别名 `GET /responses/{response_id}`）
+- `DELETE /v1/responses/{response_id}`（也有别名 `DELETE /responses/{response_id}`）
+- `POST /v1/responses/{response_id}/cancel`（也有别名 `POST /responses/{response_id}/cancel`）
+- `GET /v1/responses/{response_id}/input_items`（也有别名 `GET /responses/{response_id}/input_items`）
 
 ```bash
 curl -sS -X POST "$BASE_URL/v1/responses" \
@@ -257,4 +267,3 @@ export ANTHROPIC_AUTH_TOKEN="$SUB2API_KEY"
 - `403 Insufficient account balance`：余额不足（或订阅未开通/已过期）
 - `429 Rate Limit / quota limit exceeded`：限流/配额触发
 - `5xx`：上游/网络/账号不可用，可稍后重试或联系管理员
-

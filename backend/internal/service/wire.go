@@ -263,6 +263,7 @@ var ProviderSet = wire.NewSet(
 	NewAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
+	NewErrorPassthroughService,
 	NewOAuthService,
 	NewOpenAIOAuthService,
 	NewQwenOAuthService,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useDocsNavQuery, useDocsPageQuery } from '~/entities/docs'
@@ -12,16 +12,18 @@ const router = useRouter()
 
 // State
 const selectedKey = ref<string>((route.params.key as string) || '')
+const docsLang = computed(() => String(locale.value || 'zh'))
 
 // Queries
-const { data: navItems, isLoading: navLoading } = useDocsNavQuery({
-  lang: locale.value
-})
+const navParams = computed(() => ({ lang: docsLang.value }))
+const { data: navItems, isLoading: navLoading } = useDocsNavQuery(navParams)
 
 const { data: pageData, isLoading: pageLoading, error: pageError } = useDocsPageQuery(
-  selectedKey.value,
-  locale.value
+  selectedKey,
+  docsLang
 )
+
+const pageBody = computed(() => pageData.value?.markdown || '')
 
 // Watch route changes
 watch(
@@ -138,21 +140,10 @@ function formatDate(dateStr: string): string {
             </p>
           </div>
 
-          <!-- Markdown content -->
+          <!-- Docs content (backend baseline: markdown field) -->
           <div
-            class="prose prose-slate dark:prose-invert max-w-none
-              prose-headings:text-[var(--text-primary)]
-              prose-p:text-[var(--text-secondary)]
-              prose-a:text-[var(--color-primary-600)] dark:prose-a:text-[var(--color-primary-400)]
-              prose-strong:text-[var(--text-primary)]
-              prose-code:text-[var(--color-primary-600)] dark:prose-code:text-[var(--color-primary-400)]
-              prose-code:bg-[var(--bg-tertiary)] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded
-              prose-pre:bg-[var(--bg-tertiary)] prose-pre:border prose-pre:border-[var(--border-primary)]
-              prose-blockquote:border-[var(--color-primary-500)]
-              prose-hr:border-[var(--border-primary)]
-              prose-th:text-[var(--text-primary)]
-              prose-td:text-[var(--text-secondary)]"
-            v-html="pageData.content"
+            class="whitespace-pre-wrap break-words text-[var(--text-secondary)] leading-7"
+            v-text="pageBody"
           />
         </Card>
       </main>

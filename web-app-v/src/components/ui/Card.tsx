@@ -17,9 +17,9 @@ export const Card: React.FC<CardProps> = ({
   const baseStyles = 'rounded-xl transition-all duration-200';
 
   const variantStyles = {
-    default: 'bg-[#121215] border border-[#2A2A30]',
+    default: 'bg-[var(--bg-card)] border border-[var(--border-color)] shadow-[var(--shadow-sm)]',
     glass: 'glass-panel',
-    outline: 'bg-transparent border border-[#2A2A30]',
+    outline: 'bg-transparent border border-[var(--border-color)]',
   };
 
   const paddingStyles = {
@@ -30,7 +30,7 @@ export const Card: React.FC<CardProps> = ({
   };
 
   const glowStyles = glow
-    ? 'shadow-[0_0_30px_rgba(0,240,255,0.1)] hover:shadow-[0_0_40px_rgba(0,240,255,0.15)]'
+    ? 'ring-1 ring-[var(--accent-soft)] shadow-[var(--shadow-lg)] hover:shadow-[var(--shadow-xl)]'
     : '';
 
   return (
@@ -64,7 +64,7 @@ export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({
   className = '',
   ...props
 }) => (
-  <h3 className={`text-lg font-semibold text-white ${className}`} {...props}>
+  <h3 className={`text-lg font-semibold text-[var(--text-primary)] ${className}`} {...props}>
     {children}
   </h3>
 );
@@ -74,7 +74,7 @@ export const CardDescription: React.FC<React.HTMLAttributes<HTMLParagraphElement
   className = '',
   ...props
 }) => (
-  <p className={`text-sm text-gray-400 mt-1 ${className}`} {...props}>
+  <p className={`text-sm text-[var(--text-muted)] mt-1 ${className}`} {...props}>
     {children}
   </p>
 );
@@ -94,7 +94,7 @@ export const CardFooter: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
   className = '',
   ...props
 }) => (
-  <div className={`mt-4 pt-4 border-t border-[#2A2A30] ${className}`} {...props}>
+  <div className={`mt-4 pt-4 border-t border-[var(--border-color)] ${className}`} {...props}>
     {children}
   </div>
 );

@@ -9,7 +9,10 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const stickySessionPrefix = "sticky_session:"
+const (
+	stickySessionPrefix  = "sticky_session:"
+	responseIDCachePrefix = "openai_response_id:"
+)
 
 type gatewayCache struct {
 	rdb *redis.Client
@@ -23,6 +26,12 @@ func NewGatewayCache(rdb *redis.Client) service.GatewayCache {
 // 格式: sticky_session:{groupID}:{sessionHash}
 func buildSessionKey(groupID int64, sessionHash string) string {
 	return fmt.Sprintf("%s%d:%s", stickySessionPrefix, groupID, sessionHash)
+}
+
+// buildResponseIDKey constructs response_id mapping key.
+// Format: openai_response_id:{groupID}:{responseID}
+func buildResponseIDKey(groupID int64, responseID string) string {
+	return fmt.Sprintf("%s%d:%s", responseIDCachePrefix, groupID, responseID)
 }
 
 func (c *gatewayCache) GetSessionAccountID(ctx context.Context, groupID int64, sessionHash string) (int64, error) {
@@ -49,5 +58,20 @@ func (c *gatewayCache) RefreshSessionTTL(ctx context.Context, groupID int64, ses
 // or unschedulable), allowing subsequent requests to select a new available account.
 func (c *gatewayCache) DeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string) error {
 	key := buildSessionKey(groupID, sessionHash)
+	return c.rdb.Del(ctx, key).Err()
+}
+
+func (c *gatewayCache) GetResponseAccountID(ctx context.Context, groupID int64, responseID string) (int64, error) {
+	key := buildResponseIDKey(groupID, responseID)
+	return c.rdb.Get(ctx, key).Int64()
+}
+
+func (c *gatewayCache) SetResponseAccountID(ctx context.Context, groupID int64, responseID string, accountID int64, ttl time.Duration) error {
+	key := buildResponseIDKey(groupID, responseID)
+	return c.rdb.Set(ctx, key, accountID, ttl).Err()
+}
+
+func (c *gatewayCache) DeleteResponseAccountID(ctx context.Context, groupID int64, responseID string) error {
+	key := buildResponseIDKey(groupID, responseID)
 	return c.rdb.Del(ctx, key).Err()
 }

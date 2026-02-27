@@ -2,10 +2,11 @@ package geminicli
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/big"
 	"net/http"
 	"strconv"
 	"time"
@@ -65,7 +66,6 @@ func (c *driveClient) GetStorageQuota(ctx context.Context, accessToken, proxyURL
 	// Retry logic with exponential backoff (+ jitter) for rate limits and transient failures
 	var resp *http.Response
 	maxRetries := 3
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("request cancelled: %w", ctx.Err())
@@ -75,8 +75,8 @@ func (c *driveClient) GetStorageQuota(ctx context.Context, accessToken, proxyURL
 		if err != nil {
 			// Network error retry
 			if attempt < maxRetries-1 {
-				backoff := time.Duration(1<<uint(attempt)) * time.Second
-				jitter := time.Duration(rng.Intn(1000)) * time.Millisecond
+				backoff := retryBackoff(attempt)
+				jitter := cryptoJitter(1000)
 				if err := sleepWithContext(backoff + jitter); err != nil {
 					return nil, fmt.Errorf("request cancelled: %w", err)
 				}
@@ -97,8 +97,8 @@ func (c *driveClient) GetStorageQuota(ctx context.Context, accessToken, proxyURL
 			resp.StatusCode == http.StatusServiceUnavailable) && attempt < maxRetries-1 {
 			if err := func() error {
 				defer func() { _ = resp.Body.Close() }()
-				backoff := time.Duration(1<<uint(attempt)) * time.Second
-				jitter := time.Duration(rng.Intn(1000)) * time.Millisecond
+				backoff := retryBackoff(attempt)
+				jitter := cryptoJitter(1000)
 				return sleepWithContext(backoff + jitter)
 			}(); err != nil {
 				return nil, fmt.Errorf("request cancelled: %w", err)
@@ -155,4 +155,26 @@ func (c *driveClient) GetStorageQuota(ctx context.Context, accessToken, proxyURL
 		Limit: limit,
 		Usage: usage,
 	}, nil
+}
+
+func retryBackoff(attempt int) time.Duration {
+	if attempt <= 0 {
+		return time.Second
+	}
+	backoff := time.Second
+	for i := 0; i < attempt; i++ {
+		backoff *= 2
+	}
+	return backoff
+}
+
+func cryptoJitter(maxMillis int64) time.Duration {
+	if maxMillis <= 0 {
+		return 0
+	}
+	n, err := cryptorand.Int(cryptorand.Reader, big.NewInt(maxMillis))
+	if err != nil {
+		return 0
+	}
+	return time.Duration(n.Int64()) * time.Millisecond
 }

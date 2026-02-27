@@ -16,6 +16,7 @@ func (r *opsRepository) ListAlertRules(ctx context.Context) ([]*service.OpsAlert
 		return nil, fmt.Errorf("nil ops repository")
 	}
 
+	// #nosec G202 -- Static SELECT query over fixed columns/tables.
 	q := `
 SELECT
   id,
@@ -337,6 +338,7 @@ func (r *opsRepository) ListAlertEvents(ctx context.Context, filter *service.Ops
 	args = append(args, limit)
 	limitArg := "$" + itoa(len(args))
 
+	// #nosec G202 -- where/limitArg are built from validated filters; values are bound via Query args.
 	q := `
 SELECT
   id,

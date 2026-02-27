@@ -142,6 +142,7 @@ func (r *opsRepository) ListErrorLogs(ctx context.Context, filter *service.OpsEr
 
 	offset := (page - 1) * pageSize
 	argsWithLimit := append(args, pageSize, offset)
+	// #nosec G202 -- where and placeholder indexes are derived from validated filters and bound args.
 	selectSQL := `
 SELECT
   e.id,
@@ -931,21 +932,19 @@ WHERE id = $1`
 }
 
 func buildOpsErrorLogsWhere(filter *service.OpsErrorLogFilter) (string, []any) {
+	if filter == nil {
+		filter = &service.OpsErrorLogFilter{}
+	}
+
 	clauses := make([]string, 0, 12)
 	args := make([]any, 0, 12)
 	clauses = append(clauses, "1=1")
 
-	phaseFilter := ""
-	if filter != nil {
-		phaseFilter = strings.TrimSpace(strings.ToLower(filter.Phase))
-	}
+	phaseFilter := strings.TrimSpace(strings.ToLower(filter.Phase))
 	// ops_error_logs stores client-visible error requests (status>=400),
 	// but we also persist "recovered" upstream errors (status<400) for upstream health visibility.
 	// If Resolved is not specified, do not filter by resolved state (backward-compatible).
-	resolvedFilter := (*bool)(nil)
-	if filter != nil {
-		resolvedFilter = filter.Resolved
-	}
+	resolvedFilter := filter.Resolved
 	// Keep list endpoints scoped to client errors unless explicitly filtering upstream phase.
 	if phaseFilter != "upstream" {
 		clauses = append(clauses, "COALESCE(status_code, 0) >= 400")
@@ -976,15 +975,13 @@ func buildOpsErrorLogsWhere(filter *service.OpsErrorLogFilter) (string, []any) {
 		args = append(args, phase)
 		clauses = append(clauses, "error_phase = $"+itoa(len(args)))
 	}
-	if filter != nil {
-		if owner := strings.TrimSpace(strings.ToLower(filter.Owner)); owner != "" {
-			args = append(args, owner)
-			clauses = append(clauses, "LOWER(COALESCE(error_owner,'')) = $"+itoa(len(args)))
-		}
-		if source := strings.TrimSpace(strings.ToLower(filter.Source)); source != "" {
-			args = append(args, source)
-			clauses = append(clauses, "LOWER(COALESCE(error_source,'')) = $"+itoa(len(args)))
-		}
+	if owner := strings.TrimSpace(strings.ToLower(filter.Owner)); owner != "" {
+		args = append(args, owner)
+		clauses = append(clauses, "LOWER(COALESCE(error_owner,'')) = $"+itoa(len(args)))
+	}
+	if source := strings.TrimSpace(strings.ToLower(filter.Source)); source != "" {
+		args = append(args, source)
+		clauses = append(clauses, "LOWER(COALESCE(error_source,'')) = $"+itoa(len(args)))
 	}
 	if resolvedFilter != nil {
 		args = append(args, *resolvedFilter)
@@ -994,10 +991,7 @@ func buildOpsErrorLogsWhere(filter *service.OpsErrorLogFilter) (string, []any) {
 	// View filter: errors vs excluded vs all.
 	// Excluded = business-limited errors (quota/concurrency/billing).
 	// Upstream 429/529 are included in errors view to match SLA calculation.
-	view := ""
-	if filter != nil {
-		view = strings.ToLower(strings.TrimSpace(filter.View))
-	}
+	view := strings.ToLower(strings.TrimSpace(filter.View))
 	switch view {
 	case "", "errors":
 		clauses = append(clauses, "COALESCE(is_business_limited,false) = false")
@@ -1033,6 +1027,17 @@ func buildOpsErrorLogsWhere(filter *service.OpsErrorLogFilter) (string, []any) {
 		args = append(args, like)
 		n := itoa(len(args))
 		clauses = append(clauses, "(request_id ILIKE $"+n+" OR client_request_id ILIKE $"+n+" OR error_message ILIKE $"+n+")")
+	}
+
+	if category := strings.TrimSpace(strings.ToLower(filter.FailoverCategory)); category != "" {
+		args = append(args, category)
+		n := itoa(len(args))
+		clauses = append(clauses, `EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(e.upstream_errors, '[]'::jsonb)) AS ev WHERE LOWER(COALESCE(ev->>'failover_match_category','')) = $`+n+`)`)
+	}
+	if keyword := strings.TrimSpace(filter.FailoverKeyword); keyword != "" {
+		args = append(args, "%"+keyword+"%")
+		n := itoa(len(args))
+		clauses = append(clauses, `EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(e.upstream_errors, '[]'::jsonb)) AS ev WHERE COALESCE(ev->>'failover_match_keyword','') ILIKE $`+n+`)`)
 	}
 
 	if userQuery := strings.TrimSpace(filter.UserQuery); userQuery != "" {

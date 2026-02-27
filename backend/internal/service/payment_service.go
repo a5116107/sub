@@ -1028,6 +1028,7 @@ func epaySign(params map[string]string, key string) string {
 }
 
 func md5Hex(s string) string {
+	// #nosec G401 -- EPay protocol mandates MD5 signing for callback verification.
 	h := md5.New()
 	_, _ = h.Write([]byte(s))
 	return hex.EncodeToString(h.Sum(nil))

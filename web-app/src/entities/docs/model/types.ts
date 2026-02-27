@@ -10,8 +10,8 @@ export interface DocsPage {
   key: string
   lang: string
   title: string
-  format: 'markdown' | 'html'
-  content: string
+  format: 'markdown' | 'html' | 'text'
+  markdown: string
   updated_at: string
 }
 

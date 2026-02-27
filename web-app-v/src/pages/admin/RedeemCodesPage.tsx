@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Ticket,
   Plus,
@@ -9,6 +10,7 @@ import {
   Copy,
   XCircle,
   BarChart3,
+  Clock,
 } from 'lucide-react';
 import { adminRedeemApi, type RedeemCodeQueryParams, type GenerateRedeemCodesRequest } from '../../api/admin/redeem';
 import { adminGroupsApi } from '../../api/admin/groups';
@@ -24,26 +26,26 @@ import {
   Skeleton,
 } from '../../components/ui';
 
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, t: (key: string) => string) => {
   switch (status.toLowerCase()) {
     case 'available':
-      return <Badge variant="success">Available</Badge>;
+      return <Badge variant="success">{t('redeemCodes.status.available')}</Badge>;
     case 'used':
-      return <Badge variant="info">Used</Badge>;
+      return <Badge variant="info">{t('redeemCodes.status.used')}</Badge>;
     case 'revoked':
     case 'expired':
-      return <Badge variant="danger">Revoked</Badge>;
+      return <Badge variant="danger">{t('redeemCodes.status.revoked')}</Badge>;
     default:
       return <Badge variant="default">{status}</Badge>;
   }
 };
 
-const getTypeBadge = (type: string) => {
+const getTypeBadge = (type: string, t: (key: string) => string) => {
   switch (type.toLowerCase()) {
     case 'balance':
-      return <Badge variant="primary">Balance</Badge>;
+      return <Badge variant="primary">{t('redeemCodes.type.balance')}</Badge>;
     case 'subscription':
-      return <Badge variant="info">Subscription</Badge>;
+      return <Badge variant="info">{t('redeemCodes.type.subscription')}</Badge>;
     default:
       return <Badge variant="default">{type}</Badge>;
   }
@@ -66,6 +68,7 @@ interface RedeemStats {
 }
 
 export const RedeemCodesPage: React.FC = () => {
+  const { t } = useTranslation('admin');
   const [loading, setLoading] = useState(true);
   const [codes, setCodes] = useState<RedeemCode[]>([]);
   const [total, setTotal] = useState(0);
@@ -82,10 +85,14 @@ export const RedeemCodesPage: React.FC = () => {
   const [showRevokeModal, setShowRevokeModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showGeneratedModal, setShowGeneratedModal] = useState(false);
+  const [showExpireModal, setShowExpireModal] = useState(false);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [stats, setStats] = useState<RedeemStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [batchDeleteLoading, setBatchDeleteLoading] = useState(false);
 
   // Form state for generate
   const [generateForm, setGenerateForm] = useState<GenerateRedeemCodesRequest>({
@@ -217,6 +224,40 @@ export const RedeemCodesPage: React.FC = () => {
     }
   };
 
+  const handleExpireCode = async () => {
+    if (!selectedCode) return;
+    setActionLoading(true);
+    try {
+      await adminRedeemApi.expireCode(selectedCode.id);
+      setShowExpireModal(false);
+      setSelectedCode(null);
+      fetchCodes();
+    } catch (error) {
+      console.error('Failed to expire code:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setBatchDeleteLoading(true);
+    try {
+      await adminRedeemApi.batchDelete(selectedIds);
+      setSelectedIds([]);
+      setShowBatchDeleteModal(false);
+      fetchCodes();
+    } catch (error) {
+      console.error('Failed to batch delete codes:', error);
+    } finally {
+      setBatchDeleteLoading(false);
+    }
+  };
+
+  const toggleSelectCode = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
@@ -239,15 +280,27 @@ export const RedeemCodesPage: React.FC = () => {
 
   const columns = [
     {
+      key: 'select',
+      title: '',
+      render: (code: RedeemCode) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.includes(code.id)}
+          onChange={() => toggleSelectCode(code.id)}
+          className="rounded border-[#2A2A30] bg-[#0A0A0C] text-cyan-500 focus:ring-cyan-500"
+        />
+      ),
+    },
+    {
       key: 'id',
-      title: 'ID',
+      title: t('redeemCodes.col.id'),
       render: (code: RedeemCode) => (
         <span className="text-sm text-gray-400">#{code.id}</span>
       ),
     },
     {
       key: 'code',
-      title: 'Code',
+      title: t('redeemCodes.col.code'),
       render: (code: RedeemCode) => (
         <div className="flex items-center gap-2">
           <code className="text-sm font-mono text-cyan-400 bg-[#0A0A0C] px-2 py-1 rounded">
@@ -256,7 +309,7 @@ export const RedeemCodesPage: React.FC = () => {
           <button
             onClick={() => copyToClipboard(code.code)}
             className="p-1 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="Copy code"
+            title={t('common:btn.copy')}
           >
             <Copy className="w-3 h-3" />
           </button>
@@ -265,12 +318,12 @@ export const RedeemCodesPage: React.FC = () => {
     },
     {
       key: 'type',
-      title: 'Type',
-      render: (code: RedeemCode) => getTypeBadge(code.type),
+      title: t('redeemCodes.col.type'),
+      render: (code: RedeemCode) => getTypeBadge(code.type, t),
     },
     {
       key: 'value',
-      title: 'Value',
+      title: t('redeemCodes.col.value'),
       render: (code: RedeemCode) => (
         <span className="text-sm text-white">
           {code.type === 'balance' ? `$${code.value.toFixed(2)}` : `${code.validity_days} days`}
@@ -279,12 +332,12 @@ export const RedeemCodesPage: React.FC = () => {
     },
     {
       key: 'status',
-      title: 'Status',
-      render: (code: RedeemCode) => getStatusBadge(code.status),
+      title: t('redeemCodes.col.status'),
+      render: (code: RedeemCode) => getStatusBadge(code.status, t),
     },
     {
       key: 'used',
-      title: 'Used By',
+      title: t('redeemCodes.col.usedBy'),
       render: (code: RedeemCode) => (
         <div className="text-sm">
           {code.used_by ? (
@@ -302,16 +355,28 @@ export const RedeemCodesPage: React.FC = () => {
     },
     {
       key: 'created',
-      title: 'Created',
+      title: t('redeemCodes.col.created'),
       render: (code: RedeemCode) => (
         <span className="text-sm text-gray-400">{formatDate(code.created_at)}</span>
       ),
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('redeemCodes.col.actions'),
       render: (code: RedeemCode) => (
         <div className="flex items-center gap-2">
+          {code.status === 'available' && (
+            <button
+              onClick={() => {
+                setSelectedCode(code);
+                setShowExpireModal(true);
+              }}
+              className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-orange-400 transition-colors"
+              title={t('redeemCodes.expireTitle')}
+            >
+              <Clock className="w-4 h-4" />
+            </button>
+          )}
           {code.status === 'available' && (
             <button
               onClick={() => {
@@ -319,7 +384,7 @@ export const RedeemCodesPage: React.FC = () => {
                 setShowRevokeModal(true);
               }}
               className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-amber-400 transition-colors"
-              title="Revoke Code"
+              title={t('redeemCodes.revokeTitle')}
             >
               <XCircle className="w-4 h-4" />
             </button>
@@ -330,7 +395,7 @@ export const RedeemCodesPage: React.FC = () => {
               setShowDeleteModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-red-400 transition-colors"
-            title="Delete Code"
+            title={t('redeemCodes.deleteTitle')}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -344,21 +409,27 @@ export const RedeemCodesPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Redeem Codes</h1>
-          <p className="text-gray-400">Generate and manage redeem codes</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('redeemCodes.title')}</h1>
+          <p className="text-gray-400">{t('redeemCodes.subtitle')}</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          {selectedIds.length > 0 && (
+            <Button variant="danger" onClick={() => setShowBatchDeleteModal(true)}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              {t('redeemCodes.deleteSelected', { count: selectedIds.length })}
+            </Button>
+          )}
           <Button variant="secondary" onClick={handleViewStats}>
             <BarChart3 className="w-4 h-4 mr-2" />
-            Stats
+            {t('redeemCodes.stats')}
           </Button>
           <Button variant="secondary" onClick={handleExportCodes}>
             <Download className="w-4 h-4 mr-2" />
-            Export
+            {t('redeemCodes.export')}
           </Button>
           <Button onClick={() => setShowGenerateModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Generate Codes
+            {t('redeemCodes.generate')}
           </Button>
         </div>
       </div>
@@ -375,9 +446,9 @@ export const RedeemCodesPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Types</option>
-              <option value="balance">Balance</option>
-              <option value="subscription">Subscription</option>
+              <option value="">{t('redeemCodes.filter.allTypes')}</option>
+              <option value="balance">{t('redeemCodes.filter.balance')}</option>
+              <option value="subscription">{t('redeemCodes.filter.subscription')}</option>
             </select>
             <select
               value={statusFilter}
@@ -387,14 +458,14 @@ export const RedeemCodesPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Status</option>
-              <option value="available">Available</option>
-              <option value="used">Used</option>
-              <option value="revoked">Revoked</option>
+              <option value="">{t('redeemCodes.filter.allStatus')}</option>
+              <option value="available">{t('redeemCodes.filter.available')}</option>
+              <option value="used">{t('redeemCodes.filter.used')}</option>
+              <option value="revoked">{t('redeemCodes.filter.revoked')}</option>
             </select>
             <div className="flex items-center gap-2 text-sm text-gray-400 ml-auto">
               <Ticket className="w-4 h-4" />
-              <span>{total} total codes</span>
+              <span>{t('redeemCodes.total', { count: total })}</span>
             </div>
           </div>
         </CardContent>
@@ -407,15 +478,14 @@ export const RedeemCodesPage: React.FC = () => {
             columns={columns}
             data={codes}
             loading={loading}
-            emptyText="No redeem codes found"
+            emptyText={t('redeemCodes.empty')}
           />
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#2A2A30]">
               <p className="text-sm text-gray-400">
-                Showing {(page - 1) * pageSize + 1} to{' '}
-                {Math.min(page * pageSize, total)} of {total} codes
+                {t('common:table.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total), total })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -427,7 +497,7 @@ export const RedeemCodesPage: React.FC = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm text-gray-400">
-                  Page {page} of {totalPages}
+                  {t('common:table.page', { current: page, total: totalPages })}
                 </span>
                 <Button
                   variant="secondary"
@@ -450,23 +520,23 @@ export const RedeemCodesPage: React.FC = () => {
           setShowGenerateModal(false);
           resetGenerateForm();
         }}
-        title="Generate Redeem Codes"
+        title={t('redeemCodes.generateTitle')}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Type *</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('redeemCodes.form.type')} *</label>
             <select
               value={generateForm.type}
               onChange={(e) => setGenerateForm({ ...generateForm, type: e.target.value })}
               className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="balance">Balance</option>
-              <option value="subscription">Subscription</option>
+              <option value="balance">{t('redeemCodes.filter.balance')}</option>
+              <option value="subscription">{t('redeemCodes.filter.subscription')}</option>
             </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Count *</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('redeemCodes.form.count')} *</label>
               <Input
                 type="number"
                 min="1"
@@ -478,7 +548,7 @@ export const RedeemCodesPage: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">
-                {generateForm.type === 'balance' ? 'Value (USD) *' : 'Validity Days *'}
+                {generateForm.type === 'balance' ? t('redeemCodes.form.valueUsd') + ' *' : t('redeemCodes.form.validityDays') + ' *'}
               </label>
               <Input
                 type="number"
@@ -498,13 +568,13 @@ export const RedeemCodesPage: React.FC = () => {
           </div>
           {generateForm.type === 'subscription' && (
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Group *</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('redeemCodes.form.group')} *</label>
               <select
                 value={generateForm.group_id || ''}
                 onChange={(e) => setGenerateForm({ ...generateForm, group_id: e.target.value ? parseInt(e.target.value) : undefined })}
                 className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
               >
-                <option value="">Select a group</option>
+                <option value="">{t('redeemCodes.form.selectGroup')}</option>
                 {groups.map((group) => (
                   <option key={group.id} value={group.id}>
                     {group.name} ({group.platform})
@@ -521,7 +591,7 @@ export const RedeemCodesPage: React.FC = () => {
                 resetGenerateForm();
               }}
             >
-              Cancel
+              {t('common:btn.cancel')}
             </Button>
             <Button
               onClick={handleGenerateCodes}
@@ -532,7 +602,7 @@ export const RedeemCodesPage: React.FC = () => {
                 (generateForm.type === 'subscription' && (!generateForm.group_id || !generateForm.validity_days))
               }
             >
-              Generate {generateForm.count} Codes
+              {t('redeemCodes.generateCount', { count: generateForm.count })}
             </Button>
           </div>
         </div>
@@ -545,16 +615,16 @@ export const RedeemCodesPage: React.FC = () => {
           setShowGeneratedModal(false);
           setGeneratedCodes([]);
         }}
-        title="Generated Codes"
+        title={t('redeemCodes.generatedTitle')}
       >
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-400">
-              {generatedCodes.length} codes generated successfully
+              {t('redeemCodes.generatedSuccess', { count: generatedCodes.length })}
             </p>
             <Button variant="secondary" size="sm" onClick={copyAllCodes}>
               <Copy className="w-4 h-4 mr-2" />
-              Copy All
+              {t('redeemCodes.copyAll')}
             </Button>
           </div>
           <div className="max-h-64 overflow-y-auto bg-[#0A0A0C] rounded-lg p-4">
@@ -579,7 +649,7 @@ export const RedeemCodesPage: React.FC = () => {
                 setGeneratedCodes([]);
               }}
             >
-              Done
+              {t('common:btn.done')}
             </Button>
           </div>
         </div>
@@ -592,19 +662,15 @@ export const RedeemCodesPage: React.FC = () => {
           setShowRevokeModal(false);
           setSelectedCode(null);
         }}
-        title="Revoke Code"
+        title={t('redeemCodes.revokeTitle')}
       >
         {selectedCode && (
           <div className="space-y-4">
             <p className="text-gray-400">
-              Are you sure you want to revoke code{' '}
-              <code className="text-cyan-400 bg-[#0A0A0C] px-2 py-1 rounded">
-                {selectedCode.code}
-              </code>
-              ?
+              {t('redeemCodes.revokeConfirm', { code: selectedCode.code })}
             </p>
             <p className="text-sm text-amber-400">
-              This code will no longer be usable.
+              {t('redeemCodes.revokeWarning')}
             </p>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -614,14 +680,14 @@ export const RedeemCodesPage: React.FC = () => {
                   setSelectedCode(null);
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 variant="danger"
                 onClick={handleRevokeCode}
                 isLoading={actionLoading}
               >
-                Revoke Code
+                {t('redeemCodes.revokeCode')}
               </Button>
             </div>
           </div>
@@ -635,19 +701,15 @@ export const RedeemCodesPage: React.FC = () => {
           setShowDeleteModal(false);
           setSelectedCode(null);
         }}
-        title="Delete Code"
+        title={t('redeemCodes.deleteTitle')}
       >
         {selectedCode && (
           <div className="space-y-4">
             <p className="text-gray-400">
-              Are you sure you want to delete code{' '}
-              <code className="text-cyan-400 bg-[#0A0A0C] px-2 py-1 rounded">
-                {selectedCode.code}
-              </code>
-              ?
+              {t('redeemCodes.deleteConfirm', { code: selectedCode.code })}
             </p>
             <p className="text-sm text-red-400">
-              This action cannot be undone.
+              {t('redeemCodes.deleteWarning')}
             </p>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -657,14 +719,14 @@ export const RedeemCodesPage: React.FC = () => {
                   setSelectedCode(null);
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 variant="danger"
                 onClick={handleDeleteCode}
                 isLoading={actionLoading}
               >
-                Delete Code
+                {t('redeemCodes.deleteCode')}
               </Button>
             </div>
           </div>
@@ -678,7 +740,7 @@ export const RedeemCodesPage: React.FC = () => {
           setShowStatsModal(false);
           setStats(null);
         }}
-        title="Redeem Code Statistics"
+        title={t('redeemCodes.statsTitle')}
       >
         {statsLoading ? (
           <div className="space-y-4">
@@ -689,23 +751,23 @@ export const RedeemCodesPage: React.FC = () => {
         ) : stats ? (
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Codes</p>
+              <p className="text-xs text-gray-500 mb-1">{t('redeemCodes.stat.total')}</p>
               <p className="text-xl font-bold text-white">{stats.total_codes}</p>
             </div>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Available</p>
+              <p className="text-xs text-gray-500 mb-1">{t('redeemCodes.stat.available')}</p>
               <p className="text-xl font-bold text-emerald-400">{stats.available_codes}</p>
             </div>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Used</p>
+              <p className="text-xs text-gray-500 mb-1">{t('redeemCodes.stat.used')}</p>
               <p className="text-xl font-bold text-cyan-400">{stats.used_codes}</p>
             </div>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Revoked</p>
+              <p className="text-xs text-gray-500 mb-1">{t('redeemCodes.stat.revoked')}</p>
               <p className="text-xl font-bold text-red-400">{stats.revoked_codes}</p>
             </div>
             <div className="col-span-2 p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Value Redeemed</p>
+              <p className="text-xs text-gray-500 mb-1">{t('redeemCodes.stat.totalValue')}</p>
               <p className="text-xl font-bold text-cyan-400">
                 ${stats.total_value_redeemed?.toFixed(2) || '0.00'}
               </p>
@@ -714,6 +776,69 @@ export const RedeemCodesPage: React.FC = () => {
         ) : (
           <p className="text-gray-400">Failed to load stats</p>
         )}
+      </Modal>
+
+      {/* Expire Modal */}
+      <Modal
+        isOpen={showExpireModal}
+        onClose={() => {
+          setShowExpireModal(false);
+          setSelectedCode(null);
+        }}
+        title={t('redeemCodes.expireTitle')}
+      >
+        {selectedCode && (
+          <div className="space-y-4">
+            <p className="text-gray-400">
+              {t('redeemCodes.expireConfirm', { code: selectedCode.code })}
+            </p>
+            <p className="text-sm text-amber-400">
+              {t('redeemCodes.expireWarning')}
+            </p>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowExpireModal(false);
+                  setSelectedCode(null);
+                }}
+              >
+                {t('common:btn.cancel')}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleExpireCode}
+                isLoading={actionLoading}
+              >
+                {t('redeemCodes.expireCode')}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Batch Delete Modal */}
+      <Modal
+        isOpen={showBatchDeleteModal}
+        onClose={() => setShowBatchDeleteModal(false)}
+        title={t('redeemCodes.batchDeleteTitle')}
+      >
+        <div className="space-y-4">
+          <p className="text-gray-400">
+            {t('redeemCodes.batchDeleteConfirm', { count: selectedIds.length })}
+          </p>
+          <p className="text-sm text-red-400">
+            {t('redeemCodes.deleteWarning')}
+          </p>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="secondary" onClick={() => setShowBatchDeleteModal(false)}>
+              {t('common:btn.cancel')}
+            </Button>
+            <Button variant="danger" onClick={handleBatchDelete} isLoading={batchDeleteLoading}>
+              {t('redeemCodes.deleteSelected', { count: selectedIds.length })}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

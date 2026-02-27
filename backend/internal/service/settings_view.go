@@ -61,7 +61,11 @@ type SystemSettings struct {
 	IdentityPatchPrompt string `json:"identity_patch_prompt"`
 
 	// Gateway runtime toggles
-	GatewayFixOrphanedToolResults bool
+	GatewayFixOrphanedToolResults       bool
+	GatewayFailoverSensitive400Keywords []string
+	GatewayFailoverTemporary400Keywords []string
+	GatewayFailoverRequestErrorKeywords []string
+	GatewayCodexModelAliases            map[string]string
 
 	// Ops monitoring (vNext)
 	OpsMonitoringEnabled         bool

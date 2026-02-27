@@ -466,6 +466,9 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			if upstreamErrorMessage != nil && strings.TrimSpace(*upstreamErrorMessage) != "" {
 				recoveredMsg += ": " + strings.TrimSpace(*upstreamErrorMessage)
 			}
+			if tag := formatFailover400MatchTagFromUpstreamEvents(events); tag != "" {
+				recoveredMsg += tag
+			}
 			recoveredMsg = truncateString(recoveredMsg, 2048)
 
 			entry := &service.OpsInsertErrorLogInput{
@@ -536,6 +539,13 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 			}
 			// Store request headers/body only when an upstream error occurred to keep overhead minimal.
 			entry.RequestHeadersJSON = extractOpsRetryRequestHeaders(c)
+
+			// Skip logging if a passthrough rule with skip_monitoring=true matched.
+			if v, ok := c.Get(service.OpsSkipPassthroughKey); ok {
+				if skip, _ := v.(bool); skip {
+					return
+				}
+			}
 
 			enqueueOpsErrorLog(ops, entry, requestBody)
 			return
@@ -702,6 +712,10 @@ func OpsErrorLoggerMiddleware(ops *service.OpsService) gin.HandlerFunc {
 		// Persist only a minimal, whitelisted set of request headers to improve retry fidelity.
 		// Do NOT store Authorization/Cookie/etc.
 		entry.RequestHeadersJSON = extractOpsRetryRequestHeaders(c)
+
+		if tag := formatFailover400MatchTagFromUpstreamEvents(entry.UpstreamErrors); tag != "" && !strings.Contains(entry.ErrorMessage, "failover_400_match") {
+			entry.ErrorMessage = truncateString(entry.ErrorMessage+tag, 2048)
+		}
 
 		enqueueOpsErrorLog(ops, entry, requestBody)
 	}
@@ -969,6 +983,33 @@ func truncateString(s string, max int) string {
 		cut = cut[:len(cut)-1]
 	}
 	return cut
+}
+
+func formatFailover400MatchTagFromUpstreamEvents(events []*service.OpsUpstreamErrorEvent) string {
+	category, keyword, ok := findFailover400MatchFromUpstreamEvents(events)
+	if !ok {
+		return ""
+	}
+	return " (failover_400_match category=" + category + " keyword=" + strconv.Quote(keyword) + ")"
+}
+
+func findFailover400MatchFromUpstreamEvents(events []*service.OpsUpstreamErrorEvent) (string, string, bool) {
+	for i := len(events) - 1; i >= 0; i-- {
+		ev := events[i]
+		if ev == nil {
+			continue
+		}
+		category := strings.TrimSpace(ev.FailoverMatchCategory)
+		keyword := strings.TrimSpace(ev.FailoverMatchKeyword)
+		if category == "" && keyword == "" {
+			continue
+		}
+		if category == "" {
+			category = "unknown"
+		}
+		return category, keyword, true
+	}
+	return "", "", false
 }
 
 func strconvItoa(v int) string {

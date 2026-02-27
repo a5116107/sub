@@ -1,1 +1,0 @@
-function t(r,n=2){return r.toFixed(n)}function i(r){return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:4}).format(r)}function e(r){return r.length<=8?r:r.slice(0,4)+"..."+r.slice(-4)}export{t as a,i as f,e as m};

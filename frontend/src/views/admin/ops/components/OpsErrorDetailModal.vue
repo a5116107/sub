@@ -86,6 +86,92 @@
         <pre class="mt-4 max-h-[520px] overflow-auto rounded-xl border border-gray-200 bg-white p-4 text-xs text-gray-800 dark:border-dark-700 dark:bg-dark-800 dark:text-gray-100"><code>{{ prettyJSON(primaryResponseBody || '') }}</code></pre>
       </div>
 
+      <!-- Upstream attempts (from gateway, per request) -->
+      <div v-if="upstreamAttempts.length" class="rounded-xl bg-gray-50 p-6 dark:bg-dark-900">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="text-sm font-black uppercase tracking-wider text-gray-900 dark:text-white">
+            {{ t('admin.ops.errorDetail.upstreamAttempts') }}
+          </h3>
+        </div>
+
+        <div class="mt-4 space-y-3">
+          <div
+            v-for="(ev, idx) in upstreamAttempts"
+            :key="upstreamAttemptKey(ev, idx)"
+            class="rounded-xl border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="text-xs font-black text-gray-900 dark:text-white">
+                #{{ idx + 1 }}
+                <span
+                  v-if="ev.kind"
+                  class="ml-2 rounded-md bg-gray-100 px-2 py-0.5 font-mono text-[10px] font-bold text-gray-700 dark:bg-dark-700 dark:text-gray-200"
+                >
+                  {{ ev.kind }}
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="font-mono text-xs text-gray-500 dark:text-gray-400">
+                  {{ ev.upstream_status_code ?? '—' }}
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] font-bold text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-60 dark:text-primary-200 dark:hover:bg-dark-700"
+                  :disabled="!getUpstreamAttemptResponsePreview(ev)"
+                  :title="getUpstreamAttemptResponsePreview(ev) ? '' : t('common.noData')"
+                  @click="toggleUpstreamAttemptDetail(idx)"
+                >
+                  <Icon
+                    :name="expandedUpstreamAttemptIndexes.has(idx) ? 'chevronDown' : 'chevronRight'"
+                    size="xs"
+                    :stroke-width="2"
+                  />
+                  <span>
+                    {{
+                      expandedUpstreamAttemptIndexes.has(idx)
+                        ? t('admin.ops.errorDetail.responsePreview.collapse')
+                        : t('admin.ops.errorDetail.responsePreview.expand')
+                    }}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-3 grid grid-cols-1 gap-2 text-xs text-gray-600 dark:text-gray-300 sm:grid-cols-2">
+              <div>
+                <span class="text-gray-400">{{ t('admin.ops.errorDetail.upstreamEvent.account') }}:</span>
+                <span class="ml-1 font-mono">
+                  {{ ev.account_name || (ev.account_id != null ? String(ev.account_id) : '—') }}
+                </span>
+              </div>
+              <div>
+                <span class="text-gray-400">{{ t('admin.ops.errorDetail.upstreamEvent.requestId') }}:</span>
+                <span class="ml-1 font-mono">{{ ev.upstream_request_id || '—' }}</span>
+              </div>
+              <div v-if="ev.at_unix_ms" class="sm:col-span-2">
+                <span class="text-gray-400">{{ t('admin.ops.errorDetail.time') }}:</span>
+                <span class="ml-1 font-mono">{{ formatUnixMs(ev.at_unix_ms) }}</span>
+              </div>
+              <div v-if="ev.failover_match_category || ev.failover_match_keyword" class="sm:col-span-2">
+                <span class="text-gray-400">{{ t('admin.ops.errorDetail.upstreamEvent.failoverMatch') }}:</span>
+                <span class="ml-1 font-mono">
+                  {{ ev.failover_match_category || '—' }} / {{ ev.failover_match_keyword || '—' }}
+                </span>
+              </div>
+            </div>
+
+            <div v-if="ev.message" class="mt-3 break-words text-sm font-medium text-gray-900 dark:text-white">
+              {{ ev.message }}
+            </div>
+
+            <pre
+              v-if="expandedUpstreamAttemptIndexes.has(idx)"
+              class="mt-3 max-h-[240px] overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-800 dark:border-dark-700 dark:bg-dark-900 dark:text-gray-100"
+            ><code>{{ prettyJSON(getUpstreamAttemptResponsePreview(ev)) }}</code></pre>
+          </div>
+        </div>
+      </div>
+
       <!-- Upstream errors list (only for request errors) -->
       <div v-if="showUpstreamList" class="rounded-xl bg-gray-50 p-6 dark:bg-dark-900">
         <div class="flex flex-wrap items-center justify-between gap-2">
@@ -165,7 +251,7 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
-import { opsAPI, type OpsErrorDetail } from '@/api/admin/ops'
+import { opsAPI, type OpsErrorDetail, type OpsUpstreamErrorEvent } from '@/api/admin/ops'
 import { formatDateTime } from '@/utils/format'
 
 interface Props {
@@ -199,8 +285,60 @@ const primaryResponseBody = computed(() => {
   return detail.value.error_body || ''
 })
 
+const upstreamAttempts = computed<OpsUpstreamErrorEvent[]>(() => {
+  const raw = String(detail.value?.upstream_errors || '').trim()
+  if (!raw) return []
 
+  const parseList = (value: any): OpsUpstreamErrorEvent[] => {
+    if (!Array.isArray(value)) return []
+    return value.filter((item) => item && typeof item === 'object') as OpsUpstreamErrorEvent[]
+  }
 
+  try {
+    const parsed = JSON.parse(raw)
+    const list = parseList(parsed)
+    if (list.length) return list
+    if (typeof parsed === 'string') {
+      return parseList(JSON.parse(parsed))
+    }
+  } catch {
+    return []
+  }
+
+  return []
+})
+
+const expandedUpstreamAttemptIndexes = ref(new Set<number>())
+
+function toggleUpstreamAttemptDetail(index: number) {
+  const next = new Set(expandedUpstreamAttemptIndexes.value)
+  if (next.has(index)) next.delete(index)
+  else next.add(index)
+  expandedUpstreamAttemptIndexes.value = next
+}
+
+function upstreamAttemptKey(ev: OpsUpstreamErrorEvent, index: number): string {
+  const parts = [
+    String(ev.at_unix_ms ?? ''),
+    String(ev.kind ?? ''),
+    String(ev.upstream_request_id ?? ''),
+    String(index)
+  ].filter((x) => x !== '')
+  return parts.join(':') || String(index)
+}
+
+function getUpstreamAttemptResponsePreview(ev: OpsUpstreamErrorEvent): string {
+  return String(ev.detail || ev.upstream_response_body || '').trim()
+}
+
+function formatUnixMs(ms?: number): string {
+  if (!ms) return '—'
+  try {
+    return formatDateTime(new Date(ms).toISOString())
+  } catch {
+    return String(ms)
+  }
+}
 
 const title = computed(() => {
   if (!props.errorId) return t('admin.ops.errorDetail.title')

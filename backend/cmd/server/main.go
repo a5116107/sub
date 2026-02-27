@@ -104,6 +104,9 @@ func main() {
 
 func runSetupServer() {
 	r := gin.New()
+	if err := r.SetTrustedProxies(nil); err != nil {
+		log.Printf("Warning: failed to disable trusted proxies for setup server: %v", err)
+	}
 	r.Use(middleware.Recovery())
 	r.Use(middleware.CORS(config.CORSConfig{}))
 	r.Use(middleware.SecurityHeaders(config.CSPConfig{Enabled: true, Policy: config.DefaultCSPPolicy}))

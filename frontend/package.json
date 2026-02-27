@@ -29,8 +29,7 @@
     "vue": "^3.4.0",
     "vue-chartjs": "^5.3.0",
     "vue-i18n": "^9.14.5",
-    "vue-router": "^4.2.5",
-    "xlsx": "^0.18.5"
+    "vue-router": "^4.2.5"
   },
   "devDependencies": {
     "@types/dompurify": "^3.0.5",
@@ -54,5 +53,12 @@
     "vite-plugin-checker": "^0.9.1",
     "vitest": "^2.1.9",
     "vue-tsc": "^2.2.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "lodash": "4.17.23",
+      "lodash-es": "4.17.23",
+      "esbuild": "0.25.12"
+    }
   }
 }

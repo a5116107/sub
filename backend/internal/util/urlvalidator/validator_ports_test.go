@@ -52,4 +52,3 @@ func TestValidateHTTPSURL_RequireNoPath(t *testing.T) {
 		t.Fatalf("expected trailing slash trimmed, got %q", normalized)
 	}
 }
-

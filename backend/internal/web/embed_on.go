@@ -92,7 +92,8 @@ func (s *FrontendServer) Middleware() gin.HandlerFunc {
 			strings.HasPrefix(path, "/antigravity/") ||
 			strings.HasPrefix(path, "/setup/") ||
 			path == "/health" ||
-			path == "/responses" {
+			path == "/responses" ||
+			strings.HasPrefix(path, "/responses/") {
 			c.Next()
 			return
 		}
@@ -102,16 +103,33 @@ func (s *FrontendServer) Middleware() gin.HandlerFunc {
 			cleanPath = "index.html"
 		}
 
-		// For index.html or SPA routes, serve with injected settings
-		if cleanPath == "index.html" || !s.fileExists(cleanPath) {
+		if cleanPath == "index.html" {
 			s.serveIndexHTML(c)
 			return
 		}
 
-		// Serve static files normally
-		s.fileServer.ServeHTTP(c.Writer, c.Request)
-		c.Abort()
+		if s.fileExists(cleanPath) {
+			// Serve static files normally
+			s.fileServer.ServeHTTP(c.Writer, c.Request)
+			c.Abort()
+			return
+		}
+
+		// Missing hashed assets should return 404 instead of index fallback.
+		// Otherwise stale client bundles may trigger CSS preload failures.
+		if isViteAssetPath(cleanPath) {
+			c.Status(http.StatusNotFound)
+			c.Abort()
+			return
+		}
+
+		// SPA route fallback
+		s.serveIndexHTML(c)
 	}
+}
+
+func isViteAssetPath(cleanPath string) bool {
+	return strings.HasPrefix(cleanPath, "assets/")
 }
 
 func (s *FrontendServer) fileExists(path string) bool {
@@ -215,7 +233,8 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 			strings.HasPrefix(path, "/antigravity/") ||
 			strings.HasPrefix(path, "/setup/") ||
 			path == "/health" ||
-			path == "/responses" {
+			path == "/responses" ||
+			strings.HasPrefix(path, "/responses/") {
 			c.Next()
 			return
 		}
@@ -225,9 +244,20 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 			cleanPath = "index.html"
 		}
 
+		if cleanPath == "index.html" {
+			serveIndexHTML(c, distFS)
+			return
+		}
+
 		if file, err := distFS.Open(cleanPath); err == nil {
 			_ = file.Close()
 			fileServer.ServeHTTP(c.Writer, c.Request)
+			c.Abort()
+			return
+		}
+
+		if isViteAssetPath(cleanPath) {
+			c.Status(http.StatusNotFound)
 			c.Abort()
 			return
 		}
@@ -317,14 +347,24 @@ func (s *FrontendServer) V2Middleware() gin.HandlerFunc {
 			cleanPath = strings.TrimPrefix(cleanPath, "/")
 		}
 
-		// For index.html or SPA routes, serve with injected settings
-		if cleanPath == "index.html" || !s.fileExists(cleanPath) {
+		if cleanPath == "index.html" {
 			s.serveIndexHTML(c)
 			return
 		}
 
-		// Serve static files normally
-		s.fileServer.ServeHTTP(c.Writer, c.Request)
-		c.Abort()
+		if s.fileExists(cleanPath) {
+			// Serve static files normally
+			s.fileServer.ServeHTTP(c.Writer, c.Request)
+			c.Abort()
+			return
+		}
+
+		if isViteAssetPath(cleanPath) {
+			c.Status(http.StatusNotFound)
+			c.Abort()
+			return
+		}
+
+		s.serveIndexHTML(c)
 	}
 }

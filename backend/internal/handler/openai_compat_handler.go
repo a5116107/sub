@@ -48,6 +48,9 @@ func (h *OpenAIGatewayHandler) handleOpenAICompatEndpoint(c *gin.Context, kind o
 		return
 	}
 
+	// Bind for service-layer passthrough rule matching.
+	service.BindErrorPassthroughService(c, h.errorPassthroughService)
+
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
@@ -158,7 +161,7 @@ func (h *OpenAIGatewayHandler) handleOpenAICompatEndpoint(c *gin.Context, kind o
 				transformer:    openai.NewResponseStreamCompatTransformer(mode),
 			}
 
-			result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, service.PlatformOpenAI, payloadrules.ProtocolOpenAIResponses, reqModel, reqStream, responsesReq, responsesBody, func(ctx context.Context, c *gin.Context, account *service.Account, _ string, _ bool, body []byte) (*service.OpenAIForwardResult, error) {
+			result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, true, service.PlatformOpenAI, payloadrules.ProtocolOpenAIResponses, reqModel, reqStream, responsesReq, responsesBody, func(ctx context.Context, c *gin.Context, account *service.Account, _ string, _ bool, body []byte) (*service.OpenAIForwardResult, error) {
 				return h.gatewayService.Forward(ctx, c, account, body)
 			})
 			if result == nil || account == nil {
@@ -172,7 +175,7 @@ func (h *OpenAIGatewayHandler) handleOpenAICompatEndpoint(c *gin.Context, kind o
 		capture := &openAICompatCaptureWriter{ResponseWriter: origWriter}
 		c.Writer = capture
 
-		result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, service.PlatformOpenAI, payloadrules.ProtocolOpenAIResponses, reqModel, reqStream, responsesReq, responsesBody, func(ctx context.Context, c *gin.Context, account *service.Account, _ string, _ bool, body []byte) (*service.OpenAIForwardResult, error) {
+		result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, true, service.PlatformOpenAI, payloadrules.ProtocolOpenAIResponses, reqModel, reqStream, responsesReq, responsesBody, func(ctx context.Context, c *gin.Context, account *service.Account, _ string, _ bool, body []byte) (*service.OpenAIForwardResult, error) {
 			return h.gatewayService.Forward(ctx, c, account, body)
 		})
 
@@ -260,7 +263,7 @@ func (h *OpenAIGatewayHandler) handleOpenAICompatEndpoint(c *gin.Context, kind o
 					transformer:    openai.NewChatCompletionsToCompletionsStreamTransformer(),
 				}
 
-				result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, service.PlatformQwen, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
+				result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, true, service.PlatformQwen, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
 				if result == nil || account == nil {
 					return
 				}
@@ -272,7 +275,7 @@ func (h *OpenAIGatewayHandler) handleOpenAICompatEndpoint(c *gin.Context, kind o
 			capture := &openAICompatCaptureWriter{ResponseWriter: origWriter}
 			c.Writer = capture
 
-			result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, service.PlatformQwen, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
+			result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, true, service.PlatformQwen, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
 
 			// Restore writer for final output.
 			c.Writer = origWriter
@@ -303,7 +306,7 @@ func (h *OpenAIGatewayHandler) handleOpenAICompatEndpoint(c *gin.Context, kind o
 		}
 
 		// Chat Completions: passthrough upstream response as-is.
-		result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, service.PlatformQwen, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
+		result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, true, service.PlatformQwen, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
 		if result == nil || account == nil {
 			return
 		}
@@ -358,7 +361,7 @@ func (h *OpenAIGatewayHandler) handleOpenAICompatEndpoint(c *gin.Context, kind o
 					transformer:    openai.NewChatCompletionsToCompletionsStreamTransformer(),
 				}
 
-				result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, service.PlatformIFlow, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
+				result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, true, service.PlatformIFlow, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
 				if result == nil || account == nil {
 					return
 				}
@@ -370,7 +373,7 @@ func (h *OpenAIGatewayHandler) handleOpenAICompatEndpoint(c *gin.Context, kind o
 			capture := &openAICompatCaptureWriter{ResponseWriter: origWriter}
 			c.Writer = capture
 
-			result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, service.PlatformIFlow, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
+			result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, true, service.PlatformIFlow, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
 
 			// Restore writer for final output.
 			c.Writer = origWriter
@@ -401,7 +404,7 @@ func (h *OpenAIGatewayHandler) handleOpenAICompatEndpoint(c *gin.Context, kind o
 		}
 
 		// Chat Completions: passthrough upstream response as-is.
-		result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, service.PlatformIFlow, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
+		result, account, reservedUSD := h.forwardWithFailover(c, apiKey, subject, subscription, true, service.PlatformIFlow, payloadrules.ProtocolOpenAIChatCompletions, reqModel, reqStream, chatReq, chatBody, forwarder)
 		if result == nil || account == nil {
 			return
 		}
@@ -431,14 +434,14 @@ func (h *OpenAIGatewayHandler) asyncRecordUsage(
 			ctx = context.WithValue(ctx, ctxkey.ClientRequestID, strings.TrimSpace(clientRequestID))
 		}
 		if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
-			Result:       result,
-			APIKey:       apiKey,
-			User:         apiKey.User,
-			Account:      usedAccount,
-			Subscription: subscription,
-			UserAgent:    ua,
-			IPAddress:    ip,
-			ReservedUSD:  reservedUSD,
+			Result:             result,
+			APIKey:             apiKey,
+			User:               apiKey.User,
+			Account:            usedAccount,
+			Subscription:       subscription,
+			UserAgent:          ua,
+			IPAddress:          ip,
+			ReservedUSD:        reservedUSD,
 			ReservedUsageLogID: result.UsageLogID,
 		}); err != nil {
 			log.Printf("Record usage failed: %v", err)

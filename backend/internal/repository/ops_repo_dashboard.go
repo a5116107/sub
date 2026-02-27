@@ -354,6 +354,7 @@ func (r *opsRepository) listHourlyMetricsRows(ctx context.Context, filter *servi
 		where += " AND platform IS NULL AND group_id IS NULL"
 	}
 
+	// #nosec G202 -- where clause uses controlled fragments and positional parameters.
 	q := `
 SELECT
   bucket_start,

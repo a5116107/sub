@@ -8,7 +8,8 @@ const (
 	GeminiCliBaseURL = "https://cloudcode-pa.googleapis.com"
 
 	AuthorizeURL = "https://accounts.google.com/o/oauth2/v2/auth"
-	TokenURL     = "https://oauth2.googleapis.com/token"
+	// #nosec G101 -- OAuth token endpoint URL, not a credential.
+	TokenURL = "https://oauth2.googleapis.com/token"
 
 	// AIStudioOAuthRedirectURI is the default redirect URI used for AI Studio OAuth.
 	// This matches the "copy/paste callback URL" flow used by OpenAI OAuth in this project.
@@ -37,6 +38,7 @@ const (
 
 	// GeminiCLIOAuthClientID is the OAuth client ID used by Google Gemini CLI.
 	// Note: the corresponding client secret must be provided at runtime; it must not be committed.
+	// #nosec G101 -- Public OAuth client identifier; secret is injected via env var.
 	GeminiCLIOAuthClientID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
 
 	// GeminiCLIBuiltinOAuthClientSecretEnvVar provides the secret for the Gemini CLI built-in OAuth client.

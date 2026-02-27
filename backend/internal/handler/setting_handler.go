@@ -116,22 +116,18 @@ func (h *SettingHandler) ListDocsPages(c *gin.Context) {
 
 	items := make([]dto.DocsNavItem, 0, len(pages))
 	for _, p := range pages {
-		title := p.TitleEn
+		title := p.Key
 		if strings.HasPrefix(strings.ToLower(lang), "zh") {
 			if strings.TrimSpace(p.TitleZh) != "" {
 				title = p.TitleZh
 			} else if strings.TrimSpace(p.TitleEn) != "" {
 				title = p.TitleEn
-			} else {
-				title = p.Key
 			}
 		} else {
 			if strings.TrimSpace(p.TitleEn) != "" {
 				title = p.TitleEn
 			} else if strings.TrimSpace(p.TitleZh) != "" {
 				title = p.TitleZh
-			} else {
-				title = p.Key
 			}
 		}
 

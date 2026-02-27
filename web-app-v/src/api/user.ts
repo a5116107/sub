@@ -4,6 +4,7 @@ import type {
   UserProfile,
   Announcement,
   RedeemHistory,
+  Group,
 } from '../types';
 
 export const userApi = {
@@ -11,49 +12,21 @@ export const userApi = {
   getProfile: () =>
     api.get<UserProfile>('/user/profile'),
 
-  // Update user profile
-  updateProfile: (data: Partial<UserProfile>) =>
-    api.put<User>('/user/profile', data),
-
-  // Get user stats
-  getStats: () =>
-    api.get<{
-      total_requests: number;
-      total_tokens: number;
-      total_cost: number;
-      balance: number;
-    }>('/user/stats'),
-
-  // Get dashboard data
-  getDashboard: () =>
-    api.get<{
-      user: User;
-      stats: {
-        today_requests: number;
-        today_cost: number;
-        month_requests: number;
-        month_cost: number;
-      };
-      recent_usage: unknown[];
-      announcements: Announcement[];
-    }>('/user/dashboard'),
+  // Update user profile (backend only accepts username)
+  updateProfile: (data: { username: string }) =>
+    api.put<User>('/user', data),
 
   // Get available groups
   getGroups: () =>
-    api.get<Array<{
-      id: number;
-      name: string;
-      description: string;
-      platform: string;
-    }>>('/user/groups'),
+    api.get<Group[]>('/groups/available'),
 
   // Get announcements
-  getAnnouncements: () =>
-    api.get<Announcement[]>('/user/announcements'),
+  getAnnouncements: (params?: { unread_only?: boolean }) =>
+    api.get<Announcement[]>('/announcements', { params }),
 
   // Mark announcement as read
   markAnnouncementRead: (id: number) =>
-    api.post<void>(`/user/announcements/${id}/read`, {}),
+    api.post<void>(`/announcements/${id}/read`, {}),
 
   // Redeem code
   redeemCode: (code: string) =>
@@ -62,19 +35,11 @@ export const userApi = {
       type: string;
       value: number;
       message: string;
-    }>('/user/redeem', { code }),
+    }>('/redeem', { code }),
 
   // Get redeem history
   getRedeemHistory: () =>
-    api.get<RedeemHistory[]>('/user/redeem/history'),
-
-  // Get invite codes
-  getInviteCodes: () =>
-    api.get<{
-      invite_code: string;
-      invite_count: number;
-      invite_reward: number;
-    }>('/user/invite'),
+    api.get<RedeemHistory[]>('/redeem/history'),
 
   // Change password
   changePassword: (data: { current_password: string; new_password: string }) =>

@@ -62,7 +62,7 @@ func TestQwenGatewayService_UpstreamErrorDoesNotLeakDetailsToClient(t *testing.T
 		Platform: PlatformQwen,
 		Type:     AccountTypeAPIKey,
 		Credentials: map[string]any{
-			"api_key": "sk-test",
+			"api_key":  "sk-test",
 			"base_url": "https://portal.qwen.ai",
 		},
 	}
@@ -108,7 +108,7 @@ func TestIFlowGatewayService_UpstreamErrorDoesNotLeakDetailsToClient(t *testing.
 		Platform: PlatformIFlow,
 		Type:     AccountTypeAPIKey,
 		Credentials: map[string]any{
-			"api_key": "sk-test",
+			"api_key":  "sk-test",
 			"base_url": "https://apis.iflow.cn",
 		},
 	}

@@ -153,9 +153,11 @@ func (s *BillingSpoolService) spoolBaseDir() string {
 	return strings.TrimSpace(s.cfg.Billing.Spool.Dir)
 }
 
-func (s *BillingSpoolService) pendingDir() string    { return filepath.Join(s.spoolBaseDir(), "pending") }
-func (s *BillingSpoolService) processingDir() string { return filepath.Join(s.spoolBaseDir(), "processing") }
-func (s *BillingSpoolService) doneDir() string       { return filepath.Join(s.spoolBaseDir(), "done") }
+func (s *BillingSpoolService) pendingDir() string { return filepath.Join(s.spoolBaseDir(), "pending") }
+func (s *BillingSpoolService) processingDir() string {
+	return filepath.Join(s.spoolBaseDir(), "processing")
+}
+func (s *BillingSpoolService) doneDir() string { return filepath.Join(s.spoolBaseDir(), "done") }
 
 func (s *BillingSpoolService) ensureDirs() error {
 	if s == nil {
@@ -403,7 +405,17 @@ func (s *BillingSpoolService) listPendingFiles() ([]string, error) {
 }
 
 func readBillingSpoolEvent(path string) (*BillingSpoolEvent, error) {
-	b, err := os.ReadFile(path)
+	cleanPath := filepath.Clean(path)
+	fileName := filepath.Base(cleanPath)
+	if fileName == "" || fileName == "." || fileName == string(filepath.Separator) {
+		return nil, fmt.Errorf("invalid billing spool path: %s", path)
+	}
+	root, err := os.OpenRoot(filepath.Dir(cleanPath))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	b, err := root.ReadFile(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +456,7 @@ func (s *BillingSpoolService) applyEventWithDB(ctx context.Context, ev *BillingS
 		Model:                 ul.Model,
 		BilledModel:           ul.BilledModel,
 		GroupID:               ul.GroupID,
-		SubscriptionID:         ul.SubscriptionID,
+		SubscriptionID:        ul.SubscriptionID,
 		InputTokens:           ul.InputTokens,
 		OutputTokens:          ul.OutputTokens,
 		CacheCreationTokens:   ul.CacheCreationTokens,

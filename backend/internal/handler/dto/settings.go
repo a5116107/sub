@@ -59,7 +59,11 @@ type SystemSettings struct {
 	IdentityPatchPrompt string `json:"identity_patch_prompt"`
 
 	// Gateway runtime toggles
-	GatewayFixOrphanedToolResults bool `json:"gateway_fix_orphaned_tool_results"`
+	GatewayFixOrphanedToolResults       bool              `json:"gateway_fix_orphaned_tool_results"`
+	GatewayFailoverSensitive400Keywords []string          `json:"gateway_failover_sensitive_400_keywords"`
+	GatewayFailoverTemporary400Keywords []string          `json:"gateway_failover_temporary_400_keywords"`
+	GatewayFailoverRequestErrorKeywords []string          `json:"gateway_failover_request_error_keywords"`
+	GatewayCodexModelAliases            map[string]string `json:"gateway_codex_model_aliases"`
 
 	// Ops monitoring (vNext)
 	OpsMonitoringEnabled         bool   `json:"ops_monitoring_enabled"`

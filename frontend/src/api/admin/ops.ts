@@ -52,9 +52,12 @@ export type OpsUpstreamErrorEvent = {
   platform?: string
   account_id?: number
   account_name?: string
+  failover_match_category?: string
+  failover_match_keyword?: string
   upstream_status_code?: number
   upstream_request_id?: string
   upstream_request_body?: string
+  upstream_response_body?: string
   kind?: string
   message?: string
   detail?: string

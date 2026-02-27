@@ -7,7 +7,7 @@
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.25.6-alpine
+ARG GOLANG_IMAGE=golang:1.25.7-alpine
 ARG ALPINE_IMAGE=alpine:3.20
 ARG PNPM_VERSION=10.10.0
 ARG NPM_REGISTRY=https://registry.npmmirror.com
@@ -15,7 +15,7 @@ ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
 
 # -----------------------------------------------------------------------------
-# Stage 1: Frontend Builder
+# Stage 1: Frontend Builder (Vue v1)
 # -----------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS frontend-builder
 
@@ -34,6 +34,26 @@ COPY frontend/ ./
 # Vite outputs to ../backend/internal/web/dist (see frontend/vite.config.ts).
 # Create that path inside the builder image so the build succeeds.
 RUN mkdir -p /app/backend/internal/web/dist
+RUN pnpm run build
+
+# -----------------------------------------------------------------------------
+# Stage 1b: Frontend V2 Builder (React v2)
+# -----------------------------------------------------------------------------
+FROM ${NODE_IMAGE} AS frontend-v2-builder
+
+WORKDIR /app/web-app-v
+
+# Install pnpm
+RUN npm config set registry ${NPM_REGISTRY} \
+    && npm install -g pnpm@${PNPM_VERSION}
+
+# Install dependencies first (better caching)
+COPY web-app-v/package.json web-app-v/package-lock.json ./
+RUN pnpm install --no-frozen-lockfile
+
+# Copy frontend-v2 source and build
+COPY web-app-v/ ./
+RUN mkdir -p /app/backend/internal/web/dist-v2
 RUN pnpm run build
 
 # -----------------------------------------------------------------------------
@@ -65,6 +85,7 @@ COPY backend/ ./
 
 # Copy frontend dist from previous stage (must be after backend copy to avoid being overwritten)
 COPY --from=frontend-builder /app/backend/internal/web/dist ./internal/web/dist
+COPY --from=frontend-v2-builder /app/backend/internal/web/dist-v2 ./internal/web/dist-v2
 
 # Build the binary (BuildType=release for CI builds, embed frontend)
 RUN CGO_ENABLED=0 GOOS=linux go build \

@@ -1,24 +1,20 @@
 package antigravity
 
 import (
+	cryptorand "crypto/rand"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
+	"math/big"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
 
-var (
-	sessionRand      = rand.New(rand.NewSource(time.Now().UnixNano()))
-	sessionRandMutex sync.Mutex
-)
+var maxFallbackSessionID = big.NewInt(9_000_000_000_000_000_000)
 
 // generateStableSessionID 基于用户消息内容生成稳定的 session ID
 func generateStableSessionID(contents []GeminiContent) string {
@@ -27,16 +23,20 @@ func generateStableSessionID(contents []GeminiContent) string {
 		if content.Role == "user" && len(content.Parts) > 0 {
 			if text := content.Parts[0].Text; text != "" {
 				h := sha256.Sum256([]byte(text))
-				n := int64(binary.BigEndian.Uint64(h[:8])) & 0x7FFFFFFFFFFFFFFF
+				var idBytes [8]byte
+				copy(idBytes[:], h[:8])
+				idBytes[0] &= 0x7F
+				n := new(big.Int).SetBytes(idBytes[:]).Int64()
 				return "-" + strconv.FormatInt(n, 10)
 			}
 		}
 	}
 	// 回退：生成随机 session ID
-	sessionRandMutex.Lock()
-	n := sessionRand.Int63n(9_000_000_000_000_000_000)
-	sessionRandMutex.Unlock()
-	return "-" + strconv.FormatInt(n, 10)
+	n, err := cryptorand.Int(cryptorand.Reader, maxFallbackSessionID)
+	if err != nil {
+		return "-" + strconv.FormatInt(time.Now().UnixNano()&0x7FFFFFFFFFFFFFFF, 10)
+	}
+	return "-" + n.String()
 }
 
 type TransformOptions struct {
@@ -54,6 +54,23 @@ func DefaultTransformOptions() TransformOptions {
 
 // webSearchFallbackModel web_search 请求使用的降级模型
 const webSearchFallbackModel = "gemini-2.5-flash"
+
+// MaxTokensBudgetPadding is applied when max_tokens must be raised above
+// thinking.budget_tokens for Claude-compatible validation.
+const MaxTokensBudgetPadding = 1000
+
+// Gemini25FlashThinkingBudgetLimit is the max thinking budget allowed for
+// gemini-2.5-flash.
+const Gemini25FlashThinkingBudgetLimit = 24576
+
+// ensureMaxTokensGreaterThanBudget guarantees max_tokens > budget_tokens.
+// Returns the (possibly adjusted) max_tokens and whether adjustment happened.
+func ensureMaxTokensGreaterThanBudget(maxTokens, budgetTokens int) (int, bool) {
+	if budgetTokens > 0 && maxTokens <= budgetTokens {
+		return budgetTokens + MaxTokensBudgetPadding, true
+	}
+	return maxTokens, false
+}
 
 // TransformClaudeToGemini 将 Claude 请求转换为 v1internal Gemini 格式
 func TransformClaudeToGemini(claudeReq *ClaudeRequest, projectID, mappedModel string) ([]byte, error) {
@@ -510,11 +527,22 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 		}
 		if req.Thinking.BudgetTokens > 0 {
 			budget := req.Thinking.BudgetTokens
-			// gemini-2.5-flash 上限 24576
-			if strings.Contains(req.Model, "gemini-2.5-flash") && budget > 24576 {
-				budget = 24576
+			// gemini-2.5-flash budget upper bound.
+			if strings.Contains(req.Model, "gemini-2.5-flash") && budget > Gemini25FlashThinkingBudgetLimit {
+				budget = Gemini25FlashThinkingBudgetLimit
 			}
 			config.ThinkingConfig.ThinkingBudget = budget
+
+			// Claude API requires max_tokens > thinking.budget_tokens.
+			if adjusted, changed := ensureMaxTokensGreaterThanBudget(config.MaxOutputTokens, budget); changed {
+				log.Printf(
+					"[Antigravity] Auto-adjusted max_tokens from %d to %d (must be > budget_tokens=%d)",
+					config.MaxOutputTokens,
+					adjusted,
+					budget,
+				)
+				config.MaxOutputTokens = adjusted
+			}
 		}
 	}
 

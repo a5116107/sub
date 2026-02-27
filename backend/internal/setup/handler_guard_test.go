@@ -40,6 +40,16 @@ func TestSetupGuard_TokenAndLoopback(t *testing.T) {
 		require.Equal(t, http.StatusUnauthorized, rec.Code)
 	})
 
+	t.Run("spoofed_forwarded_loopback_is_rejected", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/setup/test-db", bytes.NewBufferString(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Forwarded-For", "127.0.0.1")
+		req.RemoteAddr = "203.0.113.10:12345"
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		require.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+
 	t.Run("loopback_without_token_allowed", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/setup/test-db", bytes.NewBufferString(`{}`))
 		req.Header.Set("Content-Type", "application/json")

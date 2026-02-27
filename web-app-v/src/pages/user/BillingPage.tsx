@@ -1,16 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   CreditCard,
   Plus,
   Eye,
-  ChevronLeft,
-  ChevronRight,
   DollarSign,
   Clock,
   CheckCircle,
   XCircle,
   ExternalLink,
-  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { paymentsApi } from '../../api/payments';
 import type { PaymentProvider, Order } from '../../types';
@@ -23,18 +22,18 @@ import {
   Modal,
 } from '../../components/ui';
 
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, t: (key: string) => string) => {
   switch (status.toLowerCase()) {
     case 'paid':
     case 'completed':
-      return <Badge variant="success">Paid</Badge>;
+      return <Badge variant="success">{t('common:status.paid')}</Badge>;
     case 'pending':
-      return <Badge variant="warning">Pending</Badge>;
+      return <Badge variant="warning">{t('common:status.pending')}</Badge>;
     case 'failed':
     case 'cancelled':
-      return <Badge variant="danger">Failed</Badge>;
+      return <Badge variant="danger">{t('common:status.failed')}</Badge>;
     case 'expired':
-      return <Badge variant="default">Expired</Badge>;
+      return <Badge variant="default">{t('common:status.expired')}</Badge>;
     default:
       return <Badge variant="info">{status}</Badge>;
   }
@@ -59,17 +58,17 @@ const formatAmount = (amount: number) => {
 };
 
 export const BillingPage: React.FC = () => {
+  const { t } = useTranslation('billing');
   const [loading, setLoading] = useState(true);
   const [providers, setProviders] = useState<PaymentProvider[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [page, setPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [recentOrder, setRecentOrder] = useState<Order | null>(null);
 
   // Modal states
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [showOrderDetailModal, setShowOrderDetailModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [pollingOrderId, setPollingOrderId] = useState<number | null>(null);
+  const [pollingStatus, setPollingStatus] = useState<string | null>(null);
 
   // Recharge form state
   const [rechargeAmount, setRechargeAmount] = useState<number>(10);
@@ -84,16 +83,6 @@ export const BillingPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to fetch providers:', error);
-    }
-  }, []);
-
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await paymentsApi.getOrders();
-      setOrders(response);
-    } catch (error) {
-      console.error('Failed to fetch orders:', error);
     } finally {
       setLoading(false);
     }
@@ -101,8 +90,47 @@ export const BillingPage: React.FC = () => {
 
   useEffect(() => {
     fetchProviders();
-    fetchOrders();
-  }, [fetchProviders, fetchOrders]);
+  }, [fetchProviders]);
+
+  // Payment order status polling
+  useEffect(() => {
+    if (!pollingOrderId) return;
+
+    let pollCount = 0;
+    const maxPolls = 100; // Auto-stop after 5 minutes (100 * 3s)
+
+    const interval = setInterval(async () => {
+      pollCount++;
+      if (pollCount > maxPolls) {
+        clearInterval(interval);
+        setPollingOrderId(null);
+        return;
+      }
+
+      try {
+        const order = await paymentsApi.getOrder(pollingOrderId);
+        const status = order.status.toLowerCase();
+
+        if (status === 'paid' || status === 'completed') {
+          clearInterval(interval);
+          setRecentOrder(order);
+          setPollingStatus(status);
+          setPollingOrderId(null);
+        } else if (status === 'failed' || status === 'expired' || status === 'cancelled') {
+          clearInterval(interval);
+          setRecentOrder(order);
+          setPollingStatus(status);
+          setPollingOrderId(null);
+        }
+      } catch (error) {
+        console.error('Polling order status failed:', error);
+      }
+    }, 3000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [pollingOrderId]);
 
   const handleCreateOrder = async () => {
     if (!selectedProvider || rechargeAmount <= 0) return;
@@ -120,9 +148,12 @@ export const BillingPage: React.FC = () => {
         window.open(response.payment_url, '_blank');
       }
 
+      // Store the created order locally
+      setRecentOrder(response.order);
+      setPollingOrderId(response.order.id);
+      setPollingStatus(null);
       setShowRechargeModal(false);
       setRechargeAmount(10);
-      fetchOrders();
     } catch (error) {
       console.error('Failed to create order:', error);
     } finally {
@@ -130,36 +161,10 @@ export const BillingPage: React.FC = () => {
     }
   };
 
-  const handleViewOrder = async (order: Order) => {
-    setSelectedOrder(order);
+  const handleViewOrder = (order: Order) => {
+    setRecentOrder(order);
     setShowOrderDetailModal(true);
   };
-
-  const handleRefreshOrderStatus = async (orderId: number) => {
-    setActionLoading(true);
-    try {
-      const response = await paymentsApi.getOrderStatus(orderId);
-      // Update the order in the list
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.id === orderId ? { ...o, status: response.status } : o
-        )
-      );
-      if (selectedOrder?.id === orderId) {
-        setSelectedOrder((prev) =>
-          prev ? { ...prev, status: response.status } : null
-        );
-      }
-    } catch (error) {
-      console.error('Failed to refresh order status:', error);
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Pagination
-  const totalPages = Math.ceil(orders.length / pageSize);
-  const paginatedOrders = orders.slice((page - 1) * pageSize, page * pageSize);
 
   // Quick amount options
   const quickAmounts = [5, 10, 20, 50, 100];
@@ -169,12 +174,12 @@ export const BillingPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Billing</h1>
-          <p className="text-gray-400">Manage your balance and payment history</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('title')}</h1>
+          <p className="text-gray-400">{t('subtitle')}</p>
         </div>
         <Button onClick={() => setShowRechargeModal(true)}>
           <Plus className="w-4 h-4 mr-2" />
-          Recharge
+          {t('recharge')}
         </Button>
       </div>
 
@@ -183,9 +188,13 @@ export const BillingPage: React.FC = () => {
         <CardContent className="p-6">
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-cyan-400" />
-            Payment Methods
+            {t('paymentMethods')}
           </h2>
-          {providers.length > 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-[#00F0FF] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : providers.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {providers.map((provider) => (
                 <div
@@ -211,123 +220,77 @@ export const BillingPage: React.FC = () => {
               ))}
             </div>
           ) : (
-            <p className="text-gray-400 text-center py-4">No payment methods available</p>
+            <p className="text-gray-400 text-center py-4">{t('noProviders')}</p>
           )}
         </CardContent>
       </Card>
 
-      {/* Order History */}
+      {/* Recent Order (shown after creating one) */}
+      {recentOrder && (
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-cyan-400" />
+              {t('recentOrder')}
+            </h2>
+            <div className="flex items-center justify-between p-4 rounded-lg bg-[#1A1A1F] border border-[#2A2A30]">
+              <div className="flex items-center gap-4">
+                <div>
+                  <p className="text-sm text-gray-400">{t('orderDetail.orderId')} #{recentOrder.order_no || recentOrder.id}</p>
+                  <p className="text-lg font-medium text-emerald-400">{formatAmount(recentOrder.amount)}</p>
+                  <p className="text-xs text-gray-500">{formatDate(recentOrder.created_at)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {getStatusBadge(recentOrder.status, t)}
+                <button
+                  onClick={() => handleViewOrder(recentOrder)}
+                  className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
+                  title={t('common:btn.view')}
+                >
+                  <Eye className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Polling Indicator */}
+      {pollingOrderId && (
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-center gap-3 py-4">
+              {pollingStatus ? (
+                <>
+                  <CheckCircle className="w-6 h-6 text-emerald-400" />
+                  <div className="text-center">
+                    <p className="text-white font-medium">{t('polling.completed')}</p>
+                    <p className="text-sm text-gray-400">{t('polling.status.' + pollingStatus)}</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Loader2 className="w-6 h-6 text-[#00F0FF] animate-spin" />
+                  <div className="text-center">
+                    <p className="text-white font-medium">{t('polling.waiting')}</p>
+                    <p className="text-sm text-gray-400">{t('polling.subtitle')}</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Info Card */}
       <Card>
         <CardContent className="p-6">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-cyan-400" />
-            Payment History
-          </h2>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-[#00F0FF] border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : orders.length > 0 ? (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-[#2A2A30]">
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Order ID</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Amount</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Provider</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Status</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Date</th>
-                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedOrders.map((order) => (
-                      <tr
-                        key={order.id}
-                        className="border-b border-[#2A2A30]/50 hover:bg-[#1A1A1F]/50 transition-colors"
-                      >
-                        <td className="py-3 px-4">
-                          <span className="text-sm text-cyan-400 font-mono">#{order.id}</span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="text-sm text-emerald-400 font-medium">
-                            {formatAmount(order.amount)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="text-sm text-gray-300 capitalize">{order.provider}</span>
-                        </td>
-                        <td className="py-3 px-4">{getStatusBadge(order.status)}</td>
-                        <td className="py-3 px-4">
-                          <span className="text-sm text-gray-400">{formatDate(order.created_at)}</span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => handleViewOrder(order)}
-                              className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-                              title="View Details"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            {order.status === 'pending' && (
-                              <button
-                                onClick={() => handleRefreshOrderStatus(order.id)}
-                                className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-cyan-400 transition-colors"
-                                title="Refresh Status"
-                                disabled={actionLoading}
-                              >
-                                <RefreshCw className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4 pt-4 border-t border-[#2A2A30]">
-                  <p className="text-sm text-gray-400">
-                    Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, orders.length)} of{' '}
-                    {orders.length} orders
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <span className="text-sm text-gray-400">
-                      Page {page} of {totalPages}
-                    </span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-center py-12">
-              <DollarSign className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-              <p className="text-gray-400">No payment history yet</p>
-              <p className="text-sm text-gray-500 mt-1">Your recharge history will appear here</p>
-            </div>
-          )}
+          <div className="text-center py-8">
+            <DollarSign className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+            <p className="text-gray-400">{t('infoTitle')}</p>
+            <p className="text-sm text-gray-500 mt-1">{t('infoSubtitle')}</p>
+          </div>
         </CardContent>
       </Card>
 
@@ -338,12 +301,12 @@ export const BillingPage: React.FC = () => {
           setShowRechargeModal(false);
           setRechargeAmount(10);
         }}
-        title="Recharge Balance"
+        title={t('rechargeModal.title')}
       >
         <div className="space-y-6">
           {/* Amount Selection */}
           <div>
-            <label className="block text-sm text-gray-400 mb-3">Select Amount</label>
+            <label className="block text-sm text-gray-400 mb-3">{t('rechargeModal.selectAmount')}</label>
             <div className="grid grid-cols-5 gap-2 mb-4">
               {quickAmounts.map((amount) => (
                 <button
@@ -365,7 +328,7 @@ export const BillingPage: React.FC = () => {
                 type="number"
                 min="1"
                 step="1"
-                placeholder="Custom amount"
+                placeholder={t('rechargeModal.customAmount')}
                 value={rechargeAmount}
                 onChange={(e) => setRechargeAmount(parseFloat(e.target.value) || 0)}
                 className="pl-10"
@@ -375,7 +338,7 @@ export const BillingPage: React.FC = () => {
 
           {/* Provider Selection */}
           <div>
-            <label className="block text-sm text-gray-400 mb-3">Payment Method</label>
+            <label className="block text-sm text-gray-400 mb-3">{t('rechargeModal.paymentMethod')}</label>
             <div className="space-y-2">
               {providers
                 .filter((p) => p.status === 'active')
@@ -406,7 +369,7 @@ export const BillingPage: React.FC = () => {
           {/* Summary */}
           <div className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg p-4">
             <div className="flex items-center justify-between">
-              <span className="text-gray-400">Total Amount</span>
+              <span className="text-gray-400">{t('rechargeModal.totalAmount')}</span>
               <span className="text-2xl font-bold text-emerald-400">
                 {formatAmount(rechargeAmount)}
               </span>
@@ -422,7 +385,7 @@ export const BillingPage: React.FC = () => {
                 setRechargeAmount(10);
               }}
             >
-              Cancel
+              {t('common:btn.cancel')}
             </Button>
             <Button
               onClick={handleCreateOrder}
@@ -430,7 +393,7 @@ export const BillingPage: React.FC = () => {
               disabled={!selectedProvider || rechargeAmount <= 0}
             >
               <ExternalLink className="w-4 h-4 mr-2" />
-              Proceed to Payment
+              {t('rechargeModal.proceed')}
             </Button>
           </div>
         </div>
@@ -441,58 +404,46 @@ export const BillingPage: React.FC = () => {
         isOpen={showOrderDetailModal}
         onClose={() => {
           setShowOrderDetailModal(false);
-          setSelectedOrder(null);
         }}
-        title="Order Details"
+        title={t('orderDetail.title')}
       >
-        {selectedOrder && (
+        {recentOrder && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm text-gray-400">Order ID</p>
-                <p className="text-white font-mono">#{selectedOrder.id}</p>
+                <p className="text-sm text-gray-400">{t('orderDetail.orderId')}</p>
+                <p className="text-white font-mono">#{recentOrder.order_no || recentOrder.id}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-400">Status</p>
-                <div className="mt-1">{getStatusBadge(selectedOrder.status)}</div>
+                <p className="text-sm text-gray-400">{t('orderDetail.status')}</p>
+                <div className="mt-1">{getStatusBadge(recentOrder.status, t)}</div>
               </div>
               <div>
-                <p className="text-sm text-gray-400">Amount</p>
-                <p className="text-emerald-400 font-medium">{formatAmount(selectedOrder.amount)}</p>
+                <p className="text-sm text-gray-400">{t('orderDetail.amount')}</p>
+                <p className="text-emerald-400 font-medium">{formatAmount(recentOrder.amount)}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-400">Provider</p>
-                <p className="text-white capitalize">{selectedOrder.provider}</p>
+                <p className="text-sm text-gray-400">{t('orderDetail.provider')}</p>
+                <p className="text-white capitalize">{recentOrder.provider}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-400">Created</p>
-                <p className="text-gray-300">{formatDate(selectedOrder.created_at)}</p>
+                <p className="text-sm text-gray-400">{t('orderDetail.created')}</p>
+                <p className="text-gray-300">{formatDate(recentOrder.created_at)}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-400">Updated</p>
-                <p className="text-gray-300">{formatDate(selectedOrder.updated_at)}</p>
+                <p className="text-sm text-gray-400">{t('orderDetail.updated')}</p>
+                <p className="text-gray-300">{formatDate(recentOrder.updated_at)}</p>
               </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4 border-t border-[#2A2A30]">
-              {selectedOrder.status === 'pending' && (
-                <Button
-                  variant="secondary"
-                  onClick={() => handleRefreshOrderStatus(selectedOrder.id)}
-                  isLoading={actionLoading}
-                >
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh Status
-                </Button>
-              )}
               <Button
                 variant="secondary"
                 onClick={() => {
                   setShowOrderDetailModal(false);
-                  setSelectedOrder(null);
                 }}
               >
-                Close
+                {t('common:btn.close')}
               </Button>
             </div>
           </div>

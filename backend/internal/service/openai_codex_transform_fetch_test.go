@@ -22,4 +22,3 @@ func TestFetchWithETag_RejectsOversizedResponse(t *testing.T) {
 		t.Fatalf("expected error for oversized response")
 	}
 }
-

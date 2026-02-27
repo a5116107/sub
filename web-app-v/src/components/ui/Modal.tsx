@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from './Button';
 
 export interface ModalProps {
@@ -55,7 +56,7 @@ export const Modal: React.FC<ModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in"
+        className="absolute inset-0 bg-black/55 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
       />
 
@@ -63,26 +64,26 @@ export const Modal: React.FC<ModalProps> = ({
       <div
         className={`
           relative w-full ${sizeStyles[size]}
-          bg-[#121215] border border-[#2A2A30] rounded-2xl
-          shadow-2xl animate-fade-in-up
+          bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl
+          shadow-[var(--shadow-xl)] animate-fade-in-up
           max-h-[90vh] overflow-hidden flex flex-col
         `}
       >
         {/* Header */}
         {(title || showCloseButton) && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#2A2A30]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border-color)]">
             <div>
               {title && (
-                <h2 className="text-lg font-semibold text-white">{title}</h2>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">{title}</h2>
               )}
               {description && (
-                <p className="text-sm text-gray-400 mt-1">{description}</p>
+                <p className="text-sm text-[var(--text-muted)] mt-1">{description}</p>
               )}
             </div>
             {showCloseButton && (
               <button
                 onClick={onClose}
-                className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                className="p-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--accent-soft)] rounded-lg transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -95,7 +96,7 @@ export const Modal: React.FC<ModalProps> = ({
 
         {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t border-[#2A2A30] bg-[#0A0A0C]/50">
+          <div className="px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-secondary)]/60">
             {footer}
           </div>
         )}
@@ -114,32 +115,34 @@ export interface ConfirmModalProps extends Omit<ModalProps, 'children' | 'footer
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onConfirm,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
   confirmVariant = 'primary',
   isLoading = false,
   ...props
 }) => {
+  const { t } = useTranslation('common');
+
   return (
     <Modal
       {...props}
       footer={
         <div className="flex justify-end gap-3">
           <Button variant="ghost" onClick={props.onClose}>
-            {cancelText}
+            {cancelText || t('btn.cancel')}
           </Button>
           <Button
             variant={confirmVariant}
             onClick={onConfirm}
             isLoading={isLoading}
           >
-            {confirmText}
+            {confirmText || t('btn.confirm')}
           </Button>
         </div>
       }
     >
-      <p className="text-gray-300">
-        Are you sure you want to proceed? This action cannot be undone.
+      <p className="text-[var(--text-secondary)]">
+        {t('modal.confirmMessage')}
       </p>
     </Modal>
   );

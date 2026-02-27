@@ -59,4 +59,3 @@ func TestQwenValidateUpstreamBaseURL_RequiresAllowlist(t *testing.T) {
 	_, err = svc.validateUpstreamBaseURL("https://portal.qwen.ai/v1")
 	require.Error(t, err)
 }
-

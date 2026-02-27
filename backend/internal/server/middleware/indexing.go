@@ -94,7 +94,7 @@ func isPublicNoIndexPath(path string) bool {
 		hasPathPrefix(path, "/v1") ||
 		hasPathPrefix(path, "/v1beta") ||
 		hasPathPrefix(path, "/antigravity") ||
-		path == "/responses" ||
+		hasPathPrefix(path, "/responses") ||
 		path == "/health" {
 		return true
 	}
@@ -120,7 +120,10 @@ func serveRobotsTXT(c *gin.Context, cfg *config.Config, mode string) {
 
 	// Public mode: allow crawling public pages, but block private/auth/API paths.
 	var b strings.Builder
-	b.WriteString("User-agent: *\n")
+	write := func(s string) {
+		_, _ = b.WriteString(s)
+	}
+	write("User-agent: *\n")
 	for _, disallow := range []string{
 		"/admin/",
 		"/dashboard",
@@ -145,14 +148,14 @@ func serveRobotsTXT(c *gin.Context, cfg *config.Config, mode string) {
 		"/antigravity/",
 		"/responses",
 	} {
-		b.WriteString("Disallow: ")
-		b.WriteString(disallow)
-		b.WriteString("\n")
+		write("Disallow: ")
+		write(disallow)
+		write("\n")
 	}
 	if base, err := trustedFrontendBaseURL(cfg, c); err == nil && base != "" {
-		b.WriteString("Sitemap: ")
-		b.WriteString(base)
-		b.WriteString("/sitemap.xml\n")
+		write("Sitemap: ")
+		write(base)
+		write("/sitemap.xml\n")
 	}
 	c.String(http.StatusOK, b.String())
 }
@@ -210,17 +213,20 @@ func serveSitemapXML(c *gin.Context, cfg *config.Config, mode string, settingSer
 	}
 
 	var b strings.Builder
-	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
-	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
-	for _, e := range entries {
-		b.WriteString("  <url>\n")
-		b.WriteString(fmt.Sprintf("    <loc>%s%s</loc>\n", base, e.Path))
-		b.WriteString(fmt.Sprintf("    <lastmod>%s</lastmod>\n", lastmod))
-		b.WriteString(fmt.Sprintf("    <changefreq>%s</changefreq>\n", e.Changefreq))
-		b.WriteString(fmt.Sprintf("    <priority>%s</priority>\n", e.Priority))
-		b.WriteString("  </url>\n")
+	write := func(s string) {
+		_, _ = b.WriteString(s)
 	}
-	b.WriteString(`</urlset>` + "\n")
+	write(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	write(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
+	for _, e := range entries {
+		write("  <url>\n")
+		write(fmt.Sprintf("    <loc>%s%s</loc>\n", base, e.Path))
+		write(fmt.Sprintf("    <lastmod>%s</lastmod>\n", lastmod))
+		write(fmt.Sprintf("    <changefreq>%s</changefreq>\n", e.Changefreq))
+		write(fmt.Sprintf("    <priority>%s</priority>\n", e.Priority))
+		write("  </url>\n")
+	}
+	write(`</urlset>` + "\n")
 	xml := b.String()
 
 	c.Header("Content-Type", "application/xml; charset=utf-8")

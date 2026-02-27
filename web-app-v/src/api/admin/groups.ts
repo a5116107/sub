@@ -49,7 +49,7 @@ export const adminGroupsApi = {
       name: string;
       platform: string;
       status: string;
-    }>>(`/admin/groups/${id}/accounts`),
+    }>>(`/admin/groups/${id}/api-keys`),
 
   // Get group subscriptions
   getGroupSubscriptions: (id: number) =>
@@ -63,9 +63,29 @@ export const adminGroupsApi = {
 
   // Set group models
   setGroupModels: (id: number, models: string[]) =>
-    api.put<void>(`/admin/groups/${id}/models`, { models }),
+    api.put<Group>(`/admin/groups/${id}`, {
+      model_routing_enabled: models.length > 0,
+      model_routing: Object.fromEntries(models.map((model) => [model, []])),
+    } as unknown as Partial<Group>).then(() => undefined),
 
   // Get group models
   getGroupModels: (id: number) =>
-    api.get<string[]>(`/admin/groups/${id}/models`),
+    api.get<Group & { model_routing?: Record<string, number[]> }>(`/admin/groups/${id}`)
+      .then((group) => Object.keys(group?.model_routing || {})),
+
+  // Get group API keys
+  getGroupApiKeys: (id: number) =>
+    api.get<Array<{
+      id: number;
+      name: string;
+      key: string;
+      status: string;
+      user_id: number;
+      user_email: string;
+      created_at: string;
+    }>>(`/admin/groups/${id}/api-keys`),
+
+  // Get all groups (no pagination)
+  getAllGroups: (params?: { platform?: string }) =>
+    api.get<Group[]>('/admin/groups/all', { params }),
 };

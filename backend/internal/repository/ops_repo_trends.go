@@ -38,6 +38,7 @@ func (r *opsRepository) GetThroughputTrend(ctx context.Context, filter *service.
 	usageBucketExpr := opsBucketExprForUsage(bucketSeconds)
 	errorBucketExpr := opsBucketExprForError(bucketSeconds)
 
+	// #nosec G202 -- bucket/join/where expressions are produced by trusted helper builders.
 	q := `
 WITH usage_buckets AS (
   SELECT ` + usageBucketExpr + ` AS bucket,
@@ -415,6 +416,7 @@ func (r *opsRepository) GetErrorTrend(ctx context.Context, filter *service.OpsDa
 	where, args, _ := buildErrorWhere(filter, start, end, 1)
 	bucketExpr := opsBucketExprForError(bucketSeconds)
 
+	// #nosec G202 -- bucketExpr/where are constrained by predefined bucket options and bound parameters.
 	q := `
 SELECT
   ` + bucketExpr + ` AS bucket,
@@ -527,6 +529,7 @@ func (r *opsRepository) GetErrorDistribution(ctx context.Context, filter *servic
 	end := filter.EndTime.UTC()
 	where, args, _ := buildErrorWhere(filter, start, end, 1)
 
+	// #nosec G202 -- where clause is parameterized and assembled from validated filter fields only.
 	q := `
 SELECT
   COALESCE(upstream_status_code, status_code, 0) AS status_code,

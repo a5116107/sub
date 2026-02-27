@@ -27,4 +27,3 @@ func loadEmbeddedDocsMarkdown(docKey, lang string) (string, bool) {
 	}
 	return text, true
 }
-

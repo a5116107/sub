@@ -1,0 +1,18 @@
+{
+  "title": "Welcome back, {{username}}",
+  "subtitle": "Here's what's happening with your account today.",
+  "stats.balance": "Balance",
+  "stats.todayUsage": "Today's Usage",
+  "stats.activeKeys": "Active Keys",
+  "stats.concurrency": "Concurrency",
+  "recentUsage.title": "Recent Usage",
+  "recentUsage.viewAll": "View all",
+  "recentUsage.empty": "No recent usage data",
+  "quickActions.title": "Quick Actions",
+  "quickActions.manageKeys": "Manage API Keys",
+  "quickActions.manageKeysDesc": "Create and manage your API keys",
+  "quickActions.redeemCode": "Redeem Code",
+  "quickActions.redeemCodeDesc": "Redeem a gift code for balance",
+  "announcements.title": "Announcements",
+  "announcements.empty": "No announcements"
+}

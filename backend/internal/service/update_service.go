@@ -350,7 +350,7 @@ func (s *UpdateService) verifyChecksum(ctx context.Context, filePath, checksumUR
 	}
 
 	// Calculate file hash
-	f, err := os.Open(filePath)
+	f, err := openScopedFile(filePath)
 	if err != nil {
 		return err
 	}
@@ -380,7 +380,7 @@ func (s *UpdateService) verifyChecksum(ctx context.Context, filePath, checksumUR
 }
 
 func (s *UpdateService) extractBinary(archivePath, destPath string) error {
-	f, err := os.Open(archivePath)
+	f, err := openScopedFile(archivePath)
 	if err != nil {
 		return err
 	}
@@ -432,7 +432,7 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 					return fmt.Errorf("binary too large: %d bytes (max %d)", hdr.Size, maxBinarySize)
 				}
 
-				out, err := os.Create(destPath)
+				out, err := createScopedFile(destPath)
 				if err != nil {
 					return err
 				}
@@ -454,7 +454,7 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 
 	// Direct copy for non-tar files (with size limit)
 	const maxBinarySize = 500 * 1024 * 1024
-	out, err := os.Create(destPath)
+	out, err := createScopedFile(destPath)
 	if err != nil {
 		return err
 	}
@@ -465,6 +465,50 @@ func (s *UpdateService) extractBinary(archivePath, destPath string) error {
 		return err
 	}
 	return out.Close()
+}
+
+func openScopedFile(path string) (*os.File, error) {
+	cleanPath := filepath.Clean(path)
+	fileName := filepath.Base(cleanPath)
+	if fileName == "" || fileName == "." || fileName == string(filepath.Separator) {
+		return nil, fmt.Errorf("invalid file path: %s", path)
+	}
+	root, err := os.OpenRoot(filepath.Dir(cleanPath))
+	if err != nil {
+		return nil, err
+	}
+	file, openErr := root.Open(fileName)
+	closeErr := root.Close()
+	if openErr != nil {
+		return nil, openErr
+	}
+	if closeErr != nil {
+		_ = file.Close()
+		return nil, closeErr
+	}
+	return file, nil
+}
+
+func createScopedFile(path string) (*os.File, error) {
+	cleanPath := filepath.Clean(path)
+	fileName := filepath.Base(cleanPath)
+	if fileName == "" || fileName == "." || fileName == string(filepath.Separator) {
+		return nil, fmt.Errorf("invalid file path: %s", path)
+	}
+	root, err := os.OpenRoot(filepath.Dir(cleanPath))
+	if err != nil {
+		return nil, err
+	}
+	file, createErr := root.Create(fileName)
+	closeErr := root.Close()
+	if createErr != nil {
+		return nil, createErr
+	}
+	if closeErr != nil {
+		_ = file.Close()
+		return nil, closeErr
+	}
+	return file, nil
 }
 
 func (s *UpdateService) getFromCache(ctx context.Context) (*UpdateInfo, error) {

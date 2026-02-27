@@ -20,7 +20,8 @@ const (
 
 	// OAuth endpoints
 	AuthorizeURL = "https://auth.openai.com/oauth/authorize"
-	TokenURL     = "https://auth.openai.com/oauth/token"
+	// #nosec G101 -- OAuth token endpoint URL, not a credential.
+	TokenURL = "https://auth.openai.com/oauth/token"
 
 	// Default redirect URI (can be customized)
 	DefaultRedirectURI = "http://localhost:1455/auth/callback"

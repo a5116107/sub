@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   RefreshCw,
@@ -12,6 +13,10 @@ import {
   Server,
   Zap,
   Activity,
+  Gauge,
+  Settings,
+  LayoutDashboard,
+  List,
 } from 'lucide-react';
 import {
   adminOpsApi,
@@ -35,52 +40,12 @@ import {
   Table,
   Modal,
 } from '../../components/ui';
+import { OpsMonitoringTab } from './components/OpsMonitoringTab';
+import { OpsAlertRulesTab } from './components/OpsAlertRulesTab';
+import { OpsSettingsTab } from './components/OpsSettingsTab';
+import { OpsDashboardTab } from './components/OpsDashboardTab';
 
-type TabType = 'errors' | 'request-errors' | 'upstream-errors' | 'requests' | 'alerts';
-
-const tabs: { key: TabType; label: string; icon: React.ReactNode }[] = [
-  { key: 'errors', label: 'System Errors', icon: <AlertTriangle className="w-4 h-4" /> },
-  { key: 'request-errors', label: 'Request Errors', icon: <XCircle className="w-4 h-4" /> },
-  { key: 'upstream-errors', label: 'Upstream Errors', icon: <Server className="w-4 h-4" /> },
-  { key: 'requests', label: 'Requests', icon: <Activity className="w-4 h-4" /> },
-  { key: 'alerts', label: 'Alerts', icon: <Bell className="w-4 h-4" /> },
-];
-
-const getStatusBadge = (resolved: boolean) => {
-  return resolved ? (
-    <Badge variant="success">Resolved</Badge>
-  ) : (
-    <Badge variant="danger">Open</Badge>
-  );
-};
-
-const getSeverityBadge = (severity: string) => {
-  switch (severity) {
-    case 'critical':
-      return <Badge variant="danger">Critical</Badge>;
-    case 'error':
-      return <Badge variant="danger">Error</Badge>;
-    case 'warning':
-      return <Badge variant="warning">Warning</Badge>;
-    case 'info':
-      return <Badge variant="info">Info</Badge>;
-    default:
-      return <Badge variant="default">{severity}</Badge>;
-  }
-};
-
-const getAlertStatusBadge = (status: string) => {
-  switch (status) {
-    case 'active':
-      return <Badge variant="danger">Active</Badge>;
-    case 'acknowledged':
-      return <Badge variant="warning">Acknowledged</Badge>;
-    case 'resolved':
-      return <Badge variant="success">Resolved</Badge>;
-    default:
-      return <Badge variant="default">{status}</Badge>;
-  }
-};
+type TabType = 'dashboard' | 'monitoring' | 'errors' | 'request-errors' | 'upstream-errors' | 'requests' | 'alerts' | 'alert-rules' | 'settings';
 
 const formatDate = (dateString?: string) => {
   if (!dateString) return 'N/A';
@@ -93,12 +58,61 @@ const formatDate = (dateString?: string) => {
 };
 
 export const OpsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('errors');
+  const { t } = useTranslation('admin');
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(10);
   const [total, setTotal] = useState(0);
+
+  const tabs: { key: TabType; label: string; icon: React.ReactNode }[] = [
+    { key: 'dashboard', label: t('ops.tab.dashboard'), icon: <LayoutDashboard className="w-4 h-4" /> },
+    { key: 'monitoring', label: t('ops.tab.monitoring'), icon: <Gauge className="w-4 h-4" /> },
+    { key: 'errors', label: t('ops.tab.errors'), icon: <AlertTriangle className="w-4 h-4" /> },
+    { key: 'request-errors', label: t('ops.tab.requestErrors'), icon: <XCircle className="w-4 h-4" /> },
+    { key: 'upstream-errors', label: t('ops.tab.upstreamErrors'), icon: <Server className="w-4 h-4" /> },
+    { key: 'requests', label: t('ops.tab.requests'), icon: <Activity className="w-4 h-4" /> },
+    { key: 'alerts', label: t('ops.tab.alerts'), icon: <Bell className="w-4 h-4" /> },
+    { key: 'alert-rules', label: t('ops.tab.alertRules'), icon: <List className="w-4 h-4" /> },
+    { key: 'settings', label: t('ops.tab.settings'), icon: <Settings className="w-4 h-4" /> },
+  ];
+
+  const getStatusBadge = (resolved: boolean) => {
+    return resolved ? (
+      <Badge variant="success">{t('ops.status.resolved')}</Badge>
+    ) : (
+      <Badge variant="danger">{t('ops.status.open')}</Badge>
+    );
+  };
+
+  const getSeverityBadge = (severity: string) => {
+    switch (severity) {
+      case 'critical':
+        return <Badge variant="danger">{t('ops.severity.critical')}</Badge>;
+      case 'error':
+        return <Badge variant="danger">{t('ops.severity.error')}</Badge>;
+      case 'warning':
+        return <Badge variant="warning">{t('ops.severity.warning')}</Badge>;
+      case 'info':
+        return <Badge variant="info">{t('ops.severity.info')}</Badge>;
+      default:
+        return <Badge variant="default">{severity}</Badge>;
+    }
+  };
+
+  const getAlertStatusBadge = (status: string) => {
+    switch (status) {
+      case 'active':
+        return <Badge variant="danger">{t('ops.status.active')}</Badge>;
+      case 'acknowledged':
+        return <Badge variant="warning">{t('ops.status.acknowledged')}</Badge>;
+      case 'resolved':
+        return <Badge variant="success">{t('ops.status.resolved')}</Badge>;
+      default:
+        return <Badge variant="default">{status}</Badge>;
+    }
+  };
 
   // Data states
   const [errors, setErrors] = useState<OpsError[]>([]);
@@ -302,17 +316,17 @@ export const OpsPage: React.FC = () => {
   const errorColumns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('ops.col.id'),
       render: (item: OpsError) => <span className="text-sm text-gray-400">#{item.id}</span>,
     },
     {
       key: 'type',
-      title: 'Type',
+      title: t('ops.col.type'),
       render: (item: OpsError) => <span className="text-sm text-white">{item.type}</span>,
     },
     {
       key: 'message',
-      title: 'Message',
+      title: t('ops.col.message'),
       render: (item: OpsError) => (
         <p className="text-sm text-gray-300 truncate max-w-[300px]" title={item.message}>
           {item.message}
@@ -321,17 +335,17 @@ export const OpsPage: React.FC = () => {
     },
     {
       key: 'status',
-      title: 'Status',
+      title: t('ops.col.status'),
       render: (item: OpsError) => getStatusBadge(item.resolved),
     },
     {
       key: 'created_at',
-      title: 'Created',
+      title: t('ops.col.created'),
       render: (item: OpsError) => <span className="text-sm text-gray-400">{formatDate(item.created_at)}</span>,
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('ops.col.actions'),
       render: (item: OpsError) => (
         <div className="flex items-center gap-1">
           <button
@@ -340,7 +354,7 @@ export const OpsPage: React.FC = () => {
               setShowDetailModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="View Details"
+            title={t('ops.action.viewDetails')}
           >
             <Eye className="w-4 h-4" />
           </button>
@@ -349,7 +363,7 @@ export const OpsPage: React.FC = () => {
               <button
                 onClick={() => handleResolveError(item.id)}
                 className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-emerald-400 transition-colors"
-                title="Resolve"
+                title={t('ops.action.resolve')}
                 disabled={actionLoading}
               >
                 <CheckCircle className="w-4 h-4" />
@@ -357,7 +371,7 @@ export const OpsPage: React.FC = () => {
               <button
                 onClick={() => handleRetryError(item.id)}
                 className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-cyan-400 transition-colors"
-                title="Retry"
+                title={t('ops.action.retry')}
                 disabled={actionLoading}
               >
                 <RefreshCw className="w-4 h-4" />
@@ -372,41 +386,41 @@ export const OpsPage: React.FC = () => {
   const requestErrorColumns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('ops.col.id'),
       render: (item: RequestError) => <span className="text-sm text-gray-400">#{item.id}</span>,
     },
     {
       key: 'request_id',
-      title: 'Request ID',
+      title: t('ops.col.requestId'),
       render: (item: RequestError) => (
         <span className="text-sm text-cyan-400 font-mono">{item.request_id.slice(0, 8)}...</span>
       ),
     },
     {
       key: 'error_type',
-      title: 'Type',
+      title: t('ops.col.type'),
       render: (item: RequestError) => <span className="text-sm text-white">{item.error_type}</span>,
     },
     {
       key: 'model',
-      title: 'Model',
+      title: t('ops.col.model'),
       render: (item: RequestError) => <span className="text-sm text-gray-300">{item.model}</span>,
     },
     {
       key: 'status_code',
-      title: 'Status',
+      title: t('ops.col.statusCode'),
       render: (item: RequestError) => (
         <Badge variant={item.status_code >= 500 ? 'danger' : 'warning'}>{item.status_code}</Badge>
       ),
     },
     {
       key: 'resolved',
-      title: 'Resolved',
+      title: t('ops.col.resolved'),
       render: (item: RequestError) => getStatusBadge(item.resolved),
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('ops.col.actions'),
       render: (item: RequestError) => (
         <div className="flex items-center gap-1">
           <button
@@ -415,7 +429,7 @@ export const OpsPage: React.FC = () => {
               setShowDetailModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="View Details"
+            title={t('ops.action.viewDetails')}
           >
             <Eye className="w-4 h-4" />
           </button>
@@ -423,7 +437,7 @@ export const OpsPage: React.FC = () => {
             <button
               onClick={() => handleResolveRequestError(item.id)}
               className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-emerald-400 transition-colors"
-              title="Resolve"
+              title={t('ops.action.resolve')}
               disabled={actionLoading}
             >
               <CheckCircle className="w-4 h-4" />
@@ -437,12 +451,12 @@ export const OpsPage: React.FC = () => {
   const upstreamErrorColumns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('ops.col.id'),
       render: (item: UpstreamError) => <span className="text-sm text-gray-400">#{item.id}</span>,
     },
     {
       key: 'account',
-      title: 'Account',
+      title: t('ops.col.account'),
       render: (item: UpstreamError) => (
         <div>
           <p className="text-sm text-white">{item.account_name || `Account #${item.account_id}`}</p>
@@ -452,29 +466,29 @@ export const OpsPage: React.FC = () => {
     },
     {
       key: 'error_type',
-      title: 'Type',
+      title: t('ops.col.type'),
       render: (item: UpstreamError) => <span className="text-sm text-white">{item.error_type}</span>,
     },
     {
       key: 'status_code',
-      title: 'Status',
+      title: t('ops.col.statusCode'),
       render: (item: UpstreamError) => (
         <Badge variant={item.status_code >= 500 ? 'danger' : 'warning'}>{item.status_code}</Badge>
       ),
     },
     {
       key: 'resolved',
-      title: 'Resolved',
+      title: t('ops.col.resolved'),
       render: (item: UpstreamError) => getStatusBadge(item.resolved),
     },
     {
       key: 'created_at',
-      title: 'Created',
+      title: t('ops.col.created'),
       render: (item: UpstreamError) => <span className="text-sm text-gray-400">{formatDate(item.created_at)}</span>,
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('ops.col.actions'),
       render: (item: UpstreamError) => (
         <div className="flex items-center gap-1">
           <button
@@ -483,7 +497,7 @@ export const OpsPage: React.FC = () => {
               setShowDetailModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="View Details"
+            title={t('ops.action.viewDetails')}
           >
             <Eye className="w-4 h-4" />
           </button>
@@ -492,7 +506,7 @@ export const OpsPage: React.FC = () => {
               <button
                 onClick={() => handleResolveUpstreamError(item.id)}
                 className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-emerald-400 transition-colors"
-                title="Resolve"
+                title={t('ops.action.resolve')}
                 disabled={actionLoading}
               >
                 <CheckCircle className="w-4 h-4" />
@@ -500,7 +514,7 @@ export const OpsPage: React.FC = () => {
               <button
                 onClick={() => handleRetryUpstreamError(item.id)}
                 className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-cyan-400 transition-colors"
-                title="Retry"
+                title={t('ops.action.retry')}
                 disabled={actionLoading}
               >
                 <RefreshCw className="w-4 h-4" />
@@ -515,24 +529,24 @@ export const OpsPage: React.FC = () => {
   const requestColumns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('ops.col.id'),
       render: (item: OpsRequest) => <span className="text-sm text-gray-400">#{item.id}</span>,
     },
     {
       key: 'request_id',
-      title: 'Request ID',
+      title: t('ops.col.requestId'),
       render: (item: OpsRequest) => (
         <span className="text-sm text-cyan-400 font-mono">{item.request_id.slice(0, 8)}...</span>
       ),
     },
     {
       key: 'model',
-      title: 'Model',
+      title: t('ops.col.model'),
       render: (item: OpsRequest) => <span className="text-sm text-white">{item.model}</span>,
     },
     {
       key: 'tokens',
-      title: 'Tokens',
+      title: t('ops.col.tokens'),
       render: (item: OpsRequest) => (
         <span className="text-sm text-gray-300">
           {item.input_tokens} / {item.output_tokens}
@@ -541,28 +555,28 @@ export const OpsPage: React.FC = () => {
     },
     {
       key: 'cost',
-      title: 'Cost',
+      title: t('ops.col.cost'),
       render: (item: OpsRequest) => (
         <span className="text-sm text-emerald-400">${item.total_cost.toFixed(4)}</span>
       ),
     },
     {
       key: 'duration',
-      title: 'Duration',
+      title: t('ops.col.duration'),
       render: (item: OpsRequest) => (
         <span className="text-sm text-gray-400">{item.duration_ms}ms</span>
       ),
     },
     {
       key: 'status',
-      title: 'Status',
+      title: t('ops.col.status'),
       render: (item: OpsRequest) => (
         <Badge variant={item.status_code === 200 ? 'success' : 'danger'}>{item.status_code}</Badge>
       ),
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('ops.col.actions'),
       render: (item: OpsRequest) => (
         <button
           onClick={() => {
@@ -570,7 +584,7 @@ export const OpsPage: React.FC = () => {
             setShowDetailModal(true);
           }}
           className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-          title="View Details"
+          title={t('ops.action.viewDetails')}
         >
           <Eye className="w-4 h-4" />
         </button>
@@ -581,37 +595,37 @@ export const OpsPage: React.FC = () => {
   const alertColumns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('ops.col.id'),
       render: (item: AlertEvent) => <span className="text-sm text-gray-400">#{item.id}</span>,
     },
     {
       key: 'severity',
-      title: 'Severity',
+      title: t('ops.col.severity'),
       render: (item: AlertEvent) => getSeverityBadge(item.severity),
     },
     {
       key: 'title',
-      title: 'Title',
+      title: t('ops.col.title'),
       render: (item: AlertEvent) => <span className="text-sm text-white">{item.title}</span>,
     },
     {
       key: 'type',
-      title: 'Type',
+      title: t('ops.col.type'),
       render: (item: AlertEvent) => <span className="text-sm text-gray-300">{item.type}</span>,
     },
     {
       key: 'status',
-      title: 'Status',
+      title: t('ops.col.status'),
       render: (item: AlertEvent) => getAlertStatusBadge(item.status),
     },
     {
       key: 'created_at',
-      title: 'Created',
+      title: t('ops.col.created'),
       render: (item: AlertEvent) => <span className="text-sm text-gray-400">{formatDate(item.created_at)}</span>,
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('ops.col.actions'),
       render: (item: AlertEvent) => (
         <div className="flex items-center gap-1">
           <button
@@ -620,7 +634,7 @@ export const OpsPage: React.FC = () => {
               setShowDetailModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="View Details"
+            title={t('ops.action.viewDetails')}
           >
             <Eye className="w-4 h-4" />
           </button>
@@ -628,7 +642,7 @@ export const OpsPage: React.FC = () => {
             <button
               onClick={() => handleUpdateAlertStatus(item.id, 'acknowledged')}
               className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-amber-400 transition-colors"
-              title="Acknowledge"
+              title={t('ops.action.acknowledge')}
               disabled={actionLoading}
             >
               <Bell className="w-4 h-4" />
@@ -638,7 +652,7 @@ export const OpsPage: React.FC = () => {
             <button
               onClick={() => handleUpdateAlertStatus(item.id, 'resolved')}
               className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-emerald-400 transition-colors"
-              title="Resolve"
+              title={t('ops.action.resolve')}
               disabled={actionLoading}
             >
               <CheckCircle className="w-4 h-4" />
@@ -660,7 +674,7 @@ export const OpsPage: React.FC = () => {
           setShowDetailModal(false);
           setSelectedItem(null);
         }}
-        title="Details"
+        title={t('ops.modal.detailTitle')}
       >
         <div className="space-y-4 max-h-[60vh] overflow-y-auto">
           <pre className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg p-4 text-sm text-gray-300 overflow-x-auto">
@@ -674,7 +688,7 @@ export const OpsPage: React.FC = () => {
                 setSelectedItem(null);
               }}
             >
-              Close
+              {t('common:btn.close')}
             </Button>
           </div>
         </div>
@@ -686,8 +700,8 @@ export const OpsPage: React.FC = () => {
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white mb-1">Operations</h1>
-        <p className="text-gray-400">Monitor errors, requests, and system alerts</p>
+        <h1 className="text-2xl font-bold text-white mb-1">{t('ops.title')}</h1>
+        <p className="text-gray-400">{t('ops.subtitle')}</p>
       </div>
 
       {/* Tabs */}
@@ -708,7 +722,14 @@ export const OpsPage: React.FC = () => {
         ))}
       </div>
 
-      {/* Filters */}
+      {/* New Tab Content (full-page tabs) */}
+      {activeTab === 'dashboard' && <OpsDashboardTab />}
+      {activeTab === 'monitoring' && <OpsMonitoringTab />}
+      {activeTab === 'alert-rules' && <OpsAlertRulesTab />}
+      {activeTab === 'settings' && <OpsSettingsTab />}
+
+      {/* Data Table Tabs - Filters */}
+      {!['dashboard', 'monitoring', 'alert-rules', 'settings'].includes(activeTab) && (<>
       <Card className="mb-6">
         <CardContent className="p-4">
           <div className="flex flex-wrap gap-4">
@@ -716,7 +737,7 @@ export const OpsPage: React.FC = () => {
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <Input
-                  placeholder="Search by model..."
+                  placeholder={t('ops.filter.searchModel')}
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -728,7 +749,7 @@ export const OpsPage: React.FC = () => {
             ) : (
               <>
                 <Input
-                  placeholder="Filter by type..."
+                  placeholder={t('ops.filter.type')}
                   value={typeFilter}
                   onChange={(e) => {
                     setTypeFilter(e.target.value);
@@ -744,17 +765,17 @@ export const OpsPage: React.FC = () => {
                   }}
                   className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
                 >
-                  <option value="">All Status</option>
+                  <option value="">{t('ops.filter.allStatus')}</option>
                   {activeTab === 'alerts' ? (
                     <>
-                      <option value="active">Active</option>
-                      <option value="acknowledged">Acknowledged</option>
-                      <option value="resolved">Resolved</option>
+                      <option value="active">{t('ops.filter.active')}</option>
+                      <option value="acknowledged">{t('ops.filter.acknowledged')}</option>
+                      <option value="resolved">{t('ops.filter.resolved')}</option>
                     </>
                   ) : (
                     <>
-                      <option value="open">Open</option>
-                      <option value="resolved">Resolved</option>
+                      <option value="open">{t('ops.filter.open')}</option>
+                      <option value="resolved">{t('ops.filter.resolved')}</option>
                     </>
                   )}
                 </select>
@@ -762,7 +783,7 @@ export const OpsPage: React.FC = () => {
             )}
             <div className="flex items-center gap-2 text-sm text-gray-400 ml-auto">
               <Zap className="w-4 h-4" />
-              <span>{total} total items</span>
+              <span>{t('ops.totalItems', { count: total })}</span>
             </div>
           </div>
         </CardContent>
@@ -771,17 +792,17 @@ export const OpsPage: React.FC = () => {
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          {activeTab === 'errors' && <Table columns={errorColumns} data={errors} loading={loading} emptyText="No errors found" />}
-          {activeTab === 'request-errors' && <Table columns={requestErrorColumns} data={requestErrors} loading={loading} emptyText="No request errors found" />}
-          {activeTab === 'upstream-errors' && <Table columns={upstreamErrorColumns} data={upstreamErrors} loading={loading} emptyText="No upstream errors found" />}
-          {activeTab === 'requests' && <Table columns={requestColumns} data={requests} loading={loading} emptyText="No requests found" />}
-          {activeTab === 'alerts' && <Table columns={alertColumns} data={alerts} loading={loading} emptyText="No alerts found" />}
+          {activeTab === 'errors' && <Table columns={errorColumns} data={errors} loading={loading} emptyText={t('ops.empty.errors')} />}
+          {activeTab === 'request-errors' && <Table columns={requestErrorColumns} data={requestErrors} loading={loading} emptyText={t('ops.empty.requestErrors')} />}
+          {activeTab === 'upstream-errors' && <Table columns={upstreamErrorColumns} data={upstreamErrors} loading={loading} emptyText={t('ops.empty.upstreamErrors')} />}
+          {activeTab === 'requests' && <Table columns={requestColumns} data={requests} loading={loading} emptyText={t('ops.empty.requests')} />}
+          {activeTab === 'alerts' && <Table columns={alertColumns} data={alerts} loading={loading} emptyText={t('ops.empty.alerts')} />}
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#2A2A30]">
               <p className="text-sm text-gray-400">
-                Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} items
+                {t('common:table.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total), total })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -793,7 +814,7 @@ export const OpsPage: React.FC = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm text-gray-400">
-                  Page {page} of {totalPages}
+                  {t('common:table.page', { current: page, total: totalPages })}
                 </span>
                 <Button
                   variant="secondary"
@@ -808,6 +829,7 @@ export const OpsPage: React.FC = () => {
           )}
         </CardContent>
       </Card>
+      </>)}
 
       {/* Detail Modal */}
       {renderDetailModal()}

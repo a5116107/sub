@@ -1193,6 +1193,16 @@ export default {
         fallbackHint: 'Non-Claude Code requests will use this group. Leave empty to reject directly.',
         noFallback: 'No Fallback (Reject)'
       },
+      copyAccounts: {
+        title: 'Copy Accounts from Groups',
+        tooltip:
+          'Select one or more groups of the same platform. After creation, all accounts from these groups will be automatically bound to the new group (deduplicated).',
+        tooltipEdit:
+          'Select one or more groups of the same platform. After saving, current group accounts will be replaced with accounts from these groups (deduplicated).',
+        selectPlaceholder: 'Select groups to copy accounts from...',
+        hint: 'Multiple groups can be selected, accounts will be deduplicated',
+        hintEdit: '⚠️ Warning: This will replace all existing account bindings'
+      },
       modelRouting: {
         title: 'Model Routing',
         tooltip: 'Configure specific model requests to be routed to designated accounts. Supports wildcard matching, e.g., claude-opus-* matches all opus models.',
@@ -2359,6 +2369,8 @@ export default {
       inputTokens: 'Input Tokens',
       outputTokens: 'Output Tokens',
       cacheCreationTokens: 'Cache Creation Tokens',
+      cacheCreation5mTokens: 'Cache Write',
+      cacheCreation1hTokens: 'Cache Write',
       cacheReadTokens: 'Cache Read Tokens',
       cacheHitRate: 'Cache Hit Rate',
       failedToLoad: 'Failed to load usage records',
@@ -2576,6 +2588,7 @@ export default {
         accountId: 'Account ID',
         status: 'Status',
         message: 'Message',
+        failoverMatch: 'Failover match',
         latency: 'Request Duration',
         action: 'Action',
         noErrors: 'No errors in this window.',
@@ -2598,6 +2611,9 @@ export default {
         resolved: 'Resolved',
         viewErrors: 'Errors',
         viewExcluded: 'Excluded',
+        failoverMatchAll: 'Failover: All',
+        failoverMatchSensitive: 'Failover: Sensitive',
+        failoverMatchTemporary: 'Failover: Temporary',
         statusCodeOther: 'Other',
         owner: {
           provider: 'Provider',
@@ -2645,10 +2661,12 @@ export default {
           detail: 'Detail',
           upstreamErrors: 'Upstream Errors'
         },
+        upstreamAttempts: 'Upstream Attempts',
         upstreamEvent: {
           account: 'Account',
           status: 'Status',
-          requestId: 'Request ID'
+          requestId: 'Request ID',
+          failoverMatch: 'Failover match'
         },
         responsePreview: {
           expand: 'Response (click to expand)',
@@ -3472,7 +3490,36 @@ export default {
         description: 'LLM gateway compatibility and auto-fix',
         fixOrphanedToolResults: 'Auto-remove orphan tool_result',
         fixOrphanedToolResultsHint:
-          'Automatically removes tool_result blocks whose tool_use_id references a missing tool_use, avoiding Claude 400. Disable as a fallback if it causes compatibility issues.'
+          'Automatically removes tool_result blocks whose tool_use_id references a missing tool_use, avoiding Claude 400. Disable as a fallback if it causes compatibility issues.',
+        failoverSensitive400Keywords: 'Failover keywords for sensitive/quota 400',
+        failoverSensitive400KeywordsHint:
+          'When a 400 error contains any keyword below (balance/credit/quota style), the gateway switches account/route automatically.',
+        failoverTemporary400Keywords: 'Failover keywords for temporary 400',
+        failoverTemporary400KeywordsHint:
+          'When a 400 error indicates temporary outage/maintenance, the gateway switches account/route automatically.',
+        failoverRequestErrorKeywords: 'Failover keywords for request-layer errors',
+        failoverRequestErrorKeywordsHint:
+          'When request errors (EOF/reset/timeout, etc.) contain any keyword below, the gateway switches account/route automatically.',
+        codexModelAliases: 'Codex model aliases',
+        codexModelAliasesPlaceholder: 'One per line: alias=target (also supports alias->target / alias:target)',
+        codexModelAliasesHint:
+          'Compatibility layer for new upstream model names. Alias keys are lowercased automatically. Current: {count}.',
+        keywordsPlaceholder: 'One keyword per line',
+        restoreDefaults: 'Restore Default Keywords',
+        defaultsApplied: 'Default gateway failover keywords applied (not saved yet)',
+        defaultKeywordCount:
+          'Default keyword count: sensitive/quota {sensitive}, temporary {temporary}, request error {request}',
+        currentKeywordCount:
+          'Current keyword count: sensitive/quota {sensitive}, temporary {temporary}, request error {request}',
+        matchesDefaults: 'Current keywords match defaults',
+        matchesDefaultsTooltip:
+          'All three keyword groups are identical to built-in defaults (case-insensitive, order-insensitive).',
+        modifiedUnsaved: 'Keywords modified (not saved)',
+        modifiedUnsavedTooltip:
+          'Keyword changes are only in the form. Click "Save Settings" to apply them to runtime routing.',
+        savedCustom: 'Custom keywords saved (non-default)',
+        savedCustomTooltip:
+          'Current keyword groups differ from defaults and are already saved/applied.'
       },
       saveSettings: 'Save Settings',
       saving: 'Saving...',

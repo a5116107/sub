@@ -144,9 +144,23 @@
               <!-- Message (Response Content) -->
               <td class="px-4 py-2">
                 <div class="max-w-[200px]">
-                  <p class="truncate text-[11px] font-medium text-gray-600 dark:text-gray-400" :title="log.message">
-                    {{ formatSmartMessage(log.message) || '-' }}
-                  </p>
+                  <div class="flex items-center gap-1.5">
+                    <template v-if="hasFailover400Match(log.message)">
+                      <el-tooltip :content="formatFailover400MatchTooltip(log.message)" placement="top" :show-after="500">
+                        <span
+                          :class="[
+                            'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold ring-1 ring-inset',
+                            getFailover400MatchBadgeClass(log.message)
+                          ]"
+                        >
+                          {{ getFailover400MatchBadgeLabel(log.message) }}
+                        </span>
+                      </el-tooltip>
+                    </template>
+                    <p class="truncate text-[11px] font-medium text-gray-600 dark:text-gray-400" :title="log.message">
+                      {{ formatSmartMessage(log.message) || '-' }}
+                    </p>
+                  </div>
                 </div>
               </td>
 
@@ -244,6 +258,8 @@ function getStatusClass(code: number): string {
 function formatSmartMessage(msg: string): string {
   if (!msg) return ''
 
+  msg = stripFailover400MatchTag(msg)
+
   if (msg.startsWith('{') || msg.startsWith('[')) {
     try {
       const obj = JSON.parse(msg)
@@ -262,5 +278,77 @@ function formatSmartMessage(msg: string): string {
 
   return msg.length > 200 ? msg.substring(0, 200) + '...' : msg
 
+}
+
+type Failover400Match = { category: string; keyword: string }
+
+const failover400MatchCache = new Map<string, Failover400Match | null>()
+
+function stripFailover400MatchTag(msg: string): string {
+  // Example:
+  // "... (failover_400_match category=sensitive keyword=\"out of quota\")"
+  return String(msg).replace(/\s*\(failover_400_match[^)]*\)\s*$/i, '').trim()
+}
+
+function parseFailover400MatchFromMessage(message: string): Failover400Match | null {
+  const msg = String(message || '')
+  if (failover400MatchCache.has(msg)) {
+    return failover400MatchCache.get(msg) || null
+  }
+
+  const re = /failover_400_match\s+category=([a-zA-Z0-9_-]+)\s+keyword=("(?:(?:\\.)|[^"\\])*")/i
+  const m = msg.match(re)
+  if (!m) {
+    failover400MatchCache.set(msg, null)
+    return null
+  }
+
+  const category = String(m[1] || '').trim()
+  const quotedKeyword = String(m[2] || '').trim()
+  let keyword = ''
+  if (quotedKeyword) {
+    try {
+      keyword = JSON.parse(quotedKeyword)
+    } catch {
+      keyword = quotedKeyword.replace(/^"|"$/g, '')
+    }
+  }
+
+  const match = { category, keyword }
+  failover400MatchCache.set(msg, match)
+  return match
+}
+
+function hasFailover400Match(message: string): boolean {
+  return parseFailover400MatchFromMessage(message) != null
+}
+
+function getFailover400MatchBadgeLabel(message: string): string {
+  const match = parseFailover400MatchFromMessage(message)
+  if (!match) return ''
+
+  if (match.category === 'sensitive') return 'S'
+  if (match.category === 'temporary') return 'T'
+  return match.category ? match.category.substring(0, 1).toUpperCase() : '?'
+}
+
+function getFailover400MatchBadgeClass(message: string): string {
+  const match = parseFailover400MatchFromMessage(message)
+  if (!match) return 'bg-gray-100 text-gray-800 ring-gray-600/20 dark:bg-dark-700 dark:text-gray-200 dark:ring-dark-500/40'
+
+  if (match.category === 'sensitive') {
+    return 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-900/30 dark:text-red-400 dark:ring-red-500/30'
+  }
+  if (match.category === 'temporary') {
+    return 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-900/30 dark:text-blue-400 dark:ring-blue-500/30'
+  }
+
+  return 'bg-gray-100 text-gray-800 ring-gray-600/20 dark:bg-dark-700 dark:text-gray-200 dark:ring-dark-500/40'
+}
+
+function formatFailover400MatchTooltip(message: string): string {
+  const match = parseFailover400MatchFromMessage(message)
+  if (!match) return ''
+  return `${t('admin.ops.errorLog.failoverMatch')}: ${match.category || '-'} / ${match.keyword || '-'}`
 }
 </script>

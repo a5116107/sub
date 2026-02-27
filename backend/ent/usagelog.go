@@ -338,6 +338,9 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_type", values[i])
 			} else if value.Valid {
+				if value.Int64 < -128 || value.Int64 > 127 {
+					return fmt.Errorf("value %d out of int8 range for field billing_type", value.Int64)
+				}
 				_m.BillingType = int8(value.Int64)
 			}
 		case usagelog.FieldStream:

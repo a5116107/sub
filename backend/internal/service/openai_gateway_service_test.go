@@ -16,6 +16,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type errorReader struct{ err error }
+
+func (r errorReader) Read(p []byte) (int, error) { return 0, r.err }
+
 type stubOpenAIAccountRepo struct {
 	AccountRepository
 	accounts []Account
@@ -989,7 +993,7 @@ func TestOpenAIInvalidBaseURLWhenAllowlistDisabled(t *testing.T) {
 		Credentials: map[string]any{"base_url": "://invalid-url"},
 	}
 
-	_, err := svc.buildUpstreamRequest(c.Request.Context(), c, account, []byte("{}"), "token", false, "", false)
+	_, err := svc.buildUpstreamRequest(c.Request.Context(), c, account, http.MethodPost, []byte("{}"), "token", false, "", false, "")
 	if err == nil {
 		t.Fatalf("expected error for invalid base_url when allowlist disabled")
 	}
@@ -1051,5 +1055,187 @@ func TestOpenAIValidateUpstreamBaseURLEnabledEnforcesAllowlist(t *testing.T) {
 	}
 	if _, err := svc.validateUpstreamBaseURL("https://evil.com"); err == nil {
 		t.Fatalf("expected non-allowlisted host to fail")
+	}
+}
+
+func TestShouldFailoverOnOpenAI400_SensitiveOrTemporary(t *testing.T) {
+	tests := []struct {
+		name string
+		body []byte
+		want bool
+	}{
+		{
+			name: "insufficient_balance_english",
+			body: []byte(`{"error":{"message":"insufficient balance for this organization"}}`),
+			want: true,
+		},
+		{
+			name: "insufficient_points_chinese",
+			body: []byte(`{"error":{"message":"积分不足，请充值后重试"}}`),
+			want: true,
+		},
+		{
+			name: "temporary_unavailable",
+			body: []byte(`{"error":{"message":"service temporarily unavailable, try again later"}}`),
+			want: true,
+		},
+		{
+			name: "validation_error_should_not_failover",
+			body: []byte(`{"error":{"message":"Input must be a list"}}`),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldFailoverOnOpenAI400(tt.body)
+			if got != tt.want {
+				t.Fatalf("shouldFailoverOnOpenAI400() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestShouldFailoverOnOpenAIRequestError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  string
+		want bool
+	}{
+		{
+			name: "eof",
+			err:  `Post "https://chatgpt.com/backend-api/codex/responses": EOF`,
+			want: true,
+		},
+		{
+			name: "connection_reset",
+			err:  `read tcp 10.0.0.1:443->10.0.0.2:12345: connection reset by peer`,
+			want: true,
+		},
+		{
+			name: "invalid_request_body_not_transient",
+			err:  "invalid request body",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldFailoverOnOpenAIRequestError(tt.err)
+			if got != tt.want {
+				t.Fatalf("shouldFailoverOnOpenAIRequestError() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestOpenAIGatewayService_HandleNonStreamingResponse_ReadErrorTriggersFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	svc := &OpenAIGatewayService{}
+	account := &Account{ID: 42, Name: "bad-link", Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"x-request-id": []string{"up_req_123"}},
+		Body:       io.NopCloser(errorReader{err: io.ErrUnexpectedEOF}),
+	}
+
+	_, err := svc.handleNonStreamingResponse(context.Background(), resp, c, account, "gpt-5.2", "gpt-5.2")
+	var failoverErr *UpstreamFailoverError
+	if !errors.As(err, &failoverErr) {
+		t.Fatalf("expected UpstreamFailoverError, got %T %v", err, err)
+	}
+	if failoverErr.StatusCode != http.StatusBadGateway {
+		t.Fatalf("expected failover status %d, got %d", http.StatusBadGateway, failoverErr.StatusCode)
+	}
+
+	v, ok := c.Get(OpsUpstreamErrorsKey)
+	if !ok {
+		t.Fatalf("expected ops upstream errors to be recorded")
+	}
+	events, ok := v.([]*OpsUpstreamErrorEvent)
+	if !ok || len(events) == 0 {
+		t.Fatalf("expected non-empty ops upstream errors, got %#v", v)
+	}
+	last := events[len(events)-1]
+	if last == nil {
+		t.Fatalf("expected last ops upstream error event to be non-nil")
+		return
+	}
+	if last.Kind != "response_read_error" {
+		t.Fatalf("expected kind=response_read_error, got %q", last.Kind)
+	}
+	if !strings.Contains(strings.ToLower(last.Message), "eof") {
+		t.Fatalf("expected message to contain eof, got %q", last.Message)
+	}
+}
+
+func TestOpenAIGatewayService_ShouldFailoverOnOpenAI400_UsesConfigKeywords(t *testing.T) {
+	svc := &OpenAIGatewayService{
+		cfg: &config.Config{
+			Gateway: config.GatewayConfig{
+				FailoverSensitive400Keywords: []string{"wallet depleted"},
+			},
+		},
+	}
+
+	body := []byte(`{"error":{"message":"wallet depleted for this tenant"}}`)
+	if !svc.shouldFailoverOnOpenAI400(body) {
+		t.Fatalf("expected custom 400 keyword to trigger failover")
+	}
+	if shouldFailoverOnOpenAI400(body) {
+		t.Fatalf("default 400 keyword set should not match custom-only phrase")
+	}
+}
+
+func TestOpenAIGatewayService_ShouldFailoverOnOpenAIRequestError_UsesConfigKeywords(t *testing.T) {
+	svc := &OpenAIGatewayService{
+		cfg: &config.Config{
+			Gateway: config.GatewayConfig{
+				FailoverRequestErrorKeywords: []string{"upstream route blocked"},
+			},
+		},
+	}
+
+	errMsg := "proxy failed: upstream route blocked by edge policy"
+	if !svc.shouldFailoverOnOpenAIRequestError(errMsg) {
+		t.Fatalf("expected custom request error keyword to trigger failover")
+	}
+	if shouldFailoverOnOpenAIRequestError(errMsg) {
+		t.Fatalf("default request error keyword set should not match custom-only phrase")
+	}
+}
+
+func TestOpenAIGatewayService_ShouldFailoverKeywords_UseDBSettingsWhenAvailable(t *testing.T) {
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			FailoverSensitive400Keywords: []string{"config-only-sensitive"},
+			FailoverRequestErrorKeywords: []string{"config-only-request"},
+		},
+	}
+	settingSvc := NewSettingService(&settingRepoFeatureStub{values: map[string]string{
+		SettingKeyGatewayFailoverSensitive400Keywords: `["db-sensitive"]`,
+		SettingKeyGatewayFailoverRequestErrorKeywords: `["db-request"]`,
+	}}, cfg)
+	svc := &OpenAIGatewayService{
+		cfg:              cfg,
+		rateLimitService: &RateLimitService{settingService: settingSvc},
+	}
+
+	if !svc.shouldFailoverOnOpenAI400([]byte(`{"error":{"message":"db-sensitive limit reached"}}`)) {
+		t.Fatalf("expected DB sensitive keyword to trigger failover")
+	}
+	if svc.shouldFailoverOnOpenAI400([]byte(`{"error":{"message":"config-only-sensitive limit reached"}}`)) {
+		t.Fatalf("expected config keyword to be ignored when DB keyword list is present")
+	}
+	if !svc.shouldFailoverOnOpenAIRequestError("proxy failed: db-request") {
+		t.Fatalf("expected DB request keyword to trigger failover")
+	}
+	if svc.shouldFailoverOnOpenAIRequestError("proxy failed: config-only-request") {
+		t.Fatalf("expected config request keyword to be ignored when DB keyword list is present")
 	}
 }

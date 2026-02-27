@@ -3,30 +3,27 @@ import type {
   APIKey,
   CreateAPIKeyRequest,
   UpdateAPIKeyRequest,
+  PaginatedResponse,
 } from '../types';
 
 export const keysApi = {
-  // Get all API keys
-  getKeys: () =>
-    api.get<APIKey[]>('/user/keys'),
+  // Get all API keys (paginated)
+  getKeys: (params?: { page?: number; page_size?: number }) =>
+    api.get<PaginatedResponse<APIKey>>('/keys', { params }),
 
   // Get API key by ID
   getKey: (id: number) =>
-    api.get<APIKey>(`/user/keys/${id}`),
+    api.get<APIKey>(`/keys/${id}`),
 
   // Create new API key
   createKey: (data: CreateAPIKeyRequest) =>
-    api.post<APIKey & { full_key: string }>('/user/keys', data),
+    api.post<APIKey & { full_key: string }>('/keys', data),
 
   // Update API key
   updateKey: (id: number, data: UpdateAPIKeyRequest) =>
-    api.put<APIKey>(`/user/keys/${id}`, data),
+    api.put<APIKey>(`/keys/${id}`, data),
 
   // Delete API key
   deleteKey: (id: number) =>
-    api.delete<void>(`/user/keys/${id}`),
-
-  // Regenerate API key
-  regenerateKey: (id: number) =>
-    api.post<APIKey & { full_key: string }>(`/user/keys/${id}/regenerate`, {}),
+    api.delete<void>(`/keys/${id}`),
 };

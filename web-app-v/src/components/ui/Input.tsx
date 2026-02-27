@@ -13,26 +13,26 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="w-full">
         {label && (
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">
+          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
             {label}
-            {props.required && <span className="text-red-400 ml-1">*</span>}
+            {props.required && <span className="text-red-500 ml-1">*</span>}
           </label>
         )}
         <div className="relative">
           {leftIcon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
               {leftIcon}
             </div>
           )}
           <input
             ref={ref}
             className={`
-              w-full bg-[#0A0A0C] border rounded-lg px-3 py-2.5
-              text-white placeholder:text-gray-600
+              w-full bg-[var(--bg-card)] border rounded-lg px-3 py-2.5
+              text-[var(--text-primary)] placeholder:text-[var(--text-muted)]
               outline-none transition-all duration-200
-              focus:border-[#00F0FF] focus:ring-1 focus:ring-[#00F0FF]/20
+              focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-soft)]
               disabled:opacity-50 disabled:cursor-not-allowed
-              ${error ? 'border-red-500/50 focus:border-red-500' : 'border-[#2A2A30]'}
+              ${error ? 'border-red-500/60 focus:border-red-500 focus:ring-red-500/15' : 'border-[var(--border-color)]'}
               ${leftIcon ? 'pl-10' : ''}
               ${rightIcon ? 'pr-10' : ''}
               ${className}
@@ -40,16 +40,16 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
           {rightIcon && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
               {rightIcon}
             </div>
           )}
         </div>
         {error && (
-          <p className="mt-1.5 text-sm text-red-400">{error}</p>
+          <p className="mt-1.5 text-sm text-red-500 dark:text-red-400">{error}</p>
         )}
         {helperText && !error && (
-          <p className="mt-1.5 text-sm text-gray-500">{helperText}</p>
+          <p className="mt-1.5 text-sm text-[var(--text-muted)]">{helperText}</p>
         )}
       </div>
     );

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Smartphone, AlertCircle, CheckCircle, Copy, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { userApi } from '../../../api/user';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Badge } from '../../../components/ui';
 
 export const TwoFactorPage: React.FC = () => {
+  const { t } = useTranslation(['settings', 'common']);
   const [status, setStatus] = useState<{ enabled: boolean; method?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [setupData, setSetupData] = useState<{ secret: string; qr_code: string; backup_codes: string[] } | null>(null);
@@ -43,7 +45,7 @@ export const TwoFactorPage: React.FC = () => {
 
   const handleVerify = async () => {
     if (!verificationCode || verificationCode.length !== 6) {
-      setMessage({ type: 'error', text: 'Please enter a valid 6-digit code' });
+      setMessage({ type: 'error', text: t('settings:twoFactor.invalidCode') });
       return;
     }
 
@@ -52,11 +54,11 @@ export const TwoFactorPage: React.FC = () => {
 
     try {
       await userApi.enableTOTP({ code: verificationCode });
-      setMessage({ type: 'success', text: 'Two-factor authentication enabled successfully' });
+      setMessage({ type: 'success', text: t('settings:twoFactor.enableSuccess') });
       setStep('status');
       fetchStatus();
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Invalid verification code' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : t('settings:twoFactor.invalidCode') });
     } finally {
       setProcessing(false);
     }
@@ -64,7 +66,7 @@ export const TwoFactorPage: React.FC = () => {
 
   const handleDisable = async () => {
     if (!verificationCode || verificationCode.length !== 6) {
-      setMessage({ type: 'error', text: 'Please enter a valid 6-digit code' });
+      setMessage({ type: 'error', text: t('settings:twoFactor.invalidCode') });
       return;
     }
 
@@ -73,12 +75,12 @@ export const TwoFactorPage: React.FC = () => {
 
     try {
       await userApi.disableTOTP({ code: verificationCode });
-      setMessage({ type: 'success', text: 'Two-factor authentication disabled successfully' });
+      setMessage({ type: 'success', text: t('settings:twoFactor.disableSuccess') });
       setStep('status');
       setVerificationCode('');
       fetchStatus();
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Invalid verification code' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : t('settings:twoFactor.invalidCode') });
     } finally {
       setProcessing(false);
     }
@@ -86,7 +88,7 @@ export const TwoFactorPage: React.FC = () => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    setMessage({ type: 'success', text: 'Copied to clipboard' });
+    setMessage({ type: 'success', text: t('settings:twoFactor.copied') });
     setTimeout(() => setMessage(null), 2000);
   };
 
@@ -108,8 +110,8 @@ export const TwoFactorPage: React.FC = () => {
   return (
     <div className="p-6 lg:p-8 max-w-3xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">Two-Factor Authentication</h1>
-        <p className="text-gray-400">Add an extra layer of security to your account</p>
+        <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">{t('settings:twoFactor.title')}</h1>
+        <p className="text-gray-400">{t('settings:twoFactor.subtitle')}</p>
       </div>
 
       {message && (
@@ -130,7 +132,7 @@ export const TwoFactorPage: React.FC = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-[#00F0FF]" />
-              2FA Status
+              {t('settings:twoFactor.status')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -143,33 +145,33 @@ export const TwoFactorPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-white font-medium">
-                    {status?.enabled ? 'Enabled' : 'Disabled'}
+                    {status?.enabled ? t('settings:twoFactor.enabled') : t('settings:twoFactor.disabled')}
                   </p>
                   <p className="text-sm text-gray-500">
                     {status?.enabled
-                      ? `Using ${status.method?.toUpperCase() || 'TOTP'} authenticator`
-                      : 'Add extra security to your account'}
+                      ? t('settings:twoFactor.usingAuth', { method: status.method?.toUpperCase() || 'TOTP' })
+                      : t('settings:twoFactor.addSecurity')}
                   </p>
                 </div>
               </div>
               <Badge variant={status?.enabled ? 'success' : 'default'}>
-                {status?.enabled ? 'Active' : 'Inactive'}
+                {status?.enabled ? t('common:status.active') : t('common:status.inactive')}
               </Badge>
             </div>
 
             {status?.enabled ? (
               <Button variant="danger" onClick={() => setStep('disable')} className="w-full">
-                Disable 2FA
+                {t('settings:twoFactor.disable')}
               </Button>
             ) : (
               <Button onClick={handleSetup} disabled={processing} className="w-full">
                 {processing ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-                    Setting up...
+                    {t('settings:twoFactor.settingUp')}
                   </>
                 ) : (
-                  'Enable 2FA'
+                  t('settings:twoFactor.enable')
                 )}
               </Button>
             )}
@@ -180,11 +182,11 @@ export const TwoFactorPage: React.FC = () => {
       {step === 'setup' && setupData && (
         <Card>
           <CardHeader>
-            <CardTitle>Setup Authenticator</CardTitle>
+            <CardTitle>{t('settings:twoFactor.setupTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="text-center">
-              <p className="text-gray-400 mb-4">Scan this QR code with your authenticator app</p>
+              <p className="text-gray-400 mb-4">{t('settings:twoFactor.scanQR')}</p>
               <div className="inline-block p-4 bg-white rounded-lg">
                 <img
                   src={`data:image/png;base64,${setupData.qr_code}`}
@@ -195,7 +197,7 @@ export const TwoFactorPage: React.FC = () => {
             </div>
 
             <div className="p-4 rounded-lg bg-white/5">
-              <p className="text-sm text-gray-400 mb-2">Or enter this secret key manually:</p>
+              <p className="text-sm text-gray-400 mb-2">{t('settings:twoFactor.manualEntry')}</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 p-3 bg-black/30 rounded font-mono text-sm break-all">
                   {setupData.secret}
@@ -208,7 +210,7 @@ export const TwoFactorPage: React.FC = () => {
 
             <div className="border-t border-[#2A2A30] pt-6">
               <label className="block text-sm font-medium text-gray-400 mb-2">
-                Enter verification code from your app
+                {t('settings:twoFactor.enterCode')}
               </label>
               <Input
                 value={verificationCode}
@@ -219,17 +221,17 @@ export const TwoFactorPage: React.FC = () => {
               />
               <div className="flex gap-3 mt-4">
                 <Button variant="ghost" onClick={() => setStep('status')} className="flex-1">
-                  Cancel
+                  {t('common:btn.cancel')}
                 </Button>
                 <Button onClick={handleVerify} disabled={processing || verificationCode.length !== 6} className="flex-1">
-                  {processing ? 'Verifying...' : 'Verify & Enable'}
+                  {processing ? t('settings:twoFactor.verifying') : t('settings:twoFactor.verifyEnable')}
                 </Button>
               </div>
             </div>
 
             {setupData.backup_codes?.length > 0 && (
               <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <p className="text-sm text-amber-400 mb-2">Save these backup codes in a safe place:</p>
+                <p className="text-sm text-amber-400 mb-2">{t('settings:twoFactor.backupCodes')}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {setupData.backup_codes.map((code, i) => (
                     <code key={i} className="text-xs font-mono text-amber-300">
@@ -246,16 +248,16 @@ export const TwoFactorPage: React.FC = () => {
       {step === 'disable' && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-red-400">Disable Two-Factor Authentication</CardTitle>
+            <CardTitle className="text-red-400">{t('settings:twoFactor.disableTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
               <AlertCircle className="w-5 h-5 mb-2" />
-              <p>Warning: Disabling 2FA will make your account less secure.</p>
+              <p>{t('settings:twoFactor.disableWarning')}</p>
             </div>
 
             <label className="block text-sm font-medium text-gray-400 mb-2">
-              Enter your 2FA code to confirm
+              {t('settings:twoFactor.confirmDisable')}
             </label>
             <Input
               value={verificationCode}
@@ -267,7 +269,7 @@ export const TwoFactorPage: React.FC = () => {
 
             <div className="flex gap-3">
               <Button variant="ghost" onClick={() => setStep('status')} className="flex-1">
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 variant="danger"
@@ -275,7 +277,7 @@ export const TwoFactorPage: React.FC = () => {
                 disabled={processing || verificationCode.length !== 6}
                 className="flex-1"
               >
-                {processing ? 'Disabling...' : 'Disable 2FA'}
+                {processing ? t('settings:twoFactor.disabling') : t('settings:twoFactor.disable')}
               </Button>
             </div>
           </CardContent>

@@ -643,6 +643,40 @@ func (a *Account) IsSessionIDMaskingEnabled() bool {
 	return false
 }
 
+// IsCacheTTLOverrideEnabled checks whether Cache TTL override is enabled for this account.
+// Only applies to Anthropic OAuth/SetupToken accounts.
+//
+// When enabled, cache creation tokens are reclassified into a single TTL bucket ("5m" or "1h")
+// to match the configured billing model.
+func (a *Account) IsCacheTTLOverrideEnabled() bool {
+	if !a.IsAnthropicOAuthOrSetupToken() {
+		return false
+	}
+	if a.Extra == nil {
+		return false
+	}
+	if v, ok := a.Extra["cache_ttl_override_enabled"]; ok {
+		if enabled, ok := v.(bool); ok {
+			return enabled
+		}
+	}
+	return false
+}
+
+// GetCacheTTLOverrideTarget returns the target TTL bucket for Cache TTL override.
+// Valid values are "5m" and "1h"; defaults to "5m".
+func (a *Account) GetCacheTTLOverrideTarget() string {
+	if a.Extra == nil {
+		return "5m"
+	}
+	if v, ok := a.Extra["cache_ttl_override_target"]; ok {
+		if target, ok := v.(string); ok && (target == "5m" || target == "1h") {
+			return target
+		}
+	}
+	return "5m"
+}
+
 // GetWindowCostLimit 获取 5h 窗口费用阈值（美元）
 // 返回 0 表示未启用
 func (a *Account) GetWindowCostLimit() float64 {

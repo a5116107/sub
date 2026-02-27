@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,6 +25,24 @@ const (
 var codexCLIInstructions string
 
 var codexModelMap = map[string]string{
+	"gpt-5.3":                   "gpt-5.3",
+	"gpt-5.3-none":              "gpt-5.3",
+	"gpt-5.3-low":               "gpt-5.3",
+	"gpt-5.3-medium":            "gpt-5.3",
+	"gpt-5.3-high":              "gpt-5.3",
+	"gpt-5.3-xhigh":             "gpt-5.3",
+	"gpt-5.3-codex":             "gpt-5.3-codex",
+	"gpt-5.3-codex-none":        "gpt-5.3-codex",
+	"gpt-5.3-codex-low":         "gpt-5.3-codex",
+	"gpt-5.3-codex-medium":      "gpt-5.3-codex",
+	"gpt-5.3-codex-high":        "gpt-5.3-codex",
+	"gpt-5.3-codex-xhigh":       "gpt-5.3-codex",
+	"gpt-5.3-code":              "gpt-5.3-codex",
+	"gpt-5.3-code-none":         "gpt-5.3-codex",
+	"gpt-5.3-code-low":          "gpt-5.3-codex",
+	"gpt-5.3-code-medium":       "gpt-5.3-codex",
+	"gpt-5.3-code-high":         "gpt-5.3-codex",
+	"gpt-5.3-code-xhigh":        "gpt-5.3-codex",
 	"gpt-5.1-codex":             "gpt-5.1-codex",
 	"gpt-5.1-codex-low":         "gpt-5.1-codex",
 	"gpt-5.1-codex-medium":      "gpt-5.1-codex",
@@ -61,6 +80,31 @@ var codexModelMap = map[string]string{
 	"gpt-5":                     "gpt-5.1",
 	"gpt-5-mini":                "gpt-5.1",
 	"gpt-5-nano":                "gpt-5.1",
+}
+
+var (
+	codexModelAliasesMu sync.RWMutex
+	codexModelAliases   = map[string]string{}
+)
+
+// ConfigureCodexModelAliases configures runtime model aliases for Codex normalization.
+//
+// Operators can use config key `gateway.codex_model_aliases` to adjust model mapping
+// without code changes (requires service restart to apply).
+func ConfigureCodexModelAliases(aliases map[string]string) {
+	normalized := make(map[string]string)
+	for key, value := range aliases {
+		k := strings.ToLower(strings.TrimSpace(key))
+		v := strings.TrimSpace(value)
+		if k == "" || v == "" {
+			continue
+		}
+		normalized[k] = v
+	}
+
+	codexModelAliasesMu.Lock()
+	defer codexModelAliasesMu.Unlock()
+	codexModelAliases = normalized
 }
 
 type codexTransformResult struct {
@@ -164,7 +208,21 @@ func normalizeCodexModel(model string) string {
 		return mapped
 	}
 
-	normalized := strings.ToLower(modelID)
+	normalized := strings.ToLower(strings.TrimSpace(modelID))
+	normalized = strings.ReplaceAll(normalized, " ", "-")
+
+	if mapped := getNormalizedCodexModel(normalized); mapped != "" {
+		return mapped
+	}
+
+	if baseModel, stripped := stripCodexReasoningSuffix(normalized); stripped {
+		if mapped := getNormalizedCodexModel(baseModel); mapped != "" {
+			return mapped
+		}
+		if isLikelyGPT5Model(baseModel) {
+			return baseModel
+		}
+	}
 
 	if strings.Contains(normalized, "gpt-5.2-codex") || strings.Contains(normalized, "gpt 5.2 codex") {
 		return "gpt-5.2-codex"
@@ -189,13 +247,20 @@ func normalizeCodexModel(model string) string {
 	if strings.Contains(normalized, "gpt-5.1") || strings.Contains(normalized, "gpt 5.1") {
 		return "gpt-5.1"
 	}
-	if strings.Contains(normalized, "codex") {
+	if normalized == "codex" {
 		return "gpt-5.1-codex"
 	}
-	if strings.Contains(normalized, "gpt-5") || strings.Contains(normalized, "gpt 5") {
-		return "gpt-5.1"
+	if isLikelyGPT5Model(normalized) {
+		// Future-proof fallback: preserve newer GPT-5 family model names
+		// instead of force-downgrading to gpt-5.1.
+		return normalized
 	}
 
+	// Unknown non-GPT model: preserve original id (trimmed) to avoid silent rewrites.
+	trimmed := strings.TrimSpace(modelID)
+	if trimmed != "" {
+		return trimmed
+	}
 	return "gpt-5.1"
 }
 
@@ -203,6 +268,11 @@ func getNormalizedCodexModel(modelID string) string {
 	if modelID == "" {
 		return ""
 	}
+
+	if mapped := getConfiguredCodexModelAlias(modelID); mapped != "" {
+		return mapped
+	}
+
 	if mapped, ok := codexModelMap[modelID]; ok {
 		return mapped
 	}
@@ -213,6 +283,44 @@ func getNormalizedCodexModel(modelID string) string {
 		}
 	}
 	return ""
+}
+
+func getConfiguredCodexModelAlias(modelID string) string {
+	key := strings.ToLower(strings.TrimSpace(modelID))
+	if key == "" {
+		return ""
+	}
+
+	codexModelAliasesMu.RLock()
+	defer codexModelAliasesMu.RUnlock()
+	if mapped, ok := codexModelAliases[key]; ok {
+		return strings.TrimSpace(mapped)
+	}
+	return ""
+}
+
+func stripCodexReasoningSuffix(modelID string) (string, bool) {
+	if modelID == "" {
+		return "", false
+	}
+	suffixes := []string{"-none", "-low", "-medium", "-high", "-xhigh"}
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(modelID, suffix) {
+			base := strings.TrimSpace(strings.TrimSuffix(modelID, suffix))
+			if base != "" {
+				return base, true
+			}
+		}
+	}
+	return modelID, false
+}
+
+func isLikelyGPT5Model(modelID string) bool {
+	m := strings.ToLower(strings.TrimSpace(modelID))
+	if m == "" {
+		return false
+	}
+	return strings.HasPrefix(m, "gpt-5") || strings.HasPrefix(m, "gpt5")
 }
 
 func getOpenCodeCachedPrompt(url, cacheFileName, metaFileName string) string {
@@ -480,7 +588,7 @@ func readFile(path string) (string, bool) {
 	if path == "" {
 		return "", false
 	}
-	data, err := os.ReadFile(path)
+	data, err := readScopedBytes(path)
 	if err != nil {
 		return "", false
 	}
@@ -491,14 +599,11 @@ func writeFile(path, content string) error {
 	if path == "" {
 		return fmt.Errorf("empty cache path")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(content), 0o644)
+	return writeScopedBytes(path, []byte(content), 0o644)
 }
 
 func loadJSON(path string, target any) bool {
-	data, err := os.ReadFile(path)
+	data, err := readScopedBytes(path)
 	if err != nil {
 		return false
 	}
@@ -512,14 +617,43 @@ func writeJSON(path string, value any) error {
 	if path == "" {
 		return fmt.Errorf("empty json path")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return writeScopedBytes(path, data, 0o644)
+}
+
+func readScopedBytes(path string) ([]byte, error) {
+	cleanPath := filepath.Clean(path)
+	fileName := filepath.Base(cleanPath)
+	if fileName == "" || fileName == "." || fileName == string(filepath.Separator) {
+		return nil, fmt.Errorf("invalid file path: %s", path)
+	}
+	root, err := os.OpenRoot(filepath.Dir(cleanPath))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+	return root.ReadFile(fileName)
+}
+
+func writeScopedBytes(path string, data []byte, perm os.FileMode) error {
+	cleanPath := filepath.Clean(path)
+	fileName := filepath.Base(cleanPath)
+	if fileName == "" || fileName == "." || fileName == string(filepath.Separator) {
+		return fmt.Errorf("invalid file path: %s", path)
+	}
+	dir := filepath.Dir(cleanPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	return root.WriteFile(fileName, data, perm)
 }
 
 func fetchWithETag(url, etag string) (string, string, int, error) {

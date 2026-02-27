@@ -11,6 +11,7 @@ import {
   Globe,
   Save,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   adminDocsApi,
   type DocPage,
@@ -29,12 +30,12 @@ import {
   Modal,
 } from '../../components/ui';
 
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, t: (key: string) => string) => {
   switch (status) {
     case 'published':
-      return <Badge variant="success">Published</Badge>;
+      return <Badge variant="success">{t('docs.status.published')}</Badge>;
     case 'draft':
-      return <Badge variant="warning">Draft</Badge>;
+      return <Badge variant="warning">{t('docs.status.draft')}</Badge>;
     default:
       return <Badge variant="default">{status}</Badge>;
   }
@@ -65,6 +66,7 @@ const formatDate = (dateString?: string) => {
 };
 
 export const DocsPage: React.FC = () => {
+  const { t } = useTranslation('admin');
   const [loading, setLoading] = useState(true);
   const [pages, setPages] = useState<DocPageSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -227,58 +229,58 @@ export const DocsPage: React.FC = () => {
   const columns = [
     {
       key: 'key',
-      title: 'Key',
+      title: t('docs.col.key'),
       render: (item: DocPageSummary) => (
         <span className="text-sm text-cyan-400 font-mono">{item.key}</span>
       ),
     },
     {
       key: 'title',
-      title: 'Title',
+      title: t('docs.col.title'),
       render: (item: DocPageSummary) => (
         <span className="text-sm text-white">{item.title}</span>
       ),
     },
     {
       key: 'language',
-      title: 'Language',
+      title: t('docs.col.language'),
       render: (item: DocPageSummary) => getLanguageBadge(item.language),
     },
     {
       key: 'status',
-      title: 'Status',
-      render: (item: DocPageSummary) => getStatusBadge(item.status),
+      title: t('docs.col.status'),
+      render: (item: DocPageSummary) => getStatusBadge(item.status, t),
     },
     {
       key: 'order',
-      title: 'Order',
+      title: t('docs.col.order'),
       render: (item: DocPageSummary) => (
         <span className="text-sm text-gray-400">{item.order}</span>
       ),
     },
     {
       key: 'updated_at',
-      title: 'Updated',
+      title: t('docs.col.updated'),
       render: (item: DocPageSummary) => (
         <span className="text-sm text-gray-400">{formatDate(item.updated_at)}</span>
       ),
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('docs.col.actions'),
       render: (item: DocPageSummary) => (
         <div className="flex items-center gap-1">
           <button
             onClick={() => openPreviewModal(item)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="Preview"
+            title={t('docs.preview')}
           >
             <Eye className="w-4 h-4" />
           </button>
           <button
             onClick={() => openEditModal(item)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-cyan-400 transition-colors"
-            title="Edit"
+            title={t('common:btn.edit')}
           >
             <Edit className="w-4 h-4" />
           </button>
@@ -288,7 +290,7 @@ export const DocsPage: React.FC = () => {
               setShowDeleteModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-red-400 transition-colors"
-            title="Delete"
+            title={t('common:btn.delete')}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -302,19 +304,19 @@ export const DocsPage: React.FC = () => {
       <div className="grid grid-cols-2 gap-4">
         {!isEdit && (
           <div className="col-span-2">
-            <label className="block text-sm text-gray-400 mb-1">Key *</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('docs.form.key')} *</label>
             <Input
               placeholder="e.g., getting-started"
               value={formData.key}
               onChange={(e) => setFormData({ ...formData, key: e.target.value })}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Unique identifier for the page (used in URL)
+              {t('docs.form.keyDesc')}
             </p>
           </div>
         )}
         <div className="col-span-2">
-          <label className="block text-sm text-gray-400 mb-1">Title *</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('docs.form.title')} *</label>
           <Input
             placeholder="Page title"
             value={formData.title}
@@ -322,7 +324,7 @@ export const DocsPage: React.FC = () => {
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Language</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('docs.form.language')}</label>
           <select
             value={formData.language}
             onChange={(e) => setFormData({ ...formData, language: e.target.value })}
@@ -334,18 +336,18 @@ export const DocsPage: React.FC = () => {
           </select>
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Status</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('docs.form.status')}</label>
           <select
             value={formData.status}
             onChange={(e) => setFormData({ ...formData, status: e.target.value as 'published' | 'draft' })}
             className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
           >
-            <option value="draft">Draft</option>
-            <option value="published">Published</option>
+            <option value="draft">{t('docs.status.draft')}</option>
+            <option value="published">{t('docs.status.published')}</option>
           </select>
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Order</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('docs.form.order')}</label>
           <Input
             type="number"
             placeholder="0"
@@ -354,7 +356,7 @@ export const DocsPage: React.FC = () => {
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Parent Key</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('docs.form.parentKey')}</label>
           <Input
             placeholder="Optional parent page key"
             value={formData.parent_key || ''}
@@ -365,7 +367,7 @@ export const DocsPage: React.FC = () => {
 
       {/* Content Editor */}
       <div>
-        <label className="block text-sm text-gray-400 mb-1">Content (Markdown)</label>
+        <label className="block text-sm text-gray-400 mb-1">{t('docs.form.content')}</label>
         <textarea
           value={formData.content}
           onChange={(e) => setFormData({ ...formData, content: e.target.value })}
@@ -378,12 +380,16 @@ export const DocsPage: React.FC = () => {
         <Button
           variant="secondary"
           onClick={() => {
-            isEdit ? setShowEditModal(false) : setShowCreateModal(false);
+            if (isEdit) {
+              setShowEditModal(false);
+            } else {
+              setShowCreateModal(false);
+            }
             resetForm();
             setSelectedPage(null);
           }}
         >
-          Cancel
+          {t('common:btn.cancel')}
         </Button>
         <Button
           onClick={isEdit ? handleUpdatePage : handleCreatePage}
@@ -391,7 +397,7 @@ export const DocsPage: React.FC = () => {
           disabled={!formData.title || (!isEdit && !formData.key)}
         >
           <Save className="w-4 h-4 mr-2" />
-          {isEdit ? 'Update Page' : 'Create Page'}
+          {isEdit ? t('common:btn.saveChanges') : t('docs.create')}
         </Button>
       </div>
     </div>
@@ -402,12 +408,12 @@ export const DocsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Documentation</h1>
-          <p className="text-gray-400">Manage documentation pages</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('docs.title')}</h1>
+          <p className="text-gray-400">{t('docs.subtitle')}</p>
         </div>
         <Button onClick={() => setShowCreateModal(true)}>
           <Plus className="w-4 h-4 mr-2" />
-          Add Page
+          {t('docs.addPage')}
         </Button>
       </div>
 
@@ -418,7 +424,7 @@ export const DocsPage: React.FC = () => {
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <Input
-                placeholder="Search pages..."
+                placeholder={t('userAttributes.search')}
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -435,7 +441,7 @@ export const DocsPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Languages</option>
+              <option value="">{t('docs.allLanguages')}</option>
               <option value="en">English</option>
               <option value="zh">Chinese</option>
               <option value="ja">Japanese</option>
@@ -448,13 +454,13 @@ export const DocsPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Status</option>
-              <option value="published">Published</option>
-              <option value="draft">Draft</option>
+              <option value="">{t('docs.allStatus')}</option>
+              <option value="published">{t('docs.status.published')}</option>
+              <option value="draft">{t('docs.status.draft')}</option>
             </select>
             <div className="flex items-center gap-2 text-sm text-gray-400 ml-auto">
               <FileText className="w-4 h-4" />
-              <span>{total} total pages</span>
+              <span>{t('docs.pagesCount', { count: total })}</span>
             </div>
           </div>
         </CardContent>
@@ -467,14 +473,14 @@ export const DocsPage: React.FC = () => {
             columns={columns}
             data={pages}
             loading={loading}
-            emptyText="No pages found"
+            emptyText={t('docs.empty')}
           />
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#2A2A30]">
               <p className="text-sm text-gray-400">
-                Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} pages
+                {t('common:table.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total), total })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -486,7 +492,7 @@ export const DocsPage: React.FC = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm text-gray-400">
-                  Page {page} of {totalPages}
+                  {t('common:table.page', { current: page, total: totalPages })}
                 </span>
                 <Button
                   variant="secondary"
@@ -509,7 +515,7 @@ export const DocsPage: React.FC = () => {
           setShowCreateModal(false);
           resetForm();
         }}
-        title="Create Page"
+        title={t('docs.create')}
       >
         <DocForm />
       </Modal>
@@ -522,7 +528,7 @@ export const DocsPage: React.FC = () => {
           setSelectedPage(null);
           resetForm();
         }}
-        title="Edit Page"
+        title={t('docs.edit')}
       >
         <DocForm isEdit />
       </Modal>
@@ -535,7 +541,7 @@ export const DocsPage: React.FC = () => {
           setSelectedPage(null);
           setSelectedPageContent(null);
         }}
-        title={selectedPageContent?.title || 'Preview'}
+        title={selectedPageContent?.title || t('docs.preview')}
       >
         {selectedPageContent && (
           <div className="space-y-4 max-h-[70vh] overflow-y-auto">
@@ -543,11 +549,11 @@ export const DocsPage: React.FC = () => {
               <Globe className="w-4 h-4" />
               <span>{selectedPageContent.language.toUpperCase()}</span>
               <span className="mx-2">•</span>
-              {getStatusBadge(selectedPageContent.status)}
+              {getStatusBadge(selectedPageContent.status, t)}
             </div>
             <div className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg p-4">
               <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
-                {selectedPageContent.content || 'No content'}
+                {selectedPageContent.content || t('docs.noContent')}
               </pre>
             </div>
             <div className="flex justify-end">
@@ -559,7 +565,7 @@ export const DocsPage: React.FC = () => {
                   setSelectedPageContent(null);
                 }}
               >
-                Close
+                {t('common:btn.close')}
               </Button>
             </div>
           </div>
@@ -573,16 +579,16 @@ export const DocsPage: React.FC = () => {
           setShowDeleteModal(false);
           setSelectedPage(null);
         }}
-        title="Delete Page"
+        title={t('docs.delete')}
       >
         {selectedPage && (
           <div className="space-y-4">
             <p className="text-gray-400">
-              Are you sure you want to delete the page{' '}
+              {t('docs.deleteConfirm')}{' '}
               <span className="text-white font-medium">{selectedPage.title}</span>?
             </p>
             <p className="text-sm text-red-400">
-              This action cannot be undone. The page will be permanently removed.
+              {t('docs.deleteWarning')}
             </p>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -592,14 +598,14 @@ export const DocsPage: React.FC = () => {
                   setSelectedPage(null);
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 variant="danger"
                 onClick={handleDeletePage}
                 isLoading={actionLoading}
               >
-                Delete Page
+                {t('docs.delete')}
               </Button>
             </div>
           </div>

@@ -366,6 +366,8 @@ func TestFrontendServer_Middleware(t *testing.T) {
 			"/setup/init",
 			"/health",
 			"/responses",
+			"/responses/compact",
+			"/responses/input_tokens",
 		}
 
 		for _, path := range apiPaths {
@@ -439,6 +441,25 @@ func TestFrontendServer_Middleware(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Contains(t, w.Header().Get("Content-Type"), "image/png")
+	})
+
+	t.Run("returns_404_for_missing_vite_assets", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"test": "value"},
+		}
+
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+
+		router := gin.New()
+		router.Use(server.Middleware())
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/assets/DateRangePicker-missing.css", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.NotContains(t, strings.ToLower(w.Body.String()), "<!doctype html>")
 	})
 }
 
@@ -541,6 +562,8 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 			"/setup/init",
 			"/health",
 			"/responses",
+			"/responses/compact",
+			"/responses/input_tokens",
 		}
 
 		for _, path := range apiPaths {
@@ -560,6 +583,41 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 				assert.True(t, nextCalled, "next handler should be called for API route")
 			})
 		}
+	})
+
+	t.Run("returns_404_for_missing_vite_assets", func(t *testing.T) {
+		middleware := ServeEmbeddedFrontend()
+
+		router := gin.New()
+		router.Use(middleware)
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/assets/DateRangePicker-missing.css", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.NotContains(t, strings.ToLower(w.Body.String()), "<!doctype html>")
+	})
+}
+
+func TestFrontendServer_V2Middleware(t *testing.T) {
+	t.Run("returns_404_for_missing_vite_assets", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"test": "value"},
+		}
+
+		server, err := NewV2FrontendServer(provider)
+		require.NoError(t, err)
+
+		router := gin.New()
+		router.Use(server.V2Middleware())
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/v2/assets/DateRangePicker-missing.css", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.NotContains(t, strings.ToLower(w.Body.String()), "<!doctype html>")
 	})
 }
 

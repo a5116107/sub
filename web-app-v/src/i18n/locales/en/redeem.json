@@ -1,0 +1,23 @@
+{
+  "title": "Redeem Code",
+  "subtitle": "Enter a redemption code to add balance or activate a subscription",
+  "form.title": "Enter Redemption Code",
+  "form.placeholder": "XXXX-XXXX-XXXX-XXXX",
+  "form.redeem": "Redeem",
+  "form.redeeming": "Redeeming...",
+  "form.enterCode": "Please enter a redemption code",
+  "form.helpText": "Redemption codes are case-insensitive. Contact support if you have issues with your code.",
+  "result.success": "Success!",
+  "result.failed": "Failed",
+  "result.addedBalance": "Added ${{value}} to your balance",
+  "result.activated": "Activated {{type}}: {{value}}",
+  "history.title": "Redemption History",
+  "history.empty": "No redemption history yet",
+  "history.col.code": "Code",
+  "history.col.type": "Type",
+  "history.col.value": "Value",
+  "history.col.redeemedAt": "Redeemed At",
+  "type.balance": "Balance",
+  "type.subscription": "Subscription",
+  "type.quota": "Quota"
+}

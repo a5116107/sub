@@ -84,8 +84,7 @@ func setupGuard() gin.HandlerFunc {
 				return
 			}
 		} else {
-			ip := net.ParseIP(strings.TrimSpace(c.ClientIP()))
-			if ip == nil || !ip.IsLoopback() {
+			if c.Request == nil || !isLoopbackRemoteAddr(c.Request.RemoteAddr) {
 				response.Error(c, http.StatusUnauthorized, "Setup is only available from localhost unless SETUP_TOKEN is configured")
 				c.Abort()
 				return
@@ -100,6 +99,19 @@ func secureEqual(a, b string) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
+func isLoopbackRemoteAddr(remoteAddr string) bool {
+	host := strings.TrimSpace(remoteAddr)
+	if host == "" {
+		return false
+	}
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+	host = strings.Trim(host, "[]")
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // validateHostname checks if a hostname/IP is safe (no injection characters)

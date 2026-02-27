@@ -69,24 +69,24 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		return nil
 	}
 	return &APIKey{
-		ID:          k.ID,
-		UserID:      k.UserID,
-		Key:         k.Key,
-		Name:        k.Name,
-		GroupID:     k.GroupID,
-		Status:      k.Status,
-		IPWhitelist: k.IPWhitelist,
-		IPBlacklist: k.IPBlacklist,
-		AllowBalance:      k.AllowBalance,
-		AllowSubscription: k.AllowSubscription,
+		ID:                 k.ID,
+		UserID:             k.UserID,
+		Key:                k.Key,
+		Name:               k.Name,
+		GroupID:            k.GroupID,
+		Status:             k.Status,
+		IPWhitelist:        k.IPWhitelist,
+		IPBlacklist:        k.IPBlacklist,
+		AllowBalance:       k.AllowBalance,
+		AllowSubscription:  k.AllowSubscription,
 		SubscriptionStrict: k.SubscriptionStrict,
-		ExpiresAt:         k.ExpiresAt,
-		QuotaLimitUSD:     k.QuotaLimitUSD,
-		QuotaUsedUSD:      k.QuotaUsedUSD,
-		CreatedAt:   k.CreatedAt,
-		UpdatedAt:   k.UpdatedAt,
-		User:        UserFromServiceShallow(k.User),
-		Group:       GroupFromServiceShallow(k.Group),
+		ExpiresAt:          k.ExpiresAt,
+		QuotaLimitUSD:      k.QuotaLimitUSD,
+		QuotaUsedUSD:       k.QuotaUsedUSD,
+		CreatedAt:          k.CreatedAt,
+		UpdatedAt:          k.UpdatedAt,
+		User:               UserFromServiceShallow(k.User),
+		Group:              GroupFromServiceShallow(k.Group),
 	}
 }
 
@@ -209,6 +209,13 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 		if a.IsSessionIDMaskingEnabled() {
 			enabled := true
 			out.EnableSessionIDMasking = &enabled
+		}
+		// 缓存 TTL 强制替换
+		if a.IsCacheTTLOverrideEnabled() {
+			enabled := true
+			out.CacheTTLOverrideEnabled = &enabled
+			target := a.GetCacheTTLOverrideTarget()
+			out.CacheTTLOverrideTarget = &target
 		}
 	}
 

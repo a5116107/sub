@@ -21,4 +21,8 @@ const (
 	IsClaudeCodeClient Key = "ctx_is_claude_code_client"
 	// Group 认证后的分组信息，由 API Key 认证中间件设置
 	Group Key = "ctx_group"
+
+	// SingleAccountRetry 标识当前请求处于单账号 503 退避重试模式。
+	// 在此模式下，Service 层可避免对 503 (MODEL_CAPACITY_EXHAUSTED) 设置长 cooldown。
+	SingleAccountRetry Key = "ctx_single_account_retry"
 )

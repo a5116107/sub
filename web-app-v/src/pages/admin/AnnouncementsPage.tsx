@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Bell,
   Plus,
@@ -22,34 +23,6 @@ import {
   Skeleton,
 } from '../../components/ui';
 
-const getStatusBadge = (status: string) => {
-  switch (status.toLowerCase()) {
-    case 'active':
-      return <Badge variant="success">Active</Badge>;
-    case 'draft':
-      return <Badge variant="info">Draft</Badge>;
-    case 'archived':
-      return <Badge variant="default">Archived</Badge>;
-    default:
-      return <Badge variant="default">{status}</Badge>;
-  }
-};
-
-const getTypeBadge = (type: string) => {
-  switch (type.toLowerCase()) {
-    case 'info':
-      return <Badge variant="info">Info</Badge>;
-    case 'warning':
-      return <Badge variant="primary">Warning</Badge>;
-    case 'important':
-      return <Badge variant="danger">Important</Badge>;
-    case 'maintenance':
-      return <Badge variant="default">Maintenance</Badge>;
-    default:
-      return <Badge variant="default">{type}</Badge>;
-  }
-};
-
 const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleDateString('en-US', {
     year: 'numeric',
@@ -65,6 +38,7 @@ interface ReadStatus {
 }
 
 export const AnnouncementsPage: React.FC = () => {
+  const { t } = useTranslation('admin');
   const [loading, setLoading] = useState(true);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [total, setTotal] = useState(0);
@@ -73,6 +47,33 @@ export const AnnouncementsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [typeFilter, setTypeFilter] = useState<string>('');
 
+  const getStatusBadge = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return <Badge variant="success">{t('announcements.status.active')}</Badge>;
+      case 'draft':
+        return <Badge variant="info">{t('announcements.status.draft')}</Badge>;
+      case 'archived':
+        return <Badge variant="default">{t('announcements.status.archived')}</Badge>;
+      default:
+        return <Badge variant="default">{status}</Badge>;
+    }
+  };
+
+  const getTypeBadge = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'info':
+        return <Badge variant="info">{t('announcements.type.info')}</Badge>;
+      case 'warning':
+        return <Badge variant="primary">{t('announcements.type.warning')}</Badge>;
+      case 'important':
+        return <Badge variant="danger">{t('announcements.type.important')}</Badge>;
+      case 'maintenance':
+        return <Badge variant="default">{t('announcements.type.maintenance')}</Badge>;
+      default:
+        return <Badge variant="default">{type}</Badge>;
+    }
+  };
   // Modal states
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -83,6 +84,10 @@ export const AnnouncementsPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [readStatuses, setReadStatuses] = useState<ReadStatus[]>([]);
   const [readStatusLoading, setReadStatusLoading] = useState(false);
+
+  // Stats state
+  const [announcementStats, setAnnouncementStats] = useState<{ total_announcements: number; active_announcements: number; total_reads: number } | null>(null);
+  const [announcementStatsLoading, setAnnouncementStatsLoading] = useState(true);
 
   // Form state
   const [formData, setFormData] = useState<Partial<Announcement>>({
@@ -115,6 +120,22 @@ export const AnnouncementsPage: React.FC = () => {
   useEffect(() => {
     fetchAnnouncements();
   }, [fetchAnnouncements]);
+
+  // Fetch announcement stats on mount
+  useEffect(() => {
+    const fetchStats = async () => {
+      setAnnouncementStatsLoading(true);
+      try {
+        const stats = await adminAnnouncementsApi.getStats();
+        setAnnouncementStats(stats);
+      } catch (error) {
+        console.error('Failed to fetch announcement stats:', error);
+      } finally {
+        setAnnouncementStatsLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
 
   const handleCreateAnnouncement = async () => {
     if (!formData.title || !formData.content) return;
@@ -209,14 +230,14 @@ export const AnnouncementsPage: React.FC = () => {
   const columns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('announcements.col.id'),
       render: (announcement: Announcement) => (
         <span className="text-sm text-gray-400">#{announcement.id}</span>
       ),
     },
     {
       key: 'title',
-      title: 'Title',
+      title: t('announcements.col.title'),
       render: (announcement: Announcement) => (
         <div>
           <p className="text-sm font-medium text-white truncate max-w-[250px]">
@@ -230,44 +251,44 @@ export const AnnouncementsPage: React.FC = () => {
     },
     {
       key: 'type',
-      title: 'Type',
-      render: (announcement: Announcement) => getTypeBadge(announcement.type),
+      title: t('announcements.col.type'),
+      render: (announcement: Announcement) => getTypeBadge(announcement.type || 'info'),
     },
     {
       key: 'status',
-      title: 'Status',
-      render: (announcement: Announcement) => getStatusBadge(announcement.status),
+      title: t('announcements.col.status'),
+      render: (announcement: Announcement) => getStatusBadge(announcement.status || 'draft'),
     },
     {
       key: 'created',
-      title: 'Created',
+      title: t('announcements.col.created'),
       render: (announcement: Announcement) => (
         <span className="text-sm text-gray-400">{formatDate(announcement.created_at)}</span>
       ),
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('announcements.col.actions'),
       render: (announcement: Announcement) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => openPreviewModal(announcement)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-cyan-400 transition-colors"
-            title="Preview"
+            title={t('announcements.preview')}
           >
             <Eye className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleViewReadStatus(announcement)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-purple-400 transition-colors"
-            title="Read Status"
+            title={t('announcements.readStatusLabel')}
           >
             <Users className="w-4 h-4" />
           </button>
           <button
             onClick={() => openEditModal(announcement)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="Edit"
+            title={t('common:btn.edit')}
           >
             <Edit className="w-4 h-4" />
           </button>
@@ -277,7 +298,7 @@ export const AnnouncementsPage: React.FC = () => {
               setShowDeleteModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-red-400 transition-colors"
-            title="Delete"
+            title={t('common:btn.delete')}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -289,17 +310,17 @@ export const AnnouncementsPage: React.FC = () => {
   const AnnouncementForm = ({ isEdit = false }: { isEdit?: boolean }) => (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm text-gray-400 mb-1">Title *</label>
+        <label className="block text-sm text-gray-400 mb-1">{t('announcements.form.title')} *</label>
         <Input
-          placeholder="Announcement title"
+          placeholder={t('announcements.form.titlePlaceholder')}
           value={formData.title}
           onChange={(e) => setFormData({ ...formData, title: e.target.value })}
         />
       </div>
       <div>
-        <label className="block text-sm text-gray-400 mb-1">Content *</label>
+        <label className="block text-sm text-gray-400 mb-1">{t('announcements.form.content')} *</label>
         <textarea
-          placeholder="Announcement content (supports markdown)"
+          placeholder={t('announcements.form.contentPlaceholder')}
           value={formData.content}
           onChange={(e) => setFormData({ ...formData, content: e.target.value })}
           rows={6}
@@ -308,28 +329,28 @@ export const AnnouncementsPage: React.FC = () => {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Type</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('announcements.form.type')}</label>
           <select
             value={formData.type}
             onChange={(e) => setFormData({ ...formData, type: e.target.value })}
             className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
           >
-            <option value="info">Info</option>
-            <option value="warning">Warning</option>
-            <option value="important">Important</option>
-            <option value="maintenance">Maintenance</option>
+            <option value="info">{t('announcements.type.info')}</option>
+            <option value="warning">{t('announcements.type.warning')}</option>
+            <option value="important">{t('announcements.type.important')}</option>
+            <option value="maintenance">{t('announcements.type.maintenance')}</option>
           </select>
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Status</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('announcements.form.status')}</label>
           <select
             value={formData.status}
             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
             className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
           >
-            <option value="draft">Draft</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
+            <option value="draft">{t('announcements.status.draft')}</option>
+            <option value="active">{t('announcements.status.active')}</option>
+            <option value="archived">{t('announcements.status.archived')}</option>
           </select>
         </div>
       </div>
@@ -337,19 +358,23 @@ export const AnnouncementsPage: React.FC = () => {
         <Button
           variant="secondary"
           onClick={() => {
-            isEdit ? setShowEditModal(false) : setShowCreateModal(false);
+            if (isEdit) {
+              setShowEditModal(false);
+            } else {
+              setShowCreateModal(false);
+            }
             resetForm();
             setSelectedAnnouncement(null);
           }}
         >
-          Cancel
+          {t('common:btn.cancel')}
         </Button>
         <Button
           onClick={isEdit ? handleUpdateAnnouncement : handleCreateAnnouncement}
           isLoading={actionLoading}
           disabled={!formData.title || !formData.content}
         >
-          {isEdit ? 'Update Announcement' : 'Create Announcement'}
+          {isEdit ? t('announcements.updateAnnouncement') : t('announcements.createAnnouncement')}
         </Button>
       </div>
     </div>
@@ -360,14 +385,38 @@ export const AnnouncementsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Announcements</h1>
-          <p className="text-gray-400">Create and manage system announcements</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('announcements.title')}</h1>
+          <p className="text-gray-400">{t('announcements.subtitle')}</p>
         </div>
         <Button onClick={() => setShowCreateModal(true)}>
           <Plus className="w-4 h-4 mr-2" />
-          Create Announcement
+          {t('announcements.createAnnouncement')}
         </Button>
       </div>
+
+      {/* Stats Cards */}
+      {!announcementStatsLoading && announcementStats && (
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-gray-500 mb-1">{t('announcements.stat.total')}</p>
+              <p className="text-xl font-bold text-white">{announcementStats.total_announcements}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-gray-500 mb-1">{t('announcements.stat.active')}</p>
+              <p className="text-xl font-bold text-emerald-400">{announcementStats.active_announcements}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs text-gray-500 mb-1">{t('announcements.stat.totalReads')}</p>
+              <p className="text-xl font-bold text-cyan-400">{announcementStats.total_reads}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Filters */}
       <Card className="mb-6">
@@ -381,11 +430,11 @@ export const AnnouncementsPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Types</option>
-              <option value="info">Info</option>
-              <option value="warning">Warning</option>
-              <option value="important">Important</option>
-              <option value="maintenance">Maintenance</option>
+              <option value="">{t('announcements.filter.allTypes')}</option>
+              <option value="info">{t('announcements.type.info')}</option>
+              <option value="warning">{t('announcements.type.warning')}</option>
+              <option value="important">{t('announcements.type.important')}</option>
+              <option value="maintenance">{t('announcements.type.maintenance')}</option>
             </select>
             <select
               value={statusFilter}
@@ -395,14 +444,14 @@ export const AnnouncementsPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Status</option>
-              <option value="draft">Draft</option>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
+              <option value="">{t('announcements.filter.allStatus')}</option>
+              <option value="draft">{t('announcements.status.draft')}</option>
+              <option value="active">{t('announcements.status.active')}</option>
+              <option value="archived">{t('announcements.status.archived')}</option>
             </select>
             <div className="flex items-center gap-2 text-sm text-gray-400 ml-auto">
               <Bell className="w-4 h-4" />
-              <span>{total} total announcements</span>
+              <span>{t('announcements.total', { count: total })}</span>
             </div>
           </div>
         </CardContent>
@@ -415,15 +464,14 @@ export const AnnouncementsPage: React.FC = () => {
             columns={columns}
             data={announcements}
             loading={loading}
-            emptyText="No announcements found"
+            emptyText={t('announcements.empty')}
           />
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#2A2A30]">
               <p className="text-sm text-gray-400">
-                Showing {(page - 1) * pageSize + 1} to{' '}
-                {Math.min(page * pageSize, total)} of {total} announcements
+                {t('common:table.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total), total })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -435,7 +483,7 @@ export const AnnouncementsPage: React.FC = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm text-gray-400">
-                  Page {page} of {totalPages}
+                  {t('common:table.page', { current: page, total: totalPages })}
                 </span>
                 <Button
                   variant="secondary"
@@ -458,7 +506,7 @@ export const AnnouncementsPage: React.FC = () => {
           setShowCreateModal(false);
           resetForm();
         }}
-        title="Create Announcement"
+        title={t('announcements.modal.createTitle')}
       >
         <AnnouncementForm />
       </Modal>
@@ -471,7 +519,7 @@ export const AnnouncementsPage: React.FC = () => {
           setSelectedAnnouncement(null);
           resetForm();
         }}
-        title="Edit Announcement"
+        title={t('announcements.modal.editTitle')}
       >
         <AnnouncementForm isEdit />
       </Modal>
@@ -483,22 +531,22 @@ export const AnnouncementsPage: React.FC = () => {
           setShowPreviewModal(false);
           setSelectedAnnouncement(null);
         }}
-        title="Preview Announcement"
+        title={t('announcements.modal.previewTitle')}
       >
         {selectedAnnouncement && (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              {getTypeBadge(selectedAnnouncement.type)}
-              {getStatusBadge(selectedAnnouncement.status)}
+              {getTypeBadge(selectedAnnouncement.type || 'info')}
+              {getStatusBadge(selectedAnnouncement.status || 'draft')}
             </div>
             <h3 className="text-lg font-medium text-white">{selectedAnnouncement.title}</h3>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
               <p className="text-gray-300 whitespace-pre-wrap">{selectedAnnouncement.content}</p>
             </div>
             <p className="text-xs text-gray-500">
-              Created: {formatDate(selectedAnnouncement.created_at)}
+              {t('announcements.previewCreated', { date: formatDate(selectedAnnouncement.created_at) })}
               {selectedAnnouncement.updated_at !== selectedAnnouncement.created_at && (
-                <> | Updated: {formatDate(selectedAnnouncement.updated_at)}</>
+                <> | {t('announcements.previewUpdated', { date: formatDate(selectedAnnouncement.updated_at) })}</>
               )}
             </p>
           </div>
@@ -512,16 +560,15 @@ export const AnnouncementsPage: React.FC = () => {
           setShowDeleteModal(false);
           setSelectedAnnouncement(null);
         }}
-        title="Delete Announcement"
+        title={t('announcements.modal.deleteTitle')}
       >
         {selectedAnnouncement && (
           <div className="space-y-4">
             <p className="text-gray-400">
-              Are you sure you want to delete the announcement{' '}
-              <span className="text-white font-medium">"{selectedAnnouncement.title}"</span>?
+              {t('announcements.deleteConfirm', { title: selectedAnnouncement.title })}
             </p>
             <p className="text-sm text-red-400">
-              This action cannot be undone.
+              {t('announcements.deleteWarning')}
             </p>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -531,14 +578,14 @@ export const AnnouncementsPage: React.FC = () => {
                   setSelectedAnnouncement(null);
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 variant="danger"
                 onClick={handleDeleteAnnouncement}
                 isLoading={actionLoading}
               >
-                Delete Announcement
+                {t('announcements.deleteAnnouncement')}
               </Button>
             </div>
           </div>
@@ -553,7 +600,7 @@ export const AnnouncementsPage: React.FC = () => {
           setSelectedAnnouncement(null);
           setReadStatuses([]);
         }}
-        title={`Read Status: ${selectedAnnouncement?.title || ''}`}
+        title={t('announcements.modal.readStatusTitle', { title: selectedAnnouncement?.title || '' })}
       >
         {readStatusLoading ? (
           <div className="space-y-4">
@@ -566,8 +613,8 @@ export const AnnouncementsPage: React.FC = () => {
             <table className="w-full">
               <thead className="sticky top-0 bg-[#121215]">
                 <tr className="border-b border-[#2A2A30]">
-                  <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">User</th>
-                  <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">Read At</th>
+                  <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">{t('announcements.readStatus.col.user')}</th>
+                  <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">{t('announcements.readStatus.col.readAt')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -586,7 +633,7 @@ export const AnnouncementsPage: React.FC = () => {
             </table>
           </div>
         ) : (
-          <p className="text-gray-400 text-center py-8">No one has read this announcement yet</p>
+          <p className="text-gray-400 text-center py-8">{t('announcements.readStatus.empty')}</p>
         )}
       </Modal>
     </div>

@@ -46,6 +46,7 @@ func TestRegisterProfile(t *testing.T) {
 	retrieved := r.GetProfile("custom")
 	if retrieved == nil {
 		t.Fatal("expected custom profile to exist")
+		return
 	}
 	if retrieved.Name != "Custom Profile" {
 		t.Errorf("expected profile name 'Custom Profile', got '%s'", retrieved.Name)

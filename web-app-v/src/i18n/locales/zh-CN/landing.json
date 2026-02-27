@@ -1,0 +1,113 @@
+{
+  "hero": {
+    "badge": "Nexus V2.0 现已上线",
+    "title": {
+      "part1": "面向未来的",
+      "part2": "基础设施",
+      "part3": ""
+    },
+    "description": "部署无服务器函数，管理边缘数据库，编排 AI 管道。",
+    "highlight": "零配置，开箱即用。",
+    "cta": {
+      "primary": "开始部署",
+      "secondary": "阅读文档"
+    },
+    "trustedBy": "受以下工程团队信赖"
+  },
+  "stats": {
+    "globalLatency": "全球延迟",
+    "uptimeSLA": "可用性 SLA",
+    "edgeRegions": "边缘区域",
+    "dailyRequests": "日请求量"
+  },
+  "globalNetwork": {
+    "badge": "全球基础设施",
+    "title": "全球部署，即时生效。",
+    "description": "您的代码在毫秒级距离内为用户提供服务。我们的智能边缘网络自动将流量路由到最近的健康节点。",
+    "regions": {
+      "northAmerica": "北美",
+      "europe": "欧洲",
+      "asiaPacific": "亚太地区",
+      "southAmerica": "南美"
+    },
+    "status": "运行中",
+    "locations": "40+ 个地点"
+  },
+  "features": {
+    "lightningFast": {
+      "title": "闪电般快速",
+      "description": "在一秒内部署到全球 150+ 边缘节点。您的代码比以往任何时候都更贴近用户。"
+    },
+    "secureByDefault": {
+      "title": "默认安全",
+      "description": "企业级安全，自动 HTTPS、DDoS 防护和边缘认证。"
+    },
+    "realtimeAnalytics": {
+      "title": "实时分析",
+      "description": "通过详细的洞察实时监控性能、错误和使用情况。"
+    },
+    "aiGateway": {
+      "title": "AI 网关",
+      "description": "统一 API 接入所有主流 AI 提供商。智能路由请求，管理成本，监控所有 AI 工作负载。"
+    }
+  },
+  "developerExperience": {
+    "badge": "开发者体验",
+    "title": {
+      "part1": "只需编写代码。",
+      "part2": "其余交给我们。"
+    },
+    "description": "无需关心 Kubernetes、Dockerfile 或负载均衡器。只需编写函数，我们即刻将其部署到 150+ 边缘节点。专注于业务逻辑，而非基础设施。",
+    "serverless": {
+      "title": "无服务器",
+      "description": "零管理，自动扩缩容。"
+    },
+    "edgeCompute": {
+      "title": "边缘计算",
+      "description": "V8 Isolate 运行时，<10ms 启动。"
+    },
+    "checklist": {
+      "gitPush": "Git 推送即时部署",
+      "cicd": "内置 CI/CD 管道",
+      "logs": "实时日志与分析"
+    }
+  },
+  "cta": {
+    "title": "准备好发布您的下一个大作了吗？",
+    "description": "加入 100,000+ 在 Nexus 上构建未来的开发者。",
+    "credits": "今日注册即可获得 ${{amount}} 免费额度。",
+    "primary": "免费开始使用",
+    "secondary": "联系销售",
+    "disclaimer": "免费套餐无需信用卡。"
+  },
+  "footer": {
+    "product": {
+      "title": "产品",
+      "edgeFunctions": "边缘函数",
+      "edgeConfig": "边缘配置",
+      "aiGateway": "AI 网关",
+      "cli": "CLI"
+    },
+    "resources": {
+      "title": "资源",
+      "documentation": "文档",
+      "guides": "指南",
+      "helpCenter": "帮助中心",
+      "apiReference": "API 参考"
+    },
+    "company": {
+      "title": "公司",
+      "about": "关于我们",
+      "blog": "博客",
+      "careers": "招聘",
+      "contact": "联系我们"
+    },
+    "legal": {
+      "title": "法律",
+      "privacy": "隐私政策",
+      "terms": "服务条款",
+      "cookies": "Cookie 政策"
+    },
+    "copyright": "© {{year}} Nexus Cloud Inc. 保留所有权利。"
+  }
+}

@@ -1,4 +1,14 @@
 import { api } from '../client';
+import type { PaginatedResponse } from '../../types';
+
+interface OpsErrorLog {
+  id: number;
+  level?: string;
+  message?: string;
+  error_message?: string;
+  stack_trace?: string;
+  created_at?: string;
+}
 
 export const adminSystemApi = {
   // Get system version
@@ -11,71 +21,83 @@ export const adminSystemApi = {
     }>('/admin/system/version'),
 
   // Check for updates
-  checkUpdates: () =>
+  checkUpdates: (params?: { force?: boolean }) =>
     api.get<{
       has_update: boolean;
       latest_version?: string;
       release_notes?: string;
       download_url?: string;
-    }>('/admin/system/updates'),
+    }>('/admin/system/check-updates', { params }),
 
-  // Get system status
-  getStatus: () =>
-    api.get<{
-      status: string;
-      uptime: string;
+  // System status (compat layer based on available endpoints)
+  getStatus: async () => {
+    await adminSystemApi.getVersion();
+    return {
+      status: 'running',
+      uptime: 'unknown',
       memory_usage: {
-        allocated: number;
-        total: number;
-        system: number;
-      };
-      goroutines: number;
-      database_status: string;
-      cache_status: string;
-    }>('/admin/system/status'),
+        allocated: 0,
+        total: 0,
+        system: 0,
+      },
+      goroutines: 0,
+      database_status: 'unknown',
+      cache_status: 'unknown',
+    };
+  },
 
-  // Get system metrics
-  getMetrics: () =>
-    api.get<{
-      cpu_usage: number;
-      memory_usage: number;
-      disk_usage: number;
+  // System metrics (compat layer based on ops realtime endpoint)
+  getMetrics: async () => {
+    const realtime = await api.get<Record<string, number>>('/admin/ops/realtime-traffic');
+    return {
+      cpu_usage: Number(realtime?.cpu_usage || 0),
+      memory_usage: Number(realtime?.memory_usage || 0),
+      disk_usage: Number(realtime?.disk_usage || 0),
       network_io: {
-        bytes_in: number;
-        bytes_out: number;
-      };
-    }>('/admin/system/metrics'),
+        bytes_in: Number(realtime?.bytes_in || 0),
+        bytes_out: Number(realtime?.bytes_out || 0),
+      },
+    };
+  },
 
   // Restart system
   restart: () =>
-    api.post<void>('/admin/system/restart', {}),
+    api.post<void>('/admin/system/restart'),
 
   // Rollback to previous version
   rollback: () =>
-    api.post<void>('/admin/system/rollback', {}),
+    api.post<void>('/admin/system/rollback'),
 
   // Update system
   update: () =>
-    api.post<void>('/admin/system/update', {}),
+    api.post<void>('/admin/system/update'),
 
-  // Get system logs
-  getLogs: (params?: { lines?: number; level?: string }) =>
-    api.get<string[]>('/admin/system/logs', { params }),
+  // No dedicated backend endpoint (compat placeholder)
+  getLogs: async () => [],
 
-  // Get error logs
-  getErrorLogs: (params?: { page?: number; page_size?: number }) =>
-    api.get<{
-      items: Array<{
-        id: number;
-        level: string;
-        message: string;
-        stack_trace?: string;
-        created_at: string;
-      }>;
-      total: number;
-    }>('/admin/system/errors', { params }),
+  // Use ops errors endpoint as system error source
+  getErrorLogs: async (params?: { page?: number; page_size?: number }) => {
+    const response = await api.get<PaginatedResponse<OpsErrorLog>>('/admin/ops/errors', { params });
+    return {
+      items: (response?.items || []).map((item) => ({
+        id: item.id,
+        level: item.level || 'error',
+        message: item.message || item.error_message || '',
+        stack_trace: item.stack_trace,
+        created_at: item.created_at || '',
+      })),
+      total: response?.total || 0,
+    };
+  },
 
-  // Clear error logs
-  clearErrorLogs: () =>
-    api.delete<void>('/admin/system/errors'),
+  // Resolve all unresolved ops errors (compat "clear")
+  clearErrorLogs: async () => {
+    const unresolved = await api.get<PaginatedResponse<OpsErrorLog>>('/admin/ops/errors', {
+      params: { page: 1, page_size: 200, resolved: false },
+    });
+    await Promise.all(
+      (unresolved?.items || []).map((item) =>
+        api.put<void>(`/admin/ops/errors/${item.id}/resolve`, { resolved: true })),
+    );
+  },
 };

@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from '../../components/ui';
+import { useLandingStyleStore } from '../../stores/landingStyleStore';
 import {
   ChevronRight,
   ArrowRight,
@@ -15,13 +17,6 @@ import {
   Server,
   Globe2,
 } from 'lucide-react';
-
-const STATS = [
-  { label: 'Global Latency', value: '<30ms', icon: Zap, color: 'text-yellow-400' },
-  { label: 'Uptime SLA', value: '99.99%', icon: ShieldCheck, color: 'text-emerald-400' },
-  { label: 'Edge Regions', value: '150+', icon: Globe, color: 'text-blue-400' },
-  { label: 'Daily Requests', value: '2B+', icon: Activity, color: 'text-purple-400' },
-];
 
 const LOGOS = [
   <svg key="l1" viewBox="0 0 100 30" className="h-7 fill-current opacity-40 hover:opacity-100 transition-opacity"><path d="M10,15 L20,5 L30,15 L20,25 Z M40,5 H50 V25 H40 Z M60,5 H80 V10 H65 V12 H75 V17 H65 V25 H60 Z" /></svg>,
@@ -89,36 +84,53 @@ export async function POST(req: Request) {
 
 export const LandingPage: React.FC = () => {
   const { isAuthenticated } = useAuth();
+  const { t } = useTranslation('landing');
   const [activeCodeTab, setActiveCodeTab] = useState<'edge' | 'middleware' | 'ai'>('edge');
+  const { lightStyle } = useLandingStyleStore();
+  const isBusiness = lightStyle === 'business';
+
+  const stats = [
+    { label: t('stats.globalLatency'), value: '<30ms', icon: Zap, color: 'text-amber-500' },
+    { label: t('stats.uptimeSLA'), value: '99.99%', icon: ShieldCheck, color: 'text-emerald-500' },
+    { label: t('stats.edgeRegions'), value: '150+', icon: Globe, color: 'text-sky-500' },
+    { label: t('stats.dailyRequests'), value: '2B+', icon: Activity, color: 'text-violet-500' },
+  ];
+
+  const regions = [
+    { name: t('globalNetwork.regions.northAmerica'), status: t('globalNetwork.status'), locations: t('globalNetwork.locations') },
+    { name: t('globalNetwork.regions.europe'), status: t('globalNetwork.status'), locations: t('globalNetwork.locations') },
+    { name: t('globalNetwork.regions.asiaPacific'), status: t('globalNetwork.status'), locations: t('globalNetwork.locations') },
+    { name: t('globalNetwork.regions.southAmerica'), status: t('globalNetwork.status'), locations: t('globalNetwork.locations') },
+  ];
 
   return (
-    <div className="bg-[#0A0A0C] min-h-screen text-white font-sans overflow-x-hidden">
+    <div className="bg-[var(--bg-primary)] min-h-screen text-[var(--text-primary)] font-sans overflow-x-hidden">
       {/* Hero Section */}
-      <section className="relative pt-20 pb-20 lg:pt-32 lg:pb-32 px-6 overflow-visible">
+      <section className="relative pt-24 pb-20 lg:pt-32 lg:pb-28 px-6 overflow-visible">
         {/* Advanced Background Gradients */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none mix-blend-screen" />
-        <div className="absolute top-[20%] right-[10%] w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse-slow mix-blend-screen" />
-        <div className="absolute inset-0 bg-grid-pattern opacity-[0.04] pointer-events-none" />
+        <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[980px] h-[560px] rounded-full blur-[110px] pointer-events-none ${isBusiness ? 'bg-blue-500/16' : 'bg-sky-400/20'}`} />
+        <div className={`absolute top-[18%] right-[8%] w-[520px] h-[520px] rounded-full blur-[96px] pointer-events-none animate-pulse-slow ${isBusiness ? 'bg-indigo-700/12' : 'bg-indigo-400/14'}`} />
+        <div className={`absolute inset-0 bg-grid-pattern pointer-events-none ${isBusiness ? 'opacity-[0.04]' : 'opacity-[0.05]'}`} />
 
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center relative z-10">
           {/* Left Content */}
           <div className="space-y-8 text-center lg:text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-semibold text-[#00F0FF] mb-2 animate-fade-in backdrop-blur-md hover:bg-white/10 transition-colors cursor-default shadow-[0_0_20px_rgba(0,0,0,0.2)]">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--accent-soft)] border border-[var(--accent-primary)]/25 text-xs font-semibold text-[var(--accent-primary)] mb-2 animate-fade-in backdrop-blur-md transition-colors cursor-default shadow-[var(--shadow-sm)]">
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00F0FF] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00F0FF]"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-primary)] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent-primary)]"></span>
               </span>
-              Nexus V2.0 is now live
+              {t('hero.badge')}
             </div>
 
-            <h1 className="text-5xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] text-white drop-shadow-lg">
-              The <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00F0FF] via-blue-500 to-purple-500 animate-shimmer bg-[length:200%_auto]">Infrastructure</span> <br />
-              for the Future.
+            <h1 className="text-5xl lg:text-[4.65rem] font-extrabold tracking-tight leading-[1.05] text-[var(--text-primary)]">
+              {t('hero.title.part1')} <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--accent-primary)] via-sky-500 to-[var(--accent-secondary)] animate-shimmer bg-[length:200%_auto]">{t('hero.title.part2')}</span> <br />
+              {t('hero.title.part3')}
             </h1>
 
-            <p className="text-xl text-gray-400 max-w-lg mx-auto lg:mx-0 leading-relaxed font-light">
-              Deploy serverless functions, manage edge databases, and orchestrate AI pipelines.
-              <span className="text-gray-200 font-medium"> All with zero config.</span>
+            <p className="text-lg lg:text-xl text-[var(--text-secondary)] max-w-xl mx-auto lg:mx-0 leading-relaxed font-normal">
+              {t('hero.description')}
+              <span className="text-[var(--accent-primary)] font-semibold"> {t('hero.highlight')}</span>
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start pt-4">
@@ -128,19 +140,19 @@ export const LandingPage: React.FC = () => {
                   glow
                   className="w-full sm:w-auto h-14 text-base px-8 font-bold tracking-wide shadow-xl"
                 >
-                  Start Deploying <ChevronRight className="w-4 h-4 ml-1" />
+                  {t('hero.cta.primary')} <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>
-              <Button variant="secondary" className="w-full sm:w-auto h-14 text-base px-8 font-medium">
-                Read Documentation
+              <Button variant="secondary" className="w-full sm:w-auto h-14 text-base px-8 font-medium hover:bg-[var(--accent-soft)]">
+                {t('hero.cta.secondary')}
               </Button>
             </div>
 
-            <div className="pt-10 border-t border-white/5 mt-8">
-              <p className="text-sm text-gray-500 mb-6 uppercase tracking-wider font-semibold">Trusted by engineering teams at</p>
+            <div className="pt-10 border-t border-[var(--border-color-subtle)] mt-8">
+              <p className="text-sm text-[var(--text-muted)] mb-6 uppercase tracking-wider font-semibold">{t('hero.trustedBy')}</p>
               <div className="flex flex-wrap justify-center lg:justify-start gap-8 lg:gap-12 grayscale hover:grayscale-0 transition-all duration-700">
                 {LOGOS.map((logo, idx) => (
-                  <div key={idx} className="w-24 text-white">{logo}</div>
+                  <div key={idx} className="w-24 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors">{logo}</div>
                 ))}
               </div>
             </div>
@@ -148,26 +160,26 @@ export const LandingPage: React.FC = () => {
 
           {/* Right Content - Terminal Effect */}
           <div className="relative animate-float delay-100 hidden lg:block perspective-[2000px] z-20">
-            <div className="absolute -top-10 -right-10 w-24 h-24 bg-gradient-to-br from-[#00F0FF] to-blue-600 rounded-xl blur-2xl opacity-20 animate-pulse" />
-            <div className="absolute -bottom-5 -left-5 w-32 h-32 bg-purple-500 rounded-full blur-3xl opacity-20" />
+            <div className={`absolute -top-10 -right-10 w-24 h-24 bg-gradient-to-br rounded-xl blur-2xl opacity-30 animate-pulse ${isBusiness ? 'from-blue-500 to-slate-500' : 'from-sky-400 to-blue-500'}`} />
+            <div className={`absolute -bottom-5 -left-5 w-32 h-32 rounded-full blur-3xl opacity-25 ${isBusiness ? 'bg-slate-400' : 'bg-violet-500'}`} />
 
-            <div className="glass-panel rounded-xl overflow-hidden border border-white/10 shadow-2xl">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10 bg-[#0f1012]">
+            <div className="glass-panel rounded-xl overflow-hidden border border-[var(--border-color)] shadow-[var(--shadow-xl)]">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-color)] bg-[var(--code-bg)]">
                 <div className="w-3 h-3 rounded-full bg-red-500/80" />
                 <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
                 <div className="w-3 h-3 rounded-full bg-green-500/80" />
-                <div className="ml-4 text-xs text-gray-500 font-mono">nexus-cli</div>
+                <div className="ml-4 text-xs text-[var(--text-muted)] font-mono">nexus-cli</div>
               </div>
               <div className="p-6 font-mono text-sm">
-                <div className="text-gray-400 mb-2">$ nexus deploy</div>
-                <div className="text-emerald-400 mb-1">✓ Building project...</div>
-                <div className="text-emerald-400 mb-1">✓ Optimizing assets...</div>
-                <div className="text-emerald-400 mb-1">✓ Deploying to edge...</div>
-                <div className="text-[#00F0FF] mb-2">✓ Deployed to 150+ regions in 890ms</div>
-                <div className="text-gray-500">https://my-app.nexus.dev</div>
+                <div className="text-[var(--text-muted)] mb-2">$ nexus deploy</div>
+                <div className="text-emerald-500 mb-1">✓ Building project...</div>
+                <div className="text-emerald-500 mb-1">✓ Optimizing assets...</div>
+                <div className="text-emerald-500 mb-1">✓ Deploying to edge...</div>
+                <div className="text-[var(--accent-primary)] mb-2">✓ Deployed to 150+ regions in 890ms</div>
+                <div className="text-[var(--text-muted)]">https://my-app.nexus.dev</div>
                 <div className="mt-4 flex items-center gap-2">
-                  <span className="text-gray-400">$</span>
-                  <span className="w-2 h-4 bg-[#00F0FF] animate-pulse" />
+                  <span className="text-[var(--text-muted)]">$</span>
+                  <span className="w-2 h-4 bg-[var(--accent-primary)] animate-pulse" />
                 </div>
               </div>
             </div>
@@ -176,16 +188,16 @@ export const LandingPage: React.FC = () => {
       </section>
 
       {/* Metrics Strip */}
-      <div className="border-y border-white/5 bg-[#0A0A0C]/50 backdrop-blur-sm relative z-20">
+      <div className="border-y border-[var(--border-color-subtle)] bg-[var(--bg-card-alpha)] backdrop-blur-sm relative z-20">
         <div className="max-w-7xl mx-auto px-6 py-12">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {STATS.map((stat, idx) => (
-              <div key={idx} className="flex flex-col items-center lg:items-start text-center lg:text-left gap-2 group cursor-default">
-                <div className={`p-3 rounded-xl bg-white/5 border border-white/5 group-hover:border-white/20 transition-colors mb-2 ${stat.color} shadow-lg`}>
+            {stats.map((stat, idx) => (
+              <div key={idx} className="flex flex-col items-center lg:items-start text-center lg:text-left gap-2 group cursor-default rounded-2xl p-4 border border-[var(--border-color-subtle)] bg-[var(--bg-card-alpha)] transition-all hover:-translate-y-0.5 hover:border-[var(--border-color)] hover:shadow-[var(--shadow-md)]">
+                <div className={`p-3 rounded-xl bg-[var(--accent-soft)] border border-[var(--border-color-subtle)] group-hover:border-[var(--border-color)] transition-colors mb-2 ${stat.color}`}>
                   <stat.icon className="w-6 h-6" />
                 </div>
-                <div className="text-3xl font-bold text-white tracking-tight">{stat.value}</div>
-                <div className="text-sm text-gray-500 uppercase tracking-wider font-medium">{stat.label}</div>
+                <div className="text-3xl font-bold text-[var(--text-primary)] tracking-tight">{stat.value}</div>
+                <div className="text-sm text-[var(--text-muted)] uppercase tracking-wider font-medium">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -193,29 +205,29 @@ export const LandingPage: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      <div className="bg-[#050507] relative">
-        <div className="absolute inset-0 bg-grid-pattern opacity-[0.02] pointer-events-none" />
+      <div className="bg-[var(--bg-secondary)] relative">
+        <div className="absolute inset-0 bg-grid-pattern opacity-[0.04] pointer-events-none" />
 
         {/* Global Network Map Section */}
         <section className="py-32 px-6 relative z-10">
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-16">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-medium text-blue-400 mb-4">
-                <Globe2 className="w-3 h-3" /> Global Infrastructure
+              <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium mb-4 ${isBusiness ? 'bg-blue-600/10 border border-blue-700/25 text-blue-700 dark:text-blue-400' : 'bg-sky-500/10 border border-sky-500/25 text-sky-600 dark:text-sky-400'}`}>
+                <Globe2 className="w-3 h-3" /> {t('globalNetwork.badge')}
               </div>
-              <h2 className="text-3xl md:text-5xl font-bold mb-6">Deploy globally, instantly.</h2>
-              <p className="text-gray-400 max-w-2xl mx-auto text-lg">
-                Your code runs within milliseconds of your users. Our intelligent edge network automatically routes traffic to the nearest healthy node.
+              <h2 className="text-3xl md:text-5xl font-bold mb-6">{t('globalNetwork.title')}</h2>
+              <p className="text-[var(--text-secondary)] max-w-2xl mx-auto text-lg">
+                {t('globalNetwork.description')}
               </p>
             </div>
 
-            <div className="glass-panel rounded-2xl p-8 border border-white/10">
+            <div className="glass-panel rounded-2xl p-8 border border-[var(--border-color)] shadow-[var(--shadow-lg)]">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {['North America', 'Europe', 'Asia Pacific', 'South America'].map((region) => (
-                  <div key={region} className="text-center p-4 rounded-xl bg-white/5 border border-white/5">
-                    <div className="text-emerald-400 text-sm font-medium mb-1">Operational</div>
-                    <div className="text-white font-semibold">{region}</div>
-                    <div className="text-gray-500 text-sm mt-1">40+ locations</div>
+                {regions.map((region) => (
+                  <div key={region.name} className="text-center p-4 rounded-xl bg-[var(--bg-card-alpha)] border border-[var(--border-color-subtle)] hover:border-[var(--border-color)] transition-colors">
+                    <div className="text-emerald-500 dark:text-emerald-400 text-sm font-medium mb-1">{region.status}</div>
+                    <div className="text-[var(--text-primary)] font-semibold">{region.name}</div>
+                    <div className="text-[var(--text-muted)] text-sm mt-1">{region.locations}</div>
                   </div>
                 ))}
               </div>
@@ -228,39 +240,39 @@ export const LandingPage: React.FC = () => {
           <div className="max-w-7xl mx-auto px-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Feature 1 */}
-              <div className="lg:col-span-2 glass-panel rounded-2xl p-8 border border-white/10 hover:border-[#00F0FF]/30 transition-all group">
-                <div className="w-12 h-12 rounded-xl bg-[#00F0FF]/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                  <Zap className="w-6 h-6 text-[#00F0FF]" />
+              <div className="lg:col-span-2 glass-panel rounded-2xl p-8 border border-[var(--border-color)] hover:border-[var(--accent-primary)]/40 transition-all group shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)]">
+                <div className="w-12 h-12 rounded-xl bg-[var(--accent-soft)] flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Zap className="w-6 h-6 text-[var(--accent-primary)]" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Lightning Fast</h3>
-                <p className="text-gray-400">Deploy to 150+ edge locations worldwide in under a second. Your code runs closer to your users than ever before.</p>
+                <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">{t('features.lightningFast.title')}</h3>
+                <p className="text-[var(--text-secondary)]">{t('features.lightningFast.description')}</p>
               </div>
 
               {/* Feature 2 */}
-              <div className="glass-panel rounded-2xl p-8 border border-white/10 hover:border-purple-500/30 transition-all group">
+              <div className="glass-panel rounded-2xl p-8 border border-[var(--border-color)] hover:border-purple-500/30 transition-all group shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)]">
                 <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   <ShieldCheck className="w-6 h-6 text-purple-400" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Secure by Default</h3>
-                <p className="text-gray-400">Enterprise-grade security with automatic HTTPS, DDoS protection, and edge authentication.</p>
+                <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">{t('features.secureByDefault.title')}</h3>
+                <p className="text-[var(--text-secondary)]">{t('features.secureByDefault.description')}</p>
               </div>
 
               {/* Feature 3 */}
-              <div className="glass-panel rounded-2xl p-8 border border-white/10 hover:border-emerald-500/30 transition-all group">
+              <div className="glass-panel rounded-2xl p-8 border border-[var(--border-color)] hover:border-emerald-500/30 transition-all group shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)]">
                 <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   <Activity className="w-6 h-6 text-emerald-400" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Real-time Analytics</h3>
-                <p className="text-gray-400">Monitor performance, errors, and usage in real-time with detailed insights.</p>
+                <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">{t('features.realtimeAnalytics.title')}</h3>
+                <p className="text-[var(--text-secondary)]">{t('features.realtimeAnalytics.description')}</p>
               </div>
 
               {/* Feature 4 */}
-              <div className="lg:col-span-2 glass-panel rounded-2xl p-8 border border-white/10 hover:border-blue-500/30 transition-all group">
+              <div className="lg:col-span-2 glass-panel rounded-2xl p-8 border border-[var(--border-color)] hover:border-blue-500/30 transition-all group shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)]">
                 <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                   <Cpu className="w-6 h-6 text-blue-400" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">AI Gateway</h3>
-                <p className="text-gray-400">Unified API for all major AI providers. Route requests intelligently, manage costs, and monitor usage across all your AI workloads.</p>
+                <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">{t('features.aiGateway.title')}</h3>
+                <p className="text-[var(--text-secondary)]">{t('features.aiGateway.description')}</p>
               </div>
             </div>
           </div>
@@ -272,20 +284,20 @@ export const LandingPage: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
               {/* Code Editor Tabs */}
               <div className="order-2 lg:order-1 relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 blur-3xl rounded-full opacity-50 group-hover:opacity-75 transition-opacity" />
+                  <div className={`absolute inset-0 bg-gradient-to-r blur-3xl rounded-full opacity-60 group-hover:opacity-85 transition-opacity ${isBusiness ? 'from-blue-700/14 to-slate-500/20' : 'from-sky-500/16 to-indigo-500/14'}`} />
 
-                <div className="glass-panel rounded-xl relative border border-white/10 bg-[#0A0A0C] overflow-hidden shadow-2xl">
+                <div className="glass-panel rounded-xl relative border border-[var(--border-color)] bg-[var(--bg-primary)] overflow-hidden shadow-[var(--shadow-xl)]">
                   {/* Tabs */}
-                  <div className="flex border-b border-white/5 bg-[#0f1012]">
+                  <div className="flex border-b border-[var(--border-color-subtle)] bg-[var(--code-bg)]">
                     {(Object.keys(CODE_SNIPPETS) as Array<keyof typeof CODE_SNIPPETS>).map((tab) => (
                       <button
                         key={tab}
                         onClick={() => setActiveCodeTab(tab)}
                         className={`
-                          px-6 py-3 text-xs font-medium font-mono border-r border-white/5 transition-all
+                          px-6 py-3 text-xs font-medium font-mono border-r border-[var(--border-color-subtle)] transition-all
                           ${activeCodeTab === tab
-                            ? 'text-white bg-[#0A0A0C] border-t-2 border-t-[#00F0FF]'
-                            : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border-t-2 border-t-transparent'}
+                            ? 'text-[var(--text-primary)] bg-[var(--bg-primary)] border-t-2 border-t-[var(--accent-primary)]'
+                            : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--accent-soft)] border-t-2 border-t-transparent'}
                         `}
                       >
                         {CODE_SNIPPETS[tab].file}
@@ -295,7 +307,7 @@ export const LandingPage: React.FC = () => {
 
                   {/* Code Content */}
                   <div className="p-6 overflow-x-auto">
-                    <pre className="font-mono text-sm leading-relaxed text-gray-300">
+                    <pre className="font-mono text-sm leading-relaxed text-[var(--text-secondary)]">
                       <code>{CODE_SNIPPETS[activeCodeTab].code}</code>
                     </pre>
                   </div>
@@ -304,36 +316,34 @@ export const LandingPage: React.FC = () => {
 
               {/* Text Content */}
               <div className="order-1 lg:order-2 space-y-8">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 text-purple-400 text-xs font-medium border border-purple-500/20">
-                  <Code2 className="w-3 h-3" /> Developer Experience
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-medium border border-purple-500/20">
+                  <Code2 className="w-3 h-3" /> {t('developerExperience.badge')}
                 </div>
-                <h2 className="text-4xl lg:text-5xl font-bold text-white tracking-tight">
-                  Just write code. <br />
-                  <span className="text-gray-500">We handle the rest.</span>
+                <h2 className="text-4xl lg:text-5xl font-bold text-[var(--text-primary)] tracking-tight">
+                  {t('developerExperience.title.part1')} <br />
+                  <span className="text-[var(--text-secondary)]">{t('developerExperience.title.part2')}</span>
                 </h2>
-                <p className="text-gray-400 text-lg leading-relaxed">
-                  Forget about Kubernetes, Dockerfiles, or load balancers.
-                  Just write a function and we deploy it to 150+ edge locations instantly.
-                  Focus on your logic, not the infrastructure.
+                <p className="text-[var(--text-secondary)] text-lg leading-relaxed">
+                  {t('developerExperience.description')}
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                  <div className="p-4 rounded-xl bg-white/5 border border-white/5 hover:border-[#00F0FF]/30 transition-colors">
-                    <Server className="w-6 h-6 text-[#00F0FF] mb-2" />
-                    <h4 className="text-white font-bold mb-1">Serverless</h4>
-                    <p className="text-xs text-gray-400">Zero management, auto-scaling.</p>
+                  <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[var(--accent-primary)]/40 transition-colors shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)]">
+                    <Server className="w-6 h-6 text-[var(--accent-primary)] mb-2" />
+                    <h4 className="text-[var(--text-primary)] font-bold mb-1">{t('developerExperience.serverless.title')}</h4>
+                    <p className="text-xs text-[var(--text-secondary)]">{t('developerExperience.serverless.description')}</p>
                   </div>
-                  <div className="p-4 rounded-xl bg-white/5 border border-white/5 hover:border-purple-500/30 transition-colors">
+                  <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-purple-500/30 transition-colors shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)]">
                     <Cpu className="w-6 h-6 text-purple-400 mb-2" />
-                    <h4 className="text-white font-bold mb-1">Edge Compute</h4>
-                    <p className="text-xs text-gray-400">V8 Isolate runtime, &lt;10ms startup.</p>
+                    <h4 className="text-[var(--text-primary)] font-bold mb-1">{t('developerExperience.edgeCompute.title')}</h4>
+                    <p className="text-xs text-[var(--text-secondary)]">{t('developerExperience.edgeCompute.description')}</p>
                   </div>
                 </div>
 
-                <ul className="space-y-3 text-gray-300 pt-2">
-                  <li className="flex items-center gap-3"><CheckCircle2 className="w-5 h-5 text-emerald-500" /> <span className="text-sm">Instant git-push deployments</span></li>
-                  <li className="flex items-center gap-3"><CheckCircle2 className="w-5 h-5 text-emerald-500" /> <span className="text-sm">Built-in CI/CD pipelines</span></li>
-                  <li className="flex items-center gap-3"><CheckCircle2 className="w-5 h-5 text-emerald-500" /> <span className="text-sm">Real-time logs & analytics</span></li>
+                <ul className="space-y-3 text-[var(--text-secondary)] pt-2">
+                  <li className="flex items-center gap-3"><CheckCircle2 className="w-5 h-5 text-emerald-500" /> <span className="text-sm">{t('developerExperience.checklist.gitPush')}</span></li>
+                  <li className="flex items-center gap-3"><CheckCircle2 className="w-5 h-5 text-emerald-500" /> <span className="text-sm">{t('developerExperience.checklist.cicd')}</span></li>
+                  <li className="flex items-center gap-3"><CheckCircle2 className="w-5 h-5 text-emerald-500" /> <span className="text-sm">{t('developerExperience.checklist.logs')}</span></li>
                 </ul>
               </div>
             </div>
@@ -342,15 +352,15 @@ export const LandingPage: React.FC = () => {
 
         {/* CTA Section */}
         <section className="py-24 px-6 relative z-10">
-          <div className="max-w-5xl mx-auto glass-panel p-12 lg:p-16 rounded-[2rem] text-center relative overflow-hidden border border-[#00F0FF]/30 shadow-[0_0_50px_rgba(0,240,255,0.1)] group">
-            <div className="absolute inset-0 bg-gradient-to-b from-cyan-500/5 via-transparent to-transparent pointer-events-none transition-opacity duration-500 group-hover:opacity-75" />
-            <div className="absolute -top-24 -left-24 w-64 h-64 bg-cyan-500/20 rounded-full blur-[80px]" />
-            <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-purple-500/20 rounded-full blur-[80px]" />
+          <div className={`max-w-5xl mx-auto p-12 lg:p-16 rounded-[2rem] text-center relative overflow-hidden border border-[var(--border-color)] shadow-[var(--shadow-xl)] group ${isBusiness ? 'bg-[linear-gradient(140deg,rgba(255,255,255,0.94)_0%,rgba(241,245,252,0.9)_100%)]' : 'bg-[linear-gradient(140deg,rgba(255,255,255,0.9)_0%,rgba(237,244,253,0.84)_100%)]'}`}>
+            <div className={`absolute inset-0 bg-gradient-to-b via-transparent to-transparent pointer-events-none transition-opacity duration-500 group-hover:opacity-85 ${isBusiness ? 'from-blue-600/6' : 'from-sky-500/8'}`} />
+            <div className={`absolute -top-24 -left-24 w-64 h-64 rounded-full blur-[80px] ${isBusiness ? 'bg-blue-700/16' : 'bg-sky-500/20'}`} />
+            <div className={`absolute -bottom-24 -right-24 w-64 h-64 rounded-full blur-[80px] ${isBusiness ? 'bg-slate-500/18' : 'bg-indigo-500/20'}`} />
 
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 relative z-10 text-white tracking-tight">Ready to ship your next big thing?</h2>
-            <p className="text-gray-400 mb-10 max-w-xl mx-auto relative z-10 text-lg">
-              Join 100,000+ developers building the future on Nexus.
-              Get <span className="text-white font-semibold">$100 in free credits</span> when you sign up today.
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 relative z-10 text-[var(--text-primary)] tracking-tight">{t('cta.title')}</h2>
+            <p className="text-[var(--text-secondary)] mb-10 max-w-xl mx-auto relative z-10 text-lg">
+              {t('cta.description')}
+              {t('cta.credits', { amount: 100 })}
             </p>
             <div className="relative z-10 flex flex-col sm:flex-row justify-center gap-4">
               <Link to={isAuthenticated ? '/app/dashboard' : '/register'}>
@@ -359,66 +369,66 @@ export const LandingPage: React.FC = () => {
                   glow
                   className="h-14 px-10 text-lg font-bold shadow-lg transform transition-transform hover:-translate-y-1"
                 >
-                  Get Started for Free <ArrowRight className="w-5 h-5 ml-2" />
+                  {t('cta.primary')} <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
               <Button
                 variant="secondary"
-                className="h-14 px-10 text-lg hover:bg-white/10"
+                className="h-14 px-10 text-lg hover:bg-[var(--accent-soft)]"
               >
-                Contact Sales
+                {t('cta.secondary')}
               </Button>
             </div>
-            <p className="mt-6 text-sm text-gray-500">No credit card required for free tier.</p>
+            <p className="mt-6 text-sm text-[var(--text-muted)]">{t('cta.disclaimer')}</p>
           </div>
         </section>
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-white/5 bg-[#050507] py-16 px-6 relative z-20">
+      <footer className="border-t border-[var(--border-color-subtle)] bg-[var(--bg-secondary)] py-16 px-6 relative z-20">
         <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
           <div>
-            <h4 className="text-white font-bold mb-4">Product</h4>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Edge Functions</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Edge Config</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">AI Gateway</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">CLI</a></li>
+            <h4 className="text-[var(--text-primary)] font-bold mb-4">{t('footer.product.title')}</h4>
+            <ul className="space-y-2 text-sm text-[var(--text-muted)]">
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.product.edgeFunctions')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.product.edgeConfig')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.product.aiGateway')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.product.cli')}</a></li>
             </ul>
           </div>
           <div>
-            <h4 className="text-white font-bold mb-4">Resources</h4>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Documentation</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Guides</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Help Center</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">API Reference</a></li>
+            <h4 className="text-[var(--text-primary)] font-bold mb-4">{t('footer.resources.title')}</h4>
+            <ul className="space-y-2 text-sm text-[var(--text-muted)]">
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.resources.documentation')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.resources.guides')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.resources.helpCenter')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.resources.apiReference')}</a></li>
             </ul>
           </div>
           <div>
-            <h4 className="text-white font-bold mb-4">Company</h4>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">About</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Blog</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Careers</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Contact</a></li>
+            <h4 className="text-[var(--text-primary)] font-bold mb-4">{t('footer.company.title')}</h4>
+            <ul className="space-y-2 text-sm text-[var(--text-muted)]">
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.company.about')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.company.blog')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.company.careers')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.company.contact')}</a></li>
             </ul>
           </div>
           <div>
-            <h4 className="text-white font-bold mb-4">Legal</h4>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Privacy Policy</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Terms of Service</a></li>
-              <li><a href="#" className="hover:text-[#00F0FF] transition-colors">Cookie Policy</a></li>
+            <h4 className="text-[var(--text-primary)] font-bold mb-4">{t('footer.legal.title')}</h4>
+            <ul className="space-y-2 text-sm text-[var(--text-muted)]">
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.legal.privacy')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.legal.terms')}</a></li>
+              <li><a href="#" className="hover:text-[var(--accent-primary)] transition-colors">{t('footer.legal.cookies')}</a></li>
             </ul>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 border-t border-white/5 pt-8">
-          <div className="text-gray-600 text-sm">
-            © 2024 Nexus Cloud Inc. All rights reserved.
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6 border-t border-[var(--border-color-subtle)] pt-8">
+          <div className="text-[var(--text-muted)] text-sm">
+            {t('footer.copyright', { year: 2024 })}
           </div>
           <div className="flex gap-6">
-            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-white/10 hover:text-white transition-colors cursor-pointer border border-white/5">
+            <div className="w-8 h-8 rounded-full bg-[var(--bg-card)] flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--accent-soft)] hover:text-[var(--accent-primary)] transition-colors cursor-pointer border border-[var(--border-color-subtle)]">
               <Globe className="w-4 h-4" />
             </div>
           </div>

@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	// #nosec G101 -- Redis key prefixes for token cache/locks, not secrets.
 	oauthTokenKeyPrefix       = "oauth:token:"
 	oauthRefreshLockKeyPrefix = "oauth:refresh_lock:"
 )

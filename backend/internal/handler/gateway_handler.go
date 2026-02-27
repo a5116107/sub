@@ -304,20 +304,38 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 
 	if platform == service.PlatformGemini {
-		maxAccountSwitches := h.maxAccountSwitchesGemini
-		switchCount := 0
-		failedAccountIDs := make(map[int64]struct{})
-		lastFailoverStatus := 0
+		fs := NewFailoverState(h.maxAccountSwitchesGemini, false)
+
+		// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
+		// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设长 cooldown，导致后续请求连续快速失败。
+		if h.gatewayService.IsSingleAntigravityAccountGroup(c.Request.Context(), apiKey.GroupID) {
+			ctx := context.WithValue(c.Request.Context(), ctxkey.SingleAccountRetry, true)
+			c.Request = c.Request.WithContext(ctx)
+		}
 
 		for {
-			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, failedAccountIDs, "") // Gemini 不使用会话限制
+			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, "") // Gemini 不使用会话限制
 			if err != nil {
-				if len(failedAccountIDs) == 0 {
+				if len(fs.FailedAccountIDs) == 0 {
 					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 					return
 				}
-				h.handleFailoverExhausted(c, lastFailoverStatus, streamStarted)
-				return
+				action := fs.HandleSelectionExhausted(c.Request.Context())
+				switch action {
+				case FailoverContinue:
+					ctx := context.WithValue(c.Request.Context(), ctxkey.SingleAccountRetry, true)
+					c.Request = c.Request.WithContext(ctx)
+					continue
+				case FailoverCanceled:
+					return
+				default: // FailoverExhausted
+					statusCode := http.StatusBadGateway
+					if fs.LastFailoverErr != nil && fs.LastFailoverErr.StatusCode > 0 {
+						statusCode = fs.LastFailoverErr.StatusCode
+					}
+					h.handleFailoverExhausted(c, statusCode, streamStarted)
+					return
+				}
 			}
 			account := selection.Account
 			setOpsSelectedAccount(c, account.ID)
@@ -402,15 +420,20 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if err != nil {
 				var failoverErr *service.UpstreamFailoverError
 				if errors.As(err, &failoverErr) {
-					failedAccountIDs[account.ID] = struct{}{}
-					lastFailoverStatus = failoverErr.StatusCode
-					if switchCount >= maxAccountSwitches {
-						h.handleFailoverExhausted(c, lastFailoverStatus, streamStarted)
+					action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
+					switch action {
+					case FailoverContinue:
+						continue
+					case FailoverCanceled:
+						return
+					default: // FailoverExhausted
+						statusCode := http.StatusBadGateway
+						if failoverErr != nil && failoverErr.StatusCode > 0 {
+							statusCode = failoverErr.StatusCode
+						}
+						h.handleFailoverExhausted(c, statusCode, streamStarted)
 						return
 					}
-					switchCount++
-					log.Printf("Account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
-					continue
 				}
 				// 错误响应已在Forward中处理，这里只记录日志
 				log.Printf("Forward request failed: %v", err)
@@ -439,14 +462,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					ctx = context.WithValue(ctx, ctxkey.ClientRequestID, strings.TrimSpace(clientRequestID))
 				}
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
-					Result:       result,
-					APIKey:       apiKey,
-					User:         apiKey.User,
-					Account:      usedAccount,
-					Subscription: subscription,
-					UserAgent:    ua,
-					IPAddress:    clientIP,
-					ReservedUSD:  reservedUSD,
+					Result:             result,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            usedAccount,
+					Subscription:       subscription,
+					UserAgent:          ua,
+					IPAddress:          clientIP,
+					ReservedUSD:        reservedUSD,
 					ReservedUsageLogID: reservedUsageLogID,
 				}); err != nil {
 					log.Printf("Record usage failed: %v", err)
@@ -456,21 +479,39 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		}
 	}
 
-	maxAccountSwitches := h.maxAccountSwitches
-	switchCount := 0
-	failedAccountIDs := make(map[int64]struct{})
-	lastFailoverStatus := 0
+	fs := NewFailoverState(h.maxAccountSwitches, false)
+
+	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
+	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设长 cooldown，导致后续请求连续快速失败。
+	if h.gatewayService.IsSingleAntigravityAccountGroup(c.Request.Context(), apiKey.GroupID) {
+		ctx := context.WithValue(c.Request.Context(), ctxkey.SingleAccountRetry, true)
+		c.Request = c.Request.WithContext(ctx)
+	}
 
 	for {
 		// 选择支持该模型的账号
-		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, failedAccountIDs, originalParsedReq.MetadataUserID)
+		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, originalParsedReq.MetadataUserID)
 		if err != nil {
-			if len(failedAccountIDs) == 0 {
+			if len(fs.FailedAccountIDs) == 0 {
 				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 				return
 			}
-			h.handleFailoverExhausted(c, lastFailoverStatus, streamStarted)
-			return
+			action := fs.HandleSelectionExhausted(c.Request.Context())
+			switch action {
+			case FailoverContinue:
+				ctx := context.WithValue(c.Request.Context(), ctxkey.SingleAccountRetry, true)
+				c.Request = c.Request.WithContext(ctx)
+				continue
+			case FailoverCanceled:
+				return
+			default: // FailoverExhausted
+				statusCode := http.StatusBadGateway
+				if fs.LastFailoverErr != nil && fs.LastFailoverErr.StatusCode > 0 {
+					statusCode = fs.LastFailoverErr.StatusCode
+				}
+				h.handleFailoverExhausted(c, statusCode, streamStarted)
+				return
+			}
 		}
 		account := selection.Account
 		setOpsSelectedAccount(c, account.ID)
@@ -553,15 +594,20 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
-				failedAccountIDs[account.ID] = struct{}{}
-				lastFailoverStatus = failoverErr.StatusCode
-				if switchCount >= maxAccountSwitches {
-					h.handleFailoverExhausted(c, lastFailoverStatus, streamStarted)
+				action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
+				switch action {
+				case FailoverContinue:
+					continue
+				case FailoverCanceled:
+					return
+				default: // FailoverExhausted
+					statusCode := http.StatusBadGateway
+					if failoverErr != nil && failoverErr.StatusCode > 0 {
+						statusCode = failoverErr.StatusCode
+					}
+					h.handleFailoverExhausted(c, statusCode, streamStarted)
 					return
 				}
-				switchCount++
-				log.Printf("Account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
-				continue
 			}
 			// 错误响应已在Forward中处理，这里只记录日志
 			log.Printf("Account %d: Forward request failed: %v", account.ID, err)
@@ -910,17 +956,41 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	}
 
 	// 选择支持该模型的账号
-	account, err := h.gatewayService.SelectAccountForModel(c.Request.Context(), apiKey.GroupID, sessionHash, parsedReq.Model)
-	if err != nil {
-		h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error())
-		return
-	}
-	setOpsSelectedAccount(c, account.ID)
+	maxAccountSwitches := h.maxAccountSwitches
+	switchCount := 0
+	failedAccountIDs := make(map[int64]struct{})
+	lastFailoverStatus := http.StatusBadGateway
 
-	// 转发请求（不记录使用量）
-	if err := h.gatewayService.ForwardCountTokens(c.Request.Context(), c, account, parsedReq); err != nil {
-		log.Printf("Forward count_tokens request failed: %v", err)
-		// 错误响应已在 ForwardCountTokens 中处理
+	for {
+		account, selectErr := h.gatewayService.SelectAccountForModelWithExclusions(c.Request.Context(), apiKey.GroupID, sessionHash, parsedReq.Model, failedAccountIDs)
+		if selectErr != nil {
+			if len(failedAccountIDs) == 0 {
+				h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+selectErr.Error())
+				return
+			}
+			h.handleFailoverExhausted(c, lastFailoverStatus, false)
+			return
+		}
+		setOpsSelectedAccount(c, account.ID)
+
+		// 转发请求（不记录使用量）
+		if err := h.gatewayService.ForwardCountTokens(c.Request.Context(), c, account, parsedReq); err != nil {
+			var failoverErr *service.UpstreamFailoverError
+			if errors.As(err, &failoverErr) {
+				failedAccountIDs[account.ID] = struct{}{}
+				lastFailoverStatus = failoverErr.StatusCode
+				if switchCount >= maxAccountSwitches {
+					h.handleFailoverExhausted(c, lastFailoverStatus, false)
+					return
+				}
+				switchCount++
+				log.Printf("CountTokens account %d: upstream error %d, switching account %d/%d", account.ID, failoverErr.StatusCode, switchCount, maxAccountSwitches)
+				continue
+			}
+			log.Printf("Forward count_tokens request failed: %v", err)
+			// 错误响应已在 ForwardCountTokens 中处理
+			return
+		}
 		return
 	}
 }

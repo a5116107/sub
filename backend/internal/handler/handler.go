@@ -21,6 +21,7 @@ type AdminHandlers struct {
 	Promo            *admin.PromoHandler
 	Setting          *admin.SettingHandler
 	ModelPricing     *admin.ModelPricingHandler
+	ErrorPassthrough *admin.ErrorPassthroughHandler
 	Ops              *admin.OpsHandler
 	System           *admin.SystemHandler
 	Subscription     *admin.SubscriptionHandler

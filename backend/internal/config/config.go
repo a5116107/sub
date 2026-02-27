@@ -391,6 +391,12 @@ type GatewayConfig struct {
 
 	// 是否允许对部分 400 错误触发 failover（默认关闭以避免改变语义）
 	FailoverOn400 bool `mapstructure:"failover_on_400"`
+	// 400 敏感类错误关键词（余额/积分/配额/账单等），命中后优先触发切换
+	FailoverSensitive400Keywords []string `mapstructure:"failover_sensitive_400_keywords"`
+	// 400 临时不可用类错误关键词（维护/服务不可用/稍后重试等），命中后优先触发切换
+	FailoverTemporary400Keywords []string `mapstructure:"failover_temporary_400_keywords"`
+	// 请求层临时错误关键词（EOF/reset/tls/timeout/dns 等），命中后触发切换
+	FailoverRequestErrorKeywords []string `mapstructure:"failover_request_error_keywords"`
 
 	// FixOrphanedToolResults removes invalid tool_result blocks that reference non-existent tool_use ids
 	// before forwarding requests to Claude Messages API. This prevents 400 errors caused by corrupted
@@ -413,6 +419,10 @@ type GatewayConfig struct {
 
 	// ClaudeCodeCompat: Claude Code "compat mode"（安全子集，可配置开关）
 	ClaudeCodeCompat GatewayClaudeCodeCompatConfig `mapstructure:"claude_code_compat"`
+
+	// CodexModelAliases defines operator-managed model aliases used by Codex model normalization.
+	// Keys are incoming model names (case-insensitive), values are upstream model ids.
+	CodexModelAliases map[string]string `mapstructure:"codex_model_aliases"`
 
 	// PayloadRules: 通用请求适配层（按 protocol/model/path 匹配的 payload 规则）
 	// 用于替代点状“兼容补丁”逻辑。仅提供安全子集：不支持 cloak/混淆/绕过策略。
@@ -657,6 +667,14 @@ type OpsMetricsCollectorCacheConfig struct {
 type JWTConfig struct {
 	Secret     string `mapstructure:"secret"`
 	ExpireHour int    `mapstructure:"expire_hour"`
+	// AccessTokenExpireMinutes controls access token lifetime in minutes.
+	// When >0, it takes precedence over ExpireHour (for backward compatibility).
+	AccessTokenExpireMinutes int `mapstructure:"access_token_expire_minutes"`
+	// RefreshTokenExpireDays controls refresh token lifetime in days (default: 30).
+	RefreshTokenExpireDays int `mapstructure:"refresh_token_expire_days"`
+	// RefreshWindowMinutes controls how early before access token expiry we allow refresh (minutes).
+	// Currently reserved for future use.
+	RefreshWindowMinutes int `mapstructure:"refresh_window_minutes"`
 }
 
 // TotpConfig TOTP 双因素认证配置
@@ -834,6 +852,9 @@ func Load() (*Config, error) {
 	cfg.CORS.AllowedOrigins = normalizeStringSlice(cfg.CORS.AllowedOrigins)
 	cfg.Security.ResponseHeaders.AdditionalAllowed = normalizeStringSlice(cfg.Security.ResponseHeaders.AdditionalAllowed)
 	cfg.Security.ResponseHeaders.ForceRemove = normalizeStringSlice(cfg.Security.ResponseHeaders.ForceRemove)
+	cfg.Gateway.FailoverSensitive400Keywords = normalizeStringSlice(cfg.Gateway.FailoverSensitive400Keywords)
+	cfg.Gateway.FailoverTemporary400Keywords = normalizeStringSlice(cfg.Gateway.FailoverTemporary400Keywords)
+	cfg.Gateway.FailoverRequestErrorKeywords = normalizeStringSlice(cfg.Gateway.FailoverRequestErrorKeywords)
 	cfg.Security.CSP.Policy = strings.TrimSpace(cfg.Security.CSP.Policy)
 
 	if cfg.JWT.Secret == "" {
@@ -1038,6 +1059,10 @@ func setDefaults() {
 	// JWT
 	viper.SetDefault("jwt.secret", "")
 	viper.SetDefault("jwt.expire_hour", 24)
+	// 0 means fallback to expire_hour (backward compatibility).
+	viper.SetDefault("jwt.access_token_expire_minutes", 0)
+	viper.SetDefault("jwt.refresh_token_expire_days", 30)
+	viper.SetDefault("jwt.refresh_window_minutes", 2)
 
 	// TOTP
 	viper.SetDefault("totp.encryption_key", "")
@@ -1117,6 +1142,49 @@ func setDefaults() {
 	viper.SetDefault("gateway.inject_beta_for_apikey", false)
 	viper.SetDefault("gateway.cache_control_limit_removal_strategy", "messages_tail_then_head")
 	viper.SetDefault("gateway.failover_on_400", false)
+	viper.SetDefault("gateway.failover_sensitive_400_keywords", []string{
+		"insufficient balance",
+		"insufficient credit",
+		"insufficient credits",
+		"credit balance",
+		"out of quota",
+		"quota exceeded",
+		"payment required",
+		"billing issue",
+		"余额不足",
+		"积分不足",
+		"额度不足",
+		"配额不足",
+	})
+	viper.SetDefault("gateway.failover_temporary_400_keywords", []string{
+		"temporarily unavailable",
+		"service unavailable",
+		"under maintenance",
+		"maintenance",
+		"try again later",
+		"server overloaded",
+		"overloaded",
+		"服务暂时不可用",
+		"服务不可用",
+		"维护中",
+		"稍后重试",
+		"暂时不可用",
+	})
+	viper.SetDefault("gateway.failover_request_error_keywords", []string{
+		"eof",
+		" eof",
+		": eof",
+		"connection reset by peer",
+		"broken pipe",
+		"tls:",
+		"handshake failure",
+		"http2: client connection lost",
+		"dial tcp",
+		"no such host",
+		"i/o timeout",
+		"timeout awaiting response headers",
+		"server misbehaving",
+	})
 	viper.SetDefault("gateway.fix_orphaned_tool_results", true)
 	viper.SetDefault("gateway.max_account_switches", 10)
 	viper.SetDefault("gateway.max_account_switches_gemini", 3)
@@ -1156,6 +1224,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.tls_fingerprint.enabled", true)
 	// Claude Code compat mode: controls system prompt injection + fingerprint + user_id rewrite behavior.
 	viper.SetDefault("gateway.claude_code_compat.mode", "auto")
+	viper.SetDefault("gateway.codex_model_aliases", map[string]string{})
 	viper.SetDefault("concurrency.ping_interval", 10)
 
 	// TokenRefresh
@@ -1183,6 +1252,21 @@ func (c *Config) Validate() error {
 	}
 	if c.JWT.ExpireHour > 24 {
 		log.Printf("Warning: jwt.expire_hour is %d hours (> 24). Consider shorter expiration for security.", c.JWT.ExpireHour)
+	}
+	if c.JWT.AccessTokenExpireMinutes < 0 {
+		return fmt.Errorf("jwt.access_token_expire_minutes must be non-negative")
+	}
+	if c.JWT.AccessTokenExpireMinutes > 720 {
+		log.Printf("Warning: jwt.access_token_expire_minutes is %d minutes (> 720). Consider shorter expiration for security.", c.JWT.AccessTokenExpireMinutes)
+	}
+	if c.JWT.RefreshTokenExpireDays <= 0 {
+		return fmt.Errorf("jwt.refresh_token_expire_days must be positive")
+	}
+	if c.JWT.RefreshTokenExpireDays > 90 {
+		log.Printf("Warning: jwt.refresh_token_expire_days is %d days (> 90). Consider shorter expiration for security.", c.JWT.RefreshTokenExpireDays)
+	}
+	if c.JWT.RefreshWindowMinutes < 0 {
+		return fmt.Errorf("jwt.refresh_window_minutes must be non-negative")
 	}
 	if c.Security.CSP.Enabled && strings.TrimSpace(c.Security.CSP.Policy) == "" {
 		return fmt.Errorf("security.csp.policy is required when CSP is enabled")

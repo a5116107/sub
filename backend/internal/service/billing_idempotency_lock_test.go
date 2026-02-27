@@ -7,10 +7,10 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
+	"github.com/DATA-DOG/go-sqlmock"
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 )
 
 type noopUserRepo struct{}
@@ -137,4 +137,3 @@ func TestUsageLogRepo_CreateBillingUsageEntry_ConflictSelectByUsageLogID(t *test
 		t.Fatalf("mock expectations: %v", err)
 	}
 }
-

@@ -41,10 +41,15 @@ export const adminAnnouncementsApi = {
     }>>(`/admin/announcements/${id}/read-status`, { params }),
 
   // Get announcement stats
-  getStats: () =>
-    api.get<{
-      total_announcements: number;
-      active_announcements: number;
-      total_reads: number;
-    }>('/admin/announcements/stats'),
+  getStats: async () => {
+    const response = await api.get<PaginatedResponse<Announcement>>('/admin/announcements', {
+      params: { page: 1, page_size: 200 },
+    });
+    const items = response?.items || [];
+    return {
+      total_announcements: response?.total ?? items.length,
+      active_announcements: items.filter((announcement) => (announcement.status || '').toLowerCase() === 'active').length,
+      total_reads: 0,
+    };
+  },
 };

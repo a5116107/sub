@@ -1,4 +1,4 @@
-.PHONY: build test test-unit test-integration test-e2e
+.PHONY: build test test-unit test-integration test-e2e verify-embed-assets
 
 build:
 	go build -o bin/server ./cmd/server
@@ -15,3 +15,6 @@ test-integration:
 
 test-e2e:
 	go test -tags=e2e ./...
+
+verify-embed-assets:
+	node ../tools/verify-embed-assets.mjs

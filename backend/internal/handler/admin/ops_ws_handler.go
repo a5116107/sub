@@ -698,14 +698,14 @@ func loadOpsWSRuntimeLimitsFromEnv() opsWSRuntimeLimits {
 	}
 
 	if v := strings.TrimSpace(os.Getenv(envOpsWSMaxConns)); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+		if parsed, err := strconv.ParseInt(v, 10, 32); err == nil && parsed > 0 {
 			cfg.MaxConns = int32(parsed)
 		} else {
 			log.Printf("[OpsWS] invalid %s=%q (expected int>0); using default=%d", envOpsWSMaxConns, v, cfg.MaxConns)
 		}
 	}
 	if v := strings.TrimSpace(os.Getenv(envOpsWSMaxConnsPerIP)); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil && parsed >= 0 {
+		if parsed, err := strconv.ParseInt(v, 10, 32); err == nil && parsed >= 0 {
 			cfg.MaxConnsPerIP = int32(parsed)
 		} else {
 			log.Printf("[OpsWS] invalid %s=%q (expected int>=0); using default=%d", envOpsWSMaxConnsPerIP, v, cfg.MaxConnsPerIP)

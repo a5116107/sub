@@ -386,22 +386,22 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 	}
 	gid := m.GroupID
 	out := &service.APIKey{
-		ID:          m.ID,
-		UserID:      m.UserID,
-		Key:         m.Key,
-		Name:        m.Name,
-		Status:      m.Status,
-		IPWhitelist: m.IPWhitelist,
-		IPBlacklist: m.IPBlacklist,
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
-		GroupID:     &gid,
-		AllowBalance:      m.AllowBalance,
-		AllowSubscription: m.AllowSubscription,
+		ID:                 m.ID,
+		UserID:             m.UserID,
+		Key:                m.Key,
+		Name:               m.Name,
+		Status:             m.Status,
+		IPWhitelist:        m.IPWhitelist,
+		IPBlacklist:        m.IPBlacklist,
+		CreatedAt:          m.CreatedAt,
+		UpdatedAt:          m.UpdatedAt,
+		GroupID:            &gid,
+		AllowBalance:       m.AllowBalance,
+		AllowSubscription:  m.AllowSubscription,
 		SubscriptionStrict: m.SubscriptionStrict,
-		ExpiresAt:         m.ExpiresAt,
-		QuotaLimitUSD:     m.QuotaLimitUsd,
-		QuotaUsedUSD:      m.QuotaUsedUsd,
+		ExpiresAt:          m.ExpiresAt,
+		QuotaLimitUSD:      m.QuotaLimitUsd,
+		QuotaUsedUSD:       m.QuotaUsedUsd,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)

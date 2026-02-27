@@ -18,21 +18,58 @@ export const announcementApi = {
   list: (params?: AnnouncementListParams) =>
     get<PaginatedResponse<Announcement>>('/announcements', params),
 
-  // Get single announcement
-  get: (id: number) =>
-    get<Announcement>(`/announcements/${id}`),
+  // Get single announcement (fallback from list, backend has no GET /announcements/:id)
+  get: async (id: number) => {
+    const response = await get<PaginatedResponse<Announcement>>('/announcements', {
+      page: 1,
+      page_size: 100
+    })
+    const announcement = response.items?.find(item => item.id === id)
+    if (!announcement) {
+      throw new Error('Announcement not found')
+    }
+    return announcement
+  },
 
   // Mark announcement as read
   markAsRead: (id: number) =>
     post<void>(`/announcements/${id}/read`),
 
-  // Mark all announcements as read
-  markAllAsRead: () =>
-    post<void>('/announcements/read-all'),
+  // Mark all announcements as read via existing backend capability
+  markAllAsRead: async () => {
+    let page = 1
+    const pageSize = 100
 
-  // Get unread count
-  getUnreadCount: () =>
-    get<{ count: number }>('/announcements/unread-count')
+    for (;;) {
+      const unreadPage = await get<PaginatedResponse<Announcement>>('/announcements', {
+        page,
+        page_size: pageSize,
+        unread_only: true
+      })
+
+      const unreadItems = unreadPage.items || []
+      if (unreadItems.length === 0) {
+        break
+      }
+
+      await Promise.all(unreadItems.map(item => post<void>(`/announcements/${item.id}/read`)))
+
+      if (unreadItems.length < pageSize) {
+        break
+      }
+      page += 1
+    }
+  },
+
+  // Get unread count via list total
+  getUnreadCount: async () => {
+    const response = await get<PaginatedResponse<Announcement>>('/announcements', {
+      page: 1,
+      page_size: 1,
+      unread_only: true
+    })
+    return { count: response.total || 0 }
+  }
 }
 
 // Composables

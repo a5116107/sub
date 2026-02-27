@@ -68,4 +68,3 @@ const (
 	SubscriptionStatusExpired   = "expired"
 	SubscriptionStatusSuspended = "suspended"
 )
-

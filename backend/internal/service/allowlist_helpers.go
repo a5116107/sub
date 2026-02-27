@@ -6,4 +6,3 @@ func chooseAllowlist(preferred, fallback []string) []string {
 	}
 	return fallback
 }
-

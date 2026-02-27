@@ -28,22 +28,22 @@ type AdminUser struct {
 }
 
 type APIKey struct {
-	ID          int64     `json:"id"`
-	UserID      int64     `json:"user_id"`
-	Key         string    `json:"key"`
-	Name        string    `json:"name"`
-	GroupID     *int64    `json:"group_id"`
-	Status      string    `json:"status"`
-	IPWhitelist []string  `json:"ip_whitelist"`
-	IPBlacklist []string  `json:"ip_blacklist"`
-	AllowBalance      bool       `json:"allow_balance"`
-	AllowSubscription bool       `json:"allow_subscription"`
-	SubscriptionStrict bool      `json:"subscription_strict"`
-	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
-	QuotaLimitUSD     *float64   `json:"quota_limit_usd,omitempty"`
-	QuotaUsedUSD      float64    `json:"quota_used_usd"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID                 int64      `json:"id"`
+	UserID             int64      `json:"user_id"`
+	Key                string     `json:"key"`
+	Name               string     `json:"name"`
+	GroupID            *int64     `json:"group_id"`
+	Status             string     `json:"status"`
+	IPWhitelist        []string   `json:"ip_whitelist"`
+	IPBlacklist        []string   `json:"ip_blacklist"`
+	AllowBalance       bool       `json:"allow_balance"`
+	AllowSubscription  bool       `json:"allow_subscription"`
+	SubscriptionStrict bool       `json:"subscription_strict"`
+	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
+	QuotaLimitUSD      *float64   `json:"quota_limit_usd,omitempty"`
+	QuotaUsedUSD       float64    `json:"quota_used_usd"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 
 	User  *User  `json:"user,omitempty"`
 	Group *Group `json:"group,omitempty"`
@@ -141,6 +141,11 @@ type Account struct {
 	// 启用后将在15分钟内固定 metadata.user_id 中的 session ID
 	// 从 extra 字段提取，方便前端显示和编辑
 	EnableSessionIDMasking *bool `json:"session_id_masking_enabled,omitempty"`
+
+	// 缓存 TTL 强制替换（仅 Anthropic OAuth/SetupToken 账号有效）
+	// 从 extra 字段提取，方便前端显示和编辑
+	CacheTTLOverrideEnabled *bool   `json:"cache_ttl_override_enabled,omitempty"`
+	CacheTTLOverrideTarget  *string `json:"cache_ttl_override_target,omitempty"`
 
 	Proxy         *Proxy         `json:"proxy,omitempty"`
 	AccountGroups []AccountGroup `json:"account_groups,omitempty"`

@@ -237,14 +237,6 @@ func accountSlotKey(accountID int64) string {
 	return fmt.Sprintf("%s%d", accountSlotKeyPrefix, accountID)
 }
 
-func userSlotKey(userID int64) string {
-	return fmt.Sprintf("%s%d:group:%d", userSlotKeyPrefix, userID, 0)
-}
-
-func waitQueueKey(userID int64) string {
-	return fmt.Sprintf("%s%d:group:%d", waitQueueKeyPrefix, userID, 0)
-}
-
 func userGroupSlotKey(userID int64, groupID int64) string {
 	if groupID < 0 {
 		groupID = 0

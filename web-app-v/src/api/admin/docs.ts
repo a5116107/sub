@@ -71,7 +71,7 @@ export const adminDocsApi = {
 
   // Get doc page by key (admin)
   getPageByKey: (key: string) =>
-    api.get<DocPage>(`/admin/docs/pages/${key}`),
+    api.get<DocPage>(`/admin/docs/${key}`),
 
   // Update doc page
   updatePage: (key: string, data: UpdateDocPageRequest) =>

@@ -115,6 +115,10 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		EnableIdentityPatch:                  settings.EnableIdentityPatch,
 		IdentityPatchPrompt:                  settings.IdentityPatchPrompt,
 		GatewayFixOrphanedToolResults:        settings.GatewayFixOrphanedToolResults,
+		GatewayFailoverSensitive400Keywords:  settings.GatewayFailoverSensitive400Keywords,
+		GatewayFailoverTemporary400Keywords:  settings.GatewayFailoverTemporary400Keywords,
+		GatewayFailoverRequestErrorKeywords:  settings.GatewayFailoverRequestErrorKeywords,
+		GatewayCodexModelAliases:             settings.GatewayCodexModelAliases,
 		OpsMonitoringEnabled:                 opsEnabled && settings.OpsMonitoringEnabled,
 		OpsRealtimeMonitoringEnabled:         settings.OpsRealtimeMonitoringEnabled,
 		OpsQueryModeDefault:                  settings.OpsQueryModeDefault,
@@ -186,7 +190,11 @@ type UpdateSettingsRequest struct {
 	IdentityPatchPrompt string `json:"identity_patch_prompt"`
 
 	// Gateway runtime toggles
-	GatewayFixOrphanedToolResults *bool `json:"gateway_fix_orphaned_tool_results"`
+	GatewayFixOrphanedToolResults       *bool              `json:"gateway_fix_orphaned_tool_results"`
+	GatewayFailoverSensitive400Keywords *[]string          `json:"gateway_failover_sensitive_400_keywords"`
+	GatewayFailoverTemporary400Keywords *[]string          `json:"gateway_failover_temporary_400_keywords"`
+	GatewayFailoverRequestErrorKeywords *[]string          `json:"gateway_failover_request_error_keywords"`
+	GatewayCodexModelAliases            *map[string]string `json:"gateway_codex_model_aliases"`
 
 	// Ops monitoring (vNext)
 	OpsMonitoringEnabled         *bool   `json:"ops_monitoring_enabled"`
@@ -399,6 +407,30 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.GatewayFixOrphanedToolResults
 		}(),
+		GatewayFailoverSensitive400Keywords: func() []string {
+			if req.GatewayFailoverSensitive400Keywords != nil {
+				return *req.GatewayFailoverSensitive400Keywords
+			}
+			return previousSettings.GatewayFailoverSensitive400Keywords
+		}(),
+		GatewayFailoverTemporary400Keywords: func() []string {
+			if req.GatewayFailoverTemporary400Keywords != nil {
+				return *req.GatewayFailoverTemporary400Keywords
+			}
+			return previousSettings.GatewayFailoverTemporary400Keywords
+		}(),
+		GatewayFailoverRequestErrorKeywords: func() []string {
+			if req.GatewayFailoverRequestErrorKeywords != nil {
+				return *req.GatewayFailoverRequestErrorKeywords
+			}
+			return previousSettings.GatewayFailoverRequestErrorKeywords
+		}(),
+		GatewayCodexModelAliases: func() map[string]string {
+			if req.GatewayCodexModelAliases != nil {
+				return *req.GatewayCodexModelAliases
+			}
+			return previousSettings.GatewayCodexModelAliases
+		}(),
 		OpsMonitoringEnabled: func() bool {
 			if req.OpsMonitoringEnabled != nil {
 				return *req.OpsMonitoringEnabled
@@ -486,6 +518,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		EnableIdentityPatch:                  updatedSettings.EnableIdentityPatch,
 		IdentityPatchPrompt:                  updatedSettings.IdentityPatchPrompt,
 		GatewayFixOrphanedToolResults:        updatedSettings.GatewayFixOrphanedToolResults,
+		GatewayFailoverSensitive400Keywords:  updatedSettings.GatewayFailoverSensitive400Keywords,
+		GatewayFailoverTemporary400Keywords:  updatedSettings.GatewayFailoverTemporary400Keywords,
+		GatewayFailoverRequestErrorKeywords:  updatedSettings.GatewayFailoverRequestErrorKeywords,
+		GatewayCodexModelAliases:             updatedSettings.GatewayCodexModelAliases,
 		OpsMonitoringEnabled:                 updatedSettings.OpsMonitoringEnabled,
 		OpsRealtimeMonitoringEnabled:         updatedSettings.OpsRealtimeMonitoringEnabled,
 		OpsQueryModeDefault:                  updatedSettings.OpsQueryModeDefault,
@@ -632,6 +668,18 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.GatewayFixOrphanedToolResults != after.GatewayFixOrphanedToolResults {
 		changed = append(changed, "gateway_fix_orphaned_tool_results")
 	}
+	if !stringSliceEqual(before.GatewayFailoverSensitive400Keywords, after.GatewayFailoverSensitive400Keywords) {
+		changed = append(changed, "gateway_failover_sensitive_400_keywords")
+	}
+	if !stringSliceEqual(before.GatewayFailoverTemporary400Keywords, after.GatewayFailoverTemporary400Keywords) {
+		changed = append(changed, "gateway_failover_temporary_400_keywords")
+	}
+	if !stringSliceEqual(before.GatewayFailoverRequestErrorKeywords, after.GatewayFailoverRequestErrorKeywords) {
+		changed = append(changed, "gateway_failover_request_error_keywords")
+	}
+	if !stringMapEqual(before.GatewayCodexModelAliases, after.GatewayCodexModelAliases) {
+		changed = append(changed, "gateway_codex_model_aliases")
+	}
 	if before.OpsMonitoringEnabled != after.OpsMonitoringEnabled {
 		changed = append(changed, "ops_monitoring_enabled")
 	}
@@ -645,6 +693,30 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 		changed = append(changed, "ops_metrics_interval_seconds")
 	}
 	return changed
+}
+
+func stringSliceEqual(left []string, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func stringMapEqual(left map[string]string, right map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key, value := range left {
+		if rightValue, ok := right[key]; !ok || rightValue != value {
+			return false
+		}
+	}
+	return true
 }
 
 // TestSMTPRequest 测试SMTP连接请求

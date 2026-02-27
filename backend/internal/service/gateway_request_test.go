@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -363,4 +364,127 @@ func TestFilterOrphanedToolResults_EmptyContentGetsPlaceholder(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "text", content0["type"])
 	require.NotEmpty(t, content0["text"])
+}
+
+func TestShouldFailoverOnSensitiveOrTemporary400(t *testing.T) {
+	tests := []struct {
+		name string
+		body []byte
+		want bool
+	}{
+		{
+			name: "insufficient_balance_english",
+			body: []byte(`{"error":{"message":"insufficient balance for this organization"}}`),
+			want: true,
+		},
+		{
+			name: "insufficient_points_chinese",
+			body: []byte(`{"error":{"message":"积分不足，请充值后重试"}}`),
+			want: true,
+		},
+		{
+			name: "temporary_unavailable",
+			body: []byte(`{"error":{"message":"service temporarily unavailable, try again later"}}`),
+			want: true,
+		},
+		{
+			name: "validation_error_should_not_failover",
+			body: []byte(`{"error":{"message":"Input must be a list"}}`),
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldFailoverOnSensitiveOrTemporary400(tt.body)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestShouldFailoverOnGatewayRequestError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  string
+		want bool
+	}{
+		{
+			name: "eof",
+			err:  `Post "https://chatgpt.com/backend-api/codex/responses": EOF`,
+			want: true,
+		},
+		{
+			name: "connection_reset",
+			err:  `read tcp 10.0.0.1:443->10.0.0.2:12345: connection reset by peer`,
+			want: true,
+		},
+		{
+			name: "timeout",
+			err:  `Post "https://api.right.codes/v1/responses": timeout awaiting response headers`,
+			want: true,
+		},
+		{
+			name: "invalid_request_body_not_transient",
+			err:  "invalid request body",
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldFailoverOnGatewayRequestError(tt.err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestGatewayService_ShouldFailoverOnSensitiveOrTemporary400_UsesConfigKeywords(t *testing.T) {
+	customMsg := "wallet depleted for this tenant"
+	svc := &GatewayService{
+		cfg: &config.Config{
+			Gateway: config.GatewayConfig{
+				FailoverSensitive400Keywords: []string{"wallet depleted"},
+			},
+		},
+	}
+
+	body := []byte(`{"error":{"message":"wallet depleted for this tenant"}}`)
+	require.True(t, svc.shouldFailoverOnSensitiveOrTemporary400(body))
+	require.False(t, shouldFailoverOnSensitiveOrTemporary400([]byte(`{"error":{"message":"`+customMsg+`"}}`)))
+}
+
+func TestGatewayService_ShouldFailoverOnGatewayRequestError_UsesConfigKeywords(t *testing.T) {
+	svc := &GatewayService{
+		cfg: &config.Config{
+			Gateway: config.GatewayConfig{
+				FailoverRequestErrorKeywords: []string{"upstream route blocked"},
+			},
+		},
+	}
+
+	errMsg := "proxy failed: upstream route blocked by edge policy"
+	require.True(t, svc.shouldFailoverOnGatewayRequestError(errMsg))
+	require.False(t, shouldFailoverOnGatewayRequestError(errMsg))
+}
+
+func TestGatewayService_ShouldFailoverKeywords_UseDBSettingsWhenAvailable(t *testing.T) {
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			FailoverSensitive400Keywords: []string{"config-only-sensitive"},
+			FailoverRequestErrorKeywords: []string{"config-only-request"},
+		},
+	}
+	settingSvc := NewSettingService(&settingRepoFeatureStub{values: map[string]string{
+		SettingKeyGatewayFailoverSensitive400Keywords: `["db-sensitive"]`,
+		SettingKeyGatewayFailoverRequestErrorKeywords: `["db-request"]`,
+	}}, cfg)
+	svc := &GatewayService{
+		cfg:              cfg,
+		rateLimitService: &RateLimitService{settingService: settingSvc},
+	}
+
+	require.True(t, svc.shouldFailoverOnSensitiveOrTemporary400([]byte(`{"error":{"message":"db-sensitive limit reached"}}`)))
+	require.False(t, svc.shouldFailoverOnSensitiveOrTemporary400([]byte(`{"error":{"message":"config-only-sensitive limit reached"}}`)))
+	require.True(t, svc.shouldFailoverOnGatewayRequestError("proxy failed: db-request"))
+	require.False(t, svc.shouldFailoverOnGatewayRequestError("proxy failed: config-only-request"))
 }

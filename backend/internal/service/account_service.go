@@ -339,17 +339,6 @@ func (s *AccountService) GetCredential(ctx context.Context, id int64, key string
 	return account.GetCredential(key), nil
 }
 
-func validateOptionalPublicHTTPSBaseURL(raw string) error {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-	_, err := urlvalidator.ValidateHTTPSURL(raw, urlvalidator.ValidationOptions{
-		AllowPrivate:     false,
-		RequireAllowlist: false,
-	})
-	return err
-}
-
 func validateOptionalAllowlistedBaseURL(raw string, cfg *config.Config, allowlist []string) error {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

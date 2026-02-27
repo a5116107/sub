@@ -533,9 +533,9 @@ export const adminOpsApi = {
   getRequests: (params?: PaginationParams) => get<PaginatedResponse<RequestDetail>>('/admin/ops/requests', params),
 
   // Cleanup Tasks
-  getCleanupTasks: () => get<UsageCleanupTask[]>('/admin/ops/usage/cleanup-tasks'),
-  createCleanupTask: (data: CreateUsageCleanupTaskRequest) => post<UsageCleanupTask>('/admin/ops/usage/cleanup-tasks', data),
-  cancelCleanupTask: (id: number) => post(`/admin/ops/usage/cleanup-tasks/${id}/cancel`)
+  getCleanupTasks: () => get<UsageCleanupTask[]>('/admin/usage/cleanup-tasks'),
+  createCleanupTask: (data: CreateUsageCleanupTaskRequest) => post<UsageCleanupTask>('/admin/usage/cleanup-tasks', data),
+  cancelCleanupTask: (id: number) => post(`/admin/usage/cleanup-tasks/${id}/cancel`)
 }
 
 // ============================================
@@ -544,7 +544,6 @@ export const adminOpsApi = {
 export const adminUserAttributesApi = {
   list: () => get<UserAttributeDefinition[]>('/admin/user-attributes'),
   create: (data: CreateUserAttributeRequest) => post<UserAttributeDefinition>('/admin/user-attributes', data),
-  get: (id: number) => get<UserAttributeDefinition>(`/admin/user-attributes/${id}`),
   update: (id: number, data: UpdateUserAttributeRequest) => put<UserAttributeDefinition>(`/admin/user-attributes/${id}`, data),
   delete: (id: number) => del(`/admin/user-attributes/${id}`),
   batchGet: (userIds: number[]) => post<Record<number, Record<string, any>>>('/admin/user-attributes/batch', { user_ids: userIds }),

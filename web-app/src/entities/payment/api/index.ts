@@ -34,11 +34,7 @@ export const paymentApi = {
 
   // Get single order
   getOrder: (id: string) =>
-    get<PaymentOrder>(`/payments/orders/${id}`),
-
-  // Cancel order
-  cancelOrder: (id: string) =>
-    post<void>(`/payments/orders/${id}/cancel`)
+    get<PaymentOrder>(`/payments/orders/${id}`)
 }
 
 // Composables
@@ -72,17 +68,6 @@ export function useCreateOrderMutation() {
     mutationFn: paymentApi.createOrder,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PAYMENT_KEYS.orders() })
-    }
-  })
-}
-
-export function useCancelOrderMutation() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: paymentApi.cancelOrder,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PAYMENT_KEYS.all })
     }
   })
 }

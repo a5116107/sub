@@ -38,6 +38,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const backendUrl = env.VITE_DEV_PROXY_TARGET || 'http://localhost:8080'
   const devPort = Number(env.VITE_DEV_PORT || 3000)
+  const devHost = env.VITE_DEV_HOST || '127.0.0.1'
 
   return {
     plugins: [
@@ -82,7 +83,7 @@ export default defineConfig(({ mode }) => {
             }
 
             // UI 工具库（较大，单独分离）
-            if (id.includes('/@vueuse/') || id.includes('/xlsx/')) {
+            if (id.includes('/@vueuse/')) {
               return 'vendor-ui'
             }
 
@@ -107,8 +108,9 @@ export default defineConfig(({ mode }) => {
     }
   },
     server: {
-      host: '0.0.0.0',
+      host: devHost,
       port: devPort,
+      cors: false,
       proxy: {
         '/api': {
           target: backendUrl,

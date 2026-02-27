@@ -11,6 +11,7 @@ import {
   Upload,
   BarChart3,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { adminModelPricingApi, type ModelPricingQueryParams } from '../../api/admin/modelPricing';
 import type { ModelPricing } from '../../types';
 import {
@@ -24,12 +25,12 @@ import {
   Skeleton,
 } from '../../components/ui';
 
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, t: (key: string) => string) => {
   switch (status.toLowerCase()) {
     case 'active':
-      return <Badge variant="success">Active</Badge>;
+      return <Badge variant="success">{t('common:status.active')}</Badge>;
     case 'disabled':
-      return <Badge variant="danger">Disabled</Badge>;
+      return <Badge variant="danger">{t('common:status.disabled')}</Badge>;
     default:
       return <Badge variant="default">{status}</Badge>;
   }
@@ -69,6 +70,7 @@ interface SyncResult {
 }
 
 export const ModelPricingPage: React.FC = () => {
+  const { t } = useTranslation('admin');
   const [loading, setLoading] = useState(true);
   const [pricing, setPricing] = useState<ModelPricing[]>([]);
   const [total, setTotal] = useState(0);
@@ -93,6 +95,13 @@ export const ModelPricingPage: React.FC = () => {
   const [syncPlatform, setSyncPlatform] = useState<string>('');
   const [importData, setImportData] = useState<string>('');
   const [importLoading, setImportLoading] = useState(false);
+
+  // Sync status state
+  const [syncStatus, setSyncStatus] = useState<{ last_sync_at?: string; sync_status: string; pending_changes: number } | null>(null);
+  const [syncStatusLoading, setSyncStatusLoading] = useState(true);
+
+  // Override state
+  const [overrideLoading, setOverrideLoading] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<Partial<ModelPricing>>({
@@ -128,6 +137,22 @@ export const ModelPricingPage: React.FC = () => {
   useEffect(() => {
     fetchPricing();
   }, [fetchPricing]);
+
+  // Fetch sync status on mount
+  useEffect(() => {
+    const fetchSyncStatus = async () => {
+      setSyncStatusLoading(true);
+      try {
+        const status = await adminModelPricingApi.getStatus();
+        setSyncStatus(status);
+      } catch (error) {
+        console.error('Failed to fetch sync status:', error);
+      } finally {
+        setSyncStatusLoading(false);
+      }
+    };
+    fetchSyncStatus();
+  }, []);
 
   const handleCreatePricing = async () => {
     if (!formData.model || !formData.platform) return;
@@ -227,6 +252,44 @@ export const ModelPricingPage: React.FC = () => {
     }
   };
 
+  const handleDownloadPricing = async () => {
+    try {
+      const data = await adminModelPricingApi.downloadPricing();
+      const blob = new Blob([typeof data === 'string' ? data : JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `model-pricing-download-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to download pricing:', error);
+    }
+  };
+
+  const handleOverride = async () => {
+    if (!selectedPricing) return;
+    setOverrideLoading(true);
+    try {
+      await adminModelPricingApi.setOverride(selectedPricing.id, {
+        input_price: formData.input_price,
+        output_price: formData.output_price,
+        cache_creation_price: formData.cache_creation_price,
+        cache_read_price: formData.cache_read_price,
+      });
+      setShowEditModal(false);
+      setSelectedPricing(null);
+      resetForm();
+      fetchPricing();
+    } catch (error) {
+      console.error('Failed to set override:', error);
+    } finally {
+      setOverrideLoading(false);
+    }
+  };
+
   const handleViewStats = async () => {
     setShowStatsModal(true);
     setStatsLoading(true);
@@ -271,40 +334,40 @@ export const ModelPricingPage: React.FC = () => {
   const columns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('modelPricing.col.id'),
       render: (item: ModelPricing) => (
         <span className="text-sm text-gray-400">#{item.id}</span>
       ),
     },
     {
       key: 'model',
-      title: 'Model',
+      title: t('modelPricing.col.model'),
       render: (item: ModelPricing) => (
         <code className="text-sm font-mono text-cyan-400">{item.model}</code>
       ),
     },
     {
       key: 'platform',
-      title: 'Platform',
+      title: t('modelPricing.col.platform'),
       render: (item: ModelPricing) => getPlatformBadge(item.platform),
     },
     {
       key: 'input',
-      title: 'Input Price',
+      title: t('modelPricing.col.inputPrice'),
       render: (item: ModelPricing) => (
-        <span className="text-sm text-gray-400">{formatPrice(item.input_price)}/1K</span>
+        <span className="text-sm text-gray-400">{formatPrice(item.input_price)}{t('common.per1K')}</span>
       ),
     },
     {
       key: 'output',
-      title: 'Output Price',
+      title: t('modelPricing.col.outputPrice'),
       render: (item: ModelPricing) => (
-        <span className="text-sm text-gray-400">{formatPrice(item.output_price)}/1K</span>
+        <span className="text-sm text-gray-400">{formatPrice(item.output_price)}{t('common.per1K')}</span>
       ),
     },
     {
       key: 'cache',
-      title: 'Cache Prices',
+      title: t('modelPricing.col.cachePrices'),
       render: (item: ModelPricing) => (
         <div className="text-xs text-gray-500">
           {item.cache_creation_price !== undefined ? (
@@ -320,18 +383,18 @@ export const ModelPricingPage: React.FC = () => {
     },
     {
       key: 'status',
-      title: 'Status',
-      render: (item: ModelPricing) => getStatusBadge(item.status),
+      title: t('modelPricing.col.status'),
+      render: (item: ModelPricing) => getStatusBadge(item.status, t),
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('modelPricing.col.actions'),
       render: (item: ModelPricing) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => openEditModal(item)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="Edit"
+            title={t('common:btn.edit')}
           >
             <Edit className="w-4 h-4" />
           </button>
@@ -341,7 +404,7 @@ export const ModelPricingPage: React.FC = () => {
               setShowDeleteModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-red-400 transition-colors"
-            title="Delete"
+            title={t('common:btn.delete')}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -354,7 +417,7 @@ export const ModelPricingPage: React.FC = () => {
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
-          <label className="block text-sm text-gray-400 mb-1">Model Name *</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('modelPricing.form.modelName')} *</label>
           <Input
             placeholder="claude-3-opus-20240229"
             value={formData.model}
@@ -363,7 +426,7 @@ export const ModelPricingPage: React.FC = () => {
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Platform *</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('modelPricing.form.platform')} *</label>
           <select
             value={formData.platform}
             onChange={(e) => setFormData({ ...formData, platform: e.target.value })}
@@ -376,23 +439,23 @@ export const ModelPricingPage: React.FC = () => {
           </select>
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Status</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('modelPricing.form.status')}</label>
           <select
             value={formData.status}
             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
             className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
           >
-            <option value="active">Active</option>
-            <option value="disabled">Disabled</option>
+            <option value="active">{t('common:status.active')}</option>
+            <option value="disabled">{t('common:status.disabled')}</option>
           </select>
         </div>
       </div>
 
       <div className="border-t border-[#2A2A30] pt-4">
-        <p className="text-sm text-gray-400 mb-3">Pricing (per 1K tokens)</p>
+        <p className="text-sm text-gray-400 mb-3">{t('modelPricing.form.pricingPer1K')}</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Input Price *</label>
+            <label className="block text-xs text-gray-500 mb-1">{t('modelPricing.form.inputPrice')} *</label>
             <Input
               type="number"
               step="0.000001"
@@ -403,7 +466,7 @@ export const ModelPricingPage: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Output Price *</label>
+            <label className="block text-xs text-gray-500 mb-1">{t('modelPricing.form.outputPrice')} *</label>
             <Input
               type="number"
               step="0.000001"
@@ -414,23 +477,23 @@ export const ModelPricingPage: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Cache Creation Price</label>
+            <label className="block text-xs text-gray-500 mb-1">{t('modelPricing.form.cacheCreationPrice')}</label>
             <Input
               type="number"
               step="0.000001"
               min="0"
-              placeholder="Optional"
+              placeholder={t('common:btn.filter')}
               value={formData.cache_creation_price || ''}
               onChange={(e) => setFormData({ ...formData, cache_creation_price: e.target.value ? parseFloat(e.target.value) : undefined })}
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">Cache Read Price</label>
+            <label className="block text-xs text-gray-500 mb-1">{t('modelPricing.form.cacheReadPrice')}</label>
             <Input
               type="number"
               step="0.000001"
               min="0"
-              placeholder="Optional"
+              placeholder={t('common:btn.filter')}
               value={formData.cache_read_price || ''}
               onChange={(e) => setFormData({ ...formData, cache_read_price: e.target.value ? parseFloat(e.target.value) : undefined })}
             />
@@ -442,19 +505,32 @@ export const ModelPricingPage: React.FC = () => {
         <Button
           variant="secondary"
           onClick={() => {
-            isEdit ? setShowEditModal(false) : setShowCreateModal(false);
+            if (isEdit) {
+              setShowEditModal(false);
+            } else {
+              setShowCreateModal(false);
+            }
             resetForm();
             setSelectedPricing(null);
           }}
         >
-          Cancel
+          {t('common:btn.cancel')}
         </Button>
+        {isEdit && (
+          <Button
+            variant="secondary"
+            onClick={handleOverride}
+            isLoading={overrideLoading}
+          >
+            {t('modelPricing.override')}
+          </Button>
+        )}
         <Button
           onClick={isEdit ? handleUpdatePricing : handleCreatePricing}
           isLoading={actionLoading}
           disabled={!formData.model || !formData.platform}
         >
-          {isEdit ? 'Update Pricing' : 'Create Pricing'}
+          {isEdit ? t('modelPricing.update') : t('modelPricing.create')}
         </Button>
       </div>
     </div>
@@ -465,32 +541,60 @@ export const ModelPricingPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Model Pricing</h1>
-          <p className="text-gray-400">Configure pricing for AI models</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('modelPricing.title')}</h1>
+          <p className="text-gray-400">{t('modelPricing.subtitle')}</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" onClick={handleViewStats}>
             <BarChart3 className="w-4 h-4 mr-2" />
-            Stats
+            {t('modelPricing.stats')}
           </Button>
           <Button variant="secondary" onClick={() => setShowSyncModal(true)}>
             <RefreshCw className="w-4 h-4 mr-2" />
-            Sync
+            {t('modelPricing.sync')}
           </Button>
           <Button variant="secondary" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
-            Export
+            {t('modelPricing.export')}
+          </Button>
+          <Button variant="secondary" onClick={handleDownloadPricing}>
+            <Download className="w-4 h-4 mr-2" />
+            {t('modelPricing.download')}
           </Button>
           <Button variant="secondary" onClick={() => setShowImportModal(true)}>
             <Upload className="w-4 h-4 mr-2" />
-            Import
+            {t('modelPricing.import')}
           </Button>
           <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Add Pricing
+            {t('modelPricing.addPricing')}
           </Button>
         </div>
       </div>
+
+      {/* Sync Status Banner */}
+      {!syncStatusLoading && syncStatus && (
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center gap-6">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">{t('modelPricing.syncStatusLabel')}</p>
+                <Badge variant={syncStatus.sync_status === 'synced' ? 'success' : syncStatus.sync_status === 'pending' ? 'info' : 'default'}>
+                  {syncStatus.sync_status}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">{t('modelPricing.lastSyncAt')}</p>
+                <p className="text-sm text-white">{syncStatus.last_sync_at ? new Date(syncStatus.last_sync_at).toLocaleString() : '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">{t('modelPricing.pendingChanges')}</p>
+                <p className="text-sm text-white">{syncStatus.pending_changes}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card className="mb-6">
@@ -504,7 +608,7 @@ export const ModelPricingPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Platforms</option>
+              <option value="">{t('common:btn.filter')}</option>
               <option value="claude">Claude</option>
               <option value="openai">OpenAI</option>
               <option value="gemini">Gemini</option>
@@ -517,13 +621,13 @@ export const ModelPricingPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="disabled">Disabled</option>
+              <option value="">{t('common:btn.filter')}</option>
+              <option value="active">{t('common:status.active')}</option>
+              <option value="disabled">{t('common:status.disabled')}</option>
             </select>
             <div className="flex items-center gap-2 text-sm text-gray-400 ml-auto">
               <DollarSign className="w-4 h-4" />
-              <span>{total} models</span>
+              <span>{t('modelPricing.modelsCount', { count: total })}</span>
             </div>
           </div>
         </CardContent>
@@ -536,15 +640,14 @@ export const ModelPricingPage: React.FC = () => {
             columns={columns}
             data={pricing}
             loading={loading}
-            emptyText="No pricing found"
+            emptyText={t('modelPricing.empty')}
           />
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#2A2A30]">
               <p className="text-sm text-gray-400">
-                Showing {(page - 1) * pageSize + 1} to{' '}
-                {Math.min(page * pageSize, total)} of {total} models
+                {t('common:table.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total), total })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -556,7 +659,7 @@ export const ModelPricingPage: React.FC = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm text-gray-400">
-                  Page {page} of {totalPages}
+                  {t('common:table.page', { current: page, total: totalPages })}
                 </span>
                 <Button
                   variant="secondary"
@@ -579,7 +682,7 @@ export const ModelPricingPage: React.FC = () => {
           setShowCreateModal(false);
           resetForm();
         }}
-        title="Add Model Pricing"
+        title={t('modelPricing.addModel')}
       >
         <PricingForm />
       </Modal>
@@ -592,7 +695,7 @@ export const ModelPricingPage: React.FC = () => {
           setSelectedPricing(null);
           resetForm();
         }}
-        title="Edit Model Pricing"
+        title={t('modelPricing.edit')}
       >
         <PricingForm isEdit />
       </Modal>
@@ -604,19 +707,19 @@ export const ModelPricingPage: React.FC = () => {
           setShowDeleteModal(false);
           setSelectedPricing(null);
         }}
-        title="Delete Pricing"
+        title={t('modelPricing.delete')}
       >
         {selectedPricing && (
           <div className="space-y-4">
             <p className="text-gray-400">
-              Are you sure you want to delete pricing for{' '}
+              {t('modelPricing.deleteConfirm')}{' '}
               <code className="text-cyan-400 bg-[#0A0A0C] px-2 py-1 rounded">
                 {selectedPricing.model}
               </code>
               ?
             </p>
             <p className="text-sm text-red-400">
-              This action cannot be undone.
+              {t('common:modal.confirmMessage')}
             </p>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -626,14 +729,14 @@ export const ModelPricingPage: React.FC = () => {
                   setSelectedPricing(null);
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 variant="danger"
                 onClick={handleDeletePricing}
                 isLoading={actionLoading}
               >
-                Delete Pricing
+                {t('modelPricing.delete')}
               </Button>
             </div>
           </div>
@@ -648,20 +751,20 @@ export const ModelPricingPage: React.FC = () => {
           setSyncResult(null);
           setSyncPlatform('');
         }}
-        title="Sync Pricing"
+        title={t('modelPricing.syncTitle')}
       >
         <div className="space-y-4">
           <p className="text-gray-400">
-            Sync model pricing from upstream providers. This will update existing prices and add new models.
+            {t('modelPricing.syncDesc')}
           </p>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Platform (optional)</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('modelPricing.form.platform')} ({t('common:btn.filter')})</label>
             <select
               value={syncPlatform}
               onChange={(e) => setSyncPlatform(e.target.value)}
               className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Platforms</option>
+              <option value="">{t('common:btn.filter')}</option>
               <option value="claude">Claude</option>
               <option value="openai">OpenAI</option>
               <option value="gemini">Gemini</option>
@@ -697,11 +800,11 @@ export const ModelPricingPage: React.FC = () => {
                 setSyncPlatform('');
               }}
             >
-              Close
+              {t('common:btn.close')}
             </Button>
             <Button onClick={handleSync} isLoading={syncLoading}>
               <RefreshCw className="w-4 h-4 mr-2" />
-              Sync Now
+              {t('modelPricing.syncNow')}
             </Button>
           </div>
         </div>
@@ -714,11 +817,11 @@ export const ModelPricingPage: React.FC = () => {
           setShowImportModal(false);
           setImportData('');
         }}
-        title="Import Pricing"
+        title={t('modelPricing.importTitle')}
       >
         <div className="space-y-4">
           <p className="text-gray-400">
-            Paste JSON data to import model pricing. Format should be an array of pricing objects.
+            {t('modelPricing.importDesc')}
           </p>
           <div>
             <label className="block text-sm text-gray-400 mb-1">JSON Data</label>
@@ -738,11 +841,11 @@ export const ModelPricingPage: React.FC = () => {
                 setImportData('');
               }}
             >
-              Cancel
+              {t('common:btn.cancel')}
             </Button>
             <Button onClick={handleImport} isLoading={importLoading} disabled={!importData}>
               <Upload className="w-4 h-4 mr-2" />
-              Import
+              {t('modelPricing.import')}
             </Button>
           </div>
         </div>
@@ -755,7 +858,7 @@ export const ModelPricingPage: React.FC = () => {
           setShowStatsModal(false);
           setStats(null);
         }}
-        title="Pricing Statistics"
+        title={t('modelPricing.statsTitle')}
       >
         {statsLoading ? (
           <div className="space-y-4">
@@ -767,16 +870,16 @@ export const ModelPricingPage: React.FC = () => {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="p-4 bg-[#0A0A0C] rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Total Models</p>
+                <p className="text-xs text-gray-500 mb-1">{t('modelPricing.totalModels')}</p>
                 <p className="text-xl font-bold text-white">{stats.total_models}</p>
               </div>
               <div className="p-4 bg-[#0A0A0C] rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Active Models</p>
+                <p className="text-xs text-gray-500 mb-1">{t('modelPricing.activeModels')}</p>
                 <p className="text-xl font-bold text-emerald-400">{stats.active_models}</p>
               </div>
             </div>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-3">By Platform</p>
+              <p className="text-xs text-gray-500 mb-3">{t('modelPricing.byPlatform')}</p>
               <div className="space-y-2">
                 {stats.platforms.map((p) => (
                   <div key={p.platform} className="flex items-center justify-between">

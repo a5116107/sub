@@ -15,6 +15,7 @@ import {
   Calendar,
   Code,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { userAttributesApi, type UserAttribute, type CreateUserAttributeRequest } from '../../api/admin/userAttributes';
 import {
   Button,
@@ -43,7 +44,7 @@ const getTypeIcon = (type: string) => {
   }
 };
 
-const getTypeBadge = (type: string) => {
+const getTypeBadge = (type: string, t: (key: string) => string) => {
   const colors: Record<string, string> = {
     string: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
     number: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -55,7 +56,7 @@ const getTypeBadge = (type: string) => {
     <Badge variant="default" className={colors[type] || colors.string}>
       <span className="flex items-center gap-1">
         {getTypeIcon(type)}
-        {type.charAt(0).toUpperCase() + type.slice(1)}
+        {t(`userAttributes.type.${type}`)}
       </span>
     </Badge>
   );
@@ -70,6 +71,7 @@ const formatDate = (dateString: string) => {
 };
 
 export const UserAttributesPage: React.FC = () => {
+  const { t } = useTranslation('admin');
   const [loading, setLoading] = useState(true);
   const [attributes, setAttributes] = useState<UserAttribute[]>([]);
   const [search, setSearch] = useState('');
@@ -135,20 +137,20 @@ export const UserAttributesPage: React.FC = () => {
     const errors: Record<string, string> = {};
 
     if (!formData.key.trim()) {
-      errors.key = 'Key is required';
+      errors.key = t('userAttributes.form.keyRequired');
     } else if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(formData.key)) {
-      errors.key = 'Key must start with a letter and contain only letters, numbers, and underscores';
+      errors.key = t('userAttributes.form.keyInvalid');
     }
 
     if (!formData.name.trim()) {
-      errors.name = 'Name is required';
+      errors.name = t('userAttributes.form.nameRequired');
     }
 
     if (formData.validation_regex) {
       try {
         new RegExp(formData.validation_regex);
       } catch {
-        errors.validation_regex = 'Invalid regular expression';
+        errors.validation_regex = t('userAttributes.form.regexInvalid');
       }
     }
 
@@ -299,7 +301,7 @@ export const UserAttributesPage: React.FC = () => {
     },
     {
       key: 'key',
-      title: 'Key',
+      title: t('userAttributes.col.key'),
       render: (attribute: UserAttribute) => (
         <div>
           <p className="text-sm font-medium text-white font-mono">{attribute.key}</p>
@@ -311,35 +313,35 @@ export const UserAttributesPage: React.FC = () => {
     },
     {
       key: 'name',
-      title: 'Name',
+      title: t('userAttributes.col.name'),
       render: (attribute: UserAttribute) => (
         <span className="text-sm text-white">{attribute.name}</span>
       ),
     },
     {
       key: 'type',
-      title: 'Type',
-      render: (attribute: UserAttribute) => getTypeBadge(attribute.type),
+      title: t('userAttributes.col.type'),
+      render: (attribute: UserAttribute) => getTypeBadge(attribute.type, t),
     },
     {
       key: 'required',
-      title: 'Required',
+      title: t('userAttributes.col.required'),
       render: (attribute: UserAttribute) =>
         attribute.required ? (
           <Badge variant="success" className="flex items-center gap-1 w-fit">
             <Check className="w-3 h-3" />
-            Yes
+            {t('userAttributes.required.yes')}
           </Badge>
         ) : (
           <Badge variant="default" className="flex items-center gap-1 w-fit">
             <X className="w-3 h-3" />
-            No
+            {t('userAttributes.required.no')}
           </Badge>
         ),
     },
     {
       key: 'default_value',
-      title: 'Default Value',
+      title: t('userAttributes.col.defaultValue'),
       render: (attribute: UserAttribute) => (
         <span className="text-sm text-gray-400">
           {attribute.default_value || '-'}
@@ -348,27 +350,27 @@ export const UserAttributesPage: React.FC = () => {
     },
     {
       key: 'created_at',
-      title: 'Created',
+      title: t('userAttributes.col.created'),
       render: (attribute: UserAttribute) => (
         <span className="text-sm text-gray-400">{formatDate(attribute.created_at)}</span>
       ),
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('userAttributes.col.actions'),
       render: (attribute: UserAttribute) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => openEditModal(attribute)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="Edit Attribute"
+            title={t('common:btn.edit')}
           >
             <Edit className="w-4 h-4" />
           </button>
           <button
             onClick={() => openDeleteModal(attribute)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-red-400 transition-colors"
-            title="Delete Attribute"
+            title={t('common:btn.delete')}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -382,12 +384,12 @@ export const UserAttributesPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">User Attributes</h1>
-          <p className="text-gray-400">Manage custom user attribute definitions</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('userAttributes.title')}</h1>
+          <p className="text-gray-400">{t('userAttributes.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-400">
           <Tags className="w-4 h-4" />
-          <span>{attributes.length} attributes</span>
+          <span>{t('userAttributes.attributesCount', { count: attributes.length })}</span>
         </div>
       </div>
 
@@ -399,7 +401,7 @@ export const UserAttributesPage: React.FC = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <Input
-                  placeholder="Search by key, name, or description..."
+                  placeholder={t('userAttributes.search')}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-10"
@@ -408,7 +410,7 @@ export const UserAttributesPage: React.FC = () => {
             </div>
             <Button onClick={() => setShowCreateModal(true)}>
               <Plus className="w-4 h-4 mr-2" />
-              Add Attribute
+              {t('userAttributes.addAttribute')}
             </Button>
           </div>
         </CardContent>
@@ -421,7 +423,7 @@ export const UserAttributesPage: React.FC = () => {
             <div className="px-6 py-2 bg-blue-500/10 border-b border-blue-500/20">
               <p className="text-sm text-blue-400 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4" />
-                Saving new order...
+                {t('userAttributes.savingOrder')}
               </p>
             </div>
           )}
@@ -429,7 +431,7 @@ export const UserAttributesPage: React.FC = () => {
             columns={columns}
             data={filteredAttributes}
             loading={loading}
-            emptyText="No attributes found"
+            emptyText={t('userAttributes.empty')}
             rowKey="id"
           />
         </CardContent>
@@ -442,14 +444,14 @@ export const UserAttributesPage: React.FC = () => {
           setShowCreateModal(false);
           resetForm();
         }}
-        title="Create User Attribute"
+        title={t('userAttributes.create')}
         size="lg"
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">
-                Key <span className="text-red-400">*</span>
+                {t('userAttributes.form.key')} <span className="text-red-400">*</span>
               </label>
               <Input
                 placeholder="e.g., department"
@@ -458,12 +460,12 @@ export const UserAttributesPage: React.FC = () => {
                 error={formErrors.key}
               />
               <p className="text-xs text-gray-500 mt-1">
-                Unique identifier, used in API
+                {t('userAttributes.form.keyDesc')}
               </p>
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">
-                Name <span className="text-red-400">*</span>
+                {t('userAttributes.form.name')} <span className="text-red-400">*</span>
               </label>
               <Input
                 placeholder="e.g., Department"
@@ -472,15 +474,15 @@ export const UserAttributesPage: React.FC = () => {
                 error={formErrors.name}
               />
               <p className="text-xs text-gray-500 mt-1">
-                Display name for UI
+                {t('userAttributes.form.nameDesc')}
               </p>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Description</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.description')}</label>
             <Input
-              placeholder="Optional description..."
+              placeholder={t('common:btn.filter')}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
@@ -488,7 +490,7 @@ export const UserAttributesPage: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Type</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.type')}</label>
               <select
                 value={formData.type}
                 onChange={(e) =>
@@ -496,15 +498,15 @@ export const UserAttributesPage: React.FC = () => {
                 }
                 className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
               >
-                <option value="string">String</option>
-                <option value="number">Number</option>
-                <option value="boolean">Boolean</option>
-                <option value="date">Date</option>
-                <option value="json">JSON</option>
+                <option value="string">{t('userAttributes.type.string')}</option>
+                <option value="number">{t('userAttributes.type.number')}</option>
+                <option value="boolean">{t('userAttributes.type.boolean')}</option>
+                <option value="date">{t('userAttributes.type.date')}</option>
+                <option value="json">{t('userAttributes.type.json')}</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Required</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.required')}</label>
               <div className="flex items-center gap-2 mt-2">
                 <button
                   onClick={() => setFormData({ ...formData, required: !formData.required })}
@@ -519,23 +521,23 @@ export const UserAttributesPage: React.FC = () => {
                   />
                 </button>
                 <span className="text-sm text-gray-400">
-                  {formData.required ? 'Required' : 'Optional'}
+                  {formData.required ? t('userAttributes.required.required') : t('userAttributes.required.optional')}
                 </span>
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Default Value</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.defaultValue')}</label>
             <Input
-              placeholder="Optional default value..."
+              placeholder={t('common:btn.filter')}
               value={formData.default_value}
               onChange={(e) => setFormData({ ...formData, default_value: e.target.value })}
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Validation Regex</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.validationRegex')}</label>
             <Input
               placeholder="e.g., ^[A-Za-z]+$"
               value={formData.validation_regex}
@@ -543,7 +545,7 @@ export const UserAttributesPage: React.FC = () => {
               error={formErrors.validation_regex}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Optional regex pattern for validation
+              {t('userAttributes.form.regexDesc')}
             </p>
           </div>
 
@@ -555,10 +557,10 @@ export const UserAttributesPage: React.FC = () => {
                 resetForm();
               }}
             >
-              Cancel
+              {t('common:btn.cancel')}
             </Button>
             <Button onClick={handleCreate} isLoading={actionLoading}>
-              Create Attribute
+              {t('userAttributes.create')}
             </Button>
           </div>
         </div>
@@ -572,19 +574,19 @@ export const UserAttributesPage: React.FC = () => {
           setSelectedAttribute(null);
           resetForm();
         }}
-        title="Edit User Attribute"
+        title={t('userAttributes.edit')}
         size="lg"
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Key</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.key')}</label>
               <Input value={formData.key} disabled className="bg-[#2A2A30]/50" />
-              <p className="text-xs text-gray-500 mt-1">Key cannot be changed</p>
+              <p className="text-xs text-gray-500 mt-1">{t('userAttributes.form.key')} {t('common:btn.filter')}</p>
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">
-                Name <span className="text-red-400">*</span>
+                {t('userAttributes.form.name')} <span className="text-red-400">*</span>
               </label>
               <Input
                 placeholder="e.g., Department"
@@ -596,9 +598,9 @@ export const UserAttributesPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Description</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.description')}</label>
             <Input
-              placeholder="Optional description..."
+              placeholder={t('common:btn.filter')}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             />
@@ -606,7 +608,7 @@ export const UserAttributesPage: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Type</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.type')}</label>
               <select
                 value={formData.type}
                 onChange={(e) =>
@@ -614,15 +616,15 @@ export const UserAttributesPage: React.FC = () => {
                 }
                 className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
               >
-                <option value="string">String</option>
-                <option value="number">Number</option>
-                <option value="boolean">Boolean</option>
-                <option value="date">Date</option>
-                <option value="json">JSON</option>
+                <option value="string">{t('userAttributes.type.string')}</option>
+                <option value="number">{t('userAttributes.type.number')}</option>
+                <option value="boolean">{t('userAttributes.type.boolean')}</option>
+                <option value="date">{t('userAttributes.type.date')}</option>
+                <option value="json">{t('userAttributes.type.json')}</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Required</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.required')}</label>
               <div className="flex items-center gap-2 mt-2">
                 <button
                   onClick={() => setFormData({ ...formData, required: !formData.required })}
@@ -637,23 +639,23 @@ export const UserAttributesPage: React.FC = () => {
                   />
                 </button>
                 <span className="text-sm text-gray-400">
-                  {formData.required ? 'Required' : 'Optional'}
+                  {formData.required ? t('userAttributes.required.required') : t('userAttributes.required.optional')}
                 </span>
               </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Default Value</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.defaultValue')}</label>
             <Input
-              placeholder="Optional default value..."
+              placeholder={t('common:btn.filter')}
               value={formData.default_value}
               onChange={(e) => setFormData({ ...formData, default_value: e.target.value })}
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Validation Regex</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('userAttributes.form.validationRegex')}</label>
             <Input
               placeholder="e.g., ^[A-Za-z]+$"
               value={formData.validation_regex}
@@ -671,10 +673,10 @@ export const UserAttributesPage: React.FC = () => {
                 resetForm();
               }}
             >
-              Cancel
+              {t('common:btn.cancel')}
             </Button>
             <Button onClick={handleUpdate} isLoading={actionLoading}>
-              Update Attribute
+              {t('common:btn.saveChanges')}
             </Button>
           </div>
         </div>
@@ -687,18 +689,17 @@ export const UserAttributesPage: React.FC = () => {
           setShowDeleteModal(false);
           setSelectedAttribute(null);
         }}
-        title="Delete User Attribute"
+        title={t('userAttributes.delete')}
       >
         {selectedAttribute && (
           <div className="space-y-4">
             <p className="text-gray-400">
-              Are you sure you want to delete the attribute{' '}
+              {t('userAttributes.deleteConfirm')}{' '}
               <span className="text-white font-medium">{selectedAttribute.name}</span> (
               <code className="text-red-400">{selectedAttribute.key}</code>)?
             </p>
             <p className="text-sm text-red-400">
-              This action cannot be undone. All user data associated with this attribute will be
-              permanently deleted.
+              {t('userAttributes.deleteWarning')}
             </p>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -708,10 +709,10 @@ export const UserAttributesPage: React.FC = () => {
                   setSelectedAttribute(null);
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button variant="danger" onClick={handleDelete} isLoading={actionLoading}>
-                Delete Attribute
+                {t('userAttributes.delete')}
               </Button>
             </div>
           </div>

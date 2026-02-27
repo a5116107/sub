@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Gift, History, CheckCircle, XCircle } from 'lucide-react';
 import { userApi } from '../../api/user';
 import type { RedeemHistory } from '../../types';
@@ -21,14 +22,14 @@ interface RedeemResult {
   message: string;
 }
 
-const getTypeBadge = (type: string) => {
+const getTypeBadge = (type: string, t: (key: string) => string) => {
   switch (type.toLowerCase()) {
     case 'balance':
-      return <Badge variant="success">Balance</Badge>;
+      return <Badge variant="success">{t('type.balance')}</Badge>;
     case 'subscription':
-      return <Badge variant="primary">Subscription</Badge>;
+      return <Badge variant="primary">{t('type.subscription')}</Badge>;
     case 'quota':
-      return <Badge variant="info">Quota</Badge>;
+      return <Badge variant="info">{t('type.quota')}</Badge>;
     default:
       return <Badge variant="default">{type}</Badge>;
   }
@@ -45,6 +46,7 @@ const formatDate = (dateString: string) => {
 };
 
 export const RedeemPage: React.FC = () => {
+  const { t } = useTranslation('redeem');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -69,7 +71,7 @@ export const RedeemPage: React.FC = () => {
 
   const handleRedeem = async () => {
     if (!code.trim()) {
-      setError('Please enter a redemption code');
+      setError(t('form.enterCode'));
       return;
     }
 
@@ -104,19 +106,19 @@ export const RedeemPage: React.FC = () => {
   const columns = [
     {
       key: 'code',
-      title: 'Code',
+      title: t('history.col.code'),
       render: (item: RedeemHistory) => (
         <span className="font-mono text-sm text-gray-300">{item.code}</span>
       ),
     },
     {
       key: 'type',
-      title: 'Type',
-      render: (item: RedeemHistory) => getTypeBadge(item.type),
+      title: t('history.col.type'),
+      render: (item: RedeemHistory) => getTypeBadge(item.type, t),
     },
     {
       key: 'value',
-      title: 'Value',
+      title: t('history.col.value'),
       render: (item: RedeemHistory) => (
         <span className="text-sm font-medium text-emerald-400">
           {item.type === 'balance' ? `$${item.value.toFixed(2)}` : item.value}
@@ -125,7 +127,7 @@ export const RedeemPage: React.FC = () => {
     },
     {
       key: 'used_at',
-      title: 'Redeemed At',
+      title: t('history.col.redeemedAt'),
       render: (item: RedeemHistory) => (
         <span className="text-sm text-gray-400">{formatDate(item.used_at)}</span>
       ),
@@ -136,8 +138,8 @@ export const RedeemPage: React.FC = () => {
     <div className="p-6 lg:p-8 max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white mb-1">Redeem Code</h1>
-        <p className="text-gray-400">Enter a redemption code to add balance or activate a subscription</p>
+        <h1 className="text-2xl font-bold text-white mb-1">{t('title')}</h1>
+        <p className="text-gray-400">{t('subtitle')}</p>
       </div>
 
       {/* Redeem Form */}
@@ -145,7 +147,7 @@ export const RedeemPage: React.FC = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Gift className="w-5 h-5 text-cyan-400" />
-            Enter Redemption Code
+            {t('form.title')}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -153,7 +155,7 @@ export const RedeemPage: React.FC = () => {
             <div className="flex gap-3">
               <div className="flex-1">
                 <Input
-                  placeholder="XXXX-XXXX-XXXX-XXXX"
+                  placeholder={t('form.placeholder')}
                   value={code}
                   onChange={(e) => {
                     setCode(e.target.value.toUpperCase());
@@ -171,7 +173,7 @@ export const RedeemPage: React.FC = () => {
                 isLoading={loading}
                 className="px-8"
               >
-                {loading ? 'Redeeming...' : 'Redeem'}
+                {loading ? t('form.redeeming') : t('form.redeem')}
               </Button>
             </div>
 
@@ -195,14 +197,14 @@ export const RedeemPage: React.FC = () => {
                       result.success ? 'text-emerald-400' : 'text-red-400'
                     }`}
                   >
-                    {result.success ? 'Success!' : 'Failed'}
+                    {result.success ? t('result.success') : t('result.failed')}
                   </p>
                   <p className="text-sm text-gray-400">{result.message}</p>
                   {result.success && (
                     <p className="text-sm text-gray-300 mt-1">
                       {result.type === 'balance'
-                        ? `Added $${result.value.toFixed(2)} to your balance`
-                        : `Activated ${result.type}: ${result.value}`}
+                        ? t('result.addedBalance', { value: result.value.toFixed(2) })
+                        : t('result.activated', { type: result.type, value: result.value })}
                     </p>
                   )}
                 </div>
@@ -219,7 +221,7 @@ export const RedeemPage: React.FC = () => {
 
             {/* Help Text */}
             <p className="text-sm text-gray-500">
-              Redemption codes are case-insensitive. Contact support if you have issues with your code.
+              {t('form.helpText')}
             </p>
           </div>
         </CardContent>
@@ -230,7 +232,7 @@ export const RedeemPage: React.FC = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <History className="w-5 h-5 text-purple-400" />
-            Redemption History
+            {t('history.title')}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -245,7 +247,7 @@ export const RedeemPage: React.FC = () => {
               columns={columns}
               data={history}
               loading={historyLoading}
-              emptyText="No redemption history yet"
+              emptyText={t('history.empty')}
             />
           )}
         </CardContent>

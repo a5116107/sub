@@ -34,6 +34,7 @@ const statusCode = ref<number | 'other' | null>(null)
 const phase = ref<string>('')
 const errorOwner = ref<string>('')
 const viewMode = ref<'errors' | 'excluded' | 'all'>('errors')
+const failoverCategory = ref<string>('')
 
 
 const modalTitle = computed(() => {
@@ -55,6 +56,14 @@ const ownerSelectOptions = computed(() => {
     { value: 'provider', label: t('admin.ops.errorDetails.owner.provider') || 'provider' },
     { value: 'client', label: t('admin.ops.errorDetails.owner.client') || 'client' },
     { value: 'platform', label: t('admin.ops.errorDetails.owner.platform') || 'platform' }
+  ]
+})
+
+const failoverCategorySelectOptions = computed(() => {
+  return [
+    { value: '', label: t('admin.ops.errorDetails.failoverMatchAll') || t('common.all') },
+    { value: 'sensitive', label: t('admin.ops.errorDetails.failoverMatchSensitive') || 'sensitive' },
+    { value: 'temporary', label: t('admin.ops.errorDetails.failoverMatchTemporary') || 'temporary' }
   ]
 })
 
@@ -110,6 +119,9 @@ async function fetchErrorLogs() {
     const ownerVal = String(errorOwner.value || '').trim()
     if (ownerVal) params.error_owner = ownerVal
 
+    const failoverCategoryVal = String(failoverCategory.value || '').trim()
+    if (failoverCategoryVal) params.failover_category = failoverCategoryVal
+
 
     const res = props.errorType === 'upstream'
       ? await opsAPI.listUpstreamErrors(params)
@@ -131,6 +143,7 @@ async function fetchErrorLogs() {
     phase.value = props.errorType === 'upstream' ? 'upstream' : ''
     errorOwner.value = ''
     viewMode.value = 'errors'
+    failoverCategory.value = ''
     page.value = 1
     fetchErrorLogs()
   }
@@ -177,7 +190,7 @@ watch(
 )
 
 watch(
-  () => [statusCode.value, phase.value, errorOwner.value, viewMode.value] as const,
+  () => [statusCode.value, phase.value, errorOwner.value, viewMode.value, failoverCategory.value] as const,
   () => {
     if (!props.show) return
     page.value = 1
@@ -225,6 +238,9 @@ watch(
             <Select :model-value="errorOwner" :options="ownerSelectOptions" @update:model-value="errorOwner = String($event ?? '')" />
           </div>
 
+          <div class="compact-select">
+            <Select :model-value="failoverCategory" :options="failoverCategorySelectOptions" @update:model-value="failoverCategory = String($event ?? '')" />
+          </div>
 
 
           <div class="compact-select">

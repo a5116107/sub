@@ -169,4 +169,3 @@ func (h *ModelPricingHandler) Sync(c *gin.Context) {
 	}
 	response.Success(c, status)
 }
-

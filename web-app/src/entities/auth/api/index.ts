@@ -44,9 +44,8 @@ export const authApi = {
   validatePromoCode: (data: ValidatePromoCodeRequest) =>
     post<ValidatePromoCodeResponse>('/auth/validate-promo-code', data),
 
-  // Logout
-  logout: () =>
-    post<void>('/auth/logout')
+  // Logout is frontend-local (backend has no /auth/logout endpoint)
+  logout: async () => undefined
 }
 
 // Composables

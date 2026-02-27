@@ -20,6 +20,10 @@ const (
 	// retry the specific upstream attempt (not just the client request).
 	// This value is sanitized+trimmed before being persisted.
 	OpsUpstreamRequestBodyKey = "ops_upstream_request_body"
+
+	// OpsSkipPassthroughKey 由 applyErrorPassthroughRule 在命中 skip_monitoring=true 的规则时设置。
+	// ops_error_logger 中间件检查此 key，为 true 时跳过错误记录。
+	OpsSkipPassthroughKey = "ops_skip_passthrough"
 )
 
 func setOpsUpstreamError(c *gin.Context, upstreamStatusCode int, upstreamMessage, upstreamDetail string) {
@@ -46,6 +50,10 @@ type OpsUpstreamErrorEvent struct {
 	Platform    string `json:"platform,omitempty"`
 	AccountID   int64  `json:"account_id,omitempty"`
 	AccountName string `json:"account_name,omitempty"`
+
+	// Failover match context (for keyword-based 400 failover).
+	FailoverMatchCategory string `json:"failover_match_category,omitempty"`
+	FailoverMatchKeyword  string `json:"failover_match_keyword,omitempty"`
 
 	// Outcome
 	UpstreamStatusCode int    `json:"upstream_status_code,omitempty"`
@@ -79,6 +87,8 @@ func appendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
 	ev.Kind = strings.TrimSpace(ev.Kind)
 	ev.Message = strings.TrimSpace(ev.Message)
 	ev.Detail = strings.TrimSpace(ev.Detail)
+	ev.FailoverMatchCategory = strings.TrimSpace(ev.FailoverMatchCategory)
+	ev.FailoverMatchKeyword = strings.TrimSpace(ev.FailoverMatchKeyword)
 	if ev.Message != "" {
 		ev.Message = sanitizeUpstreamErrorMessage(ev.Message)
 	}

@@ -19,6 +19,11 @@ type BillingReconcileResult struct {
 	Errors     int
 }
 
+var billingTypeFromLedger = map[int16]int8{
+	int16(BillingTypeBalance):      BillingTypeBalance,
+	int16(BillingTypeSubscription): BillingTypeSubscription,
+}
+
 // BillingReconcileService is an optional safety net that reconciles billing ledger entries
 // stuck in applied=false state (e.g. after transient DB errors or process crashes).
 //
@@ -231,7 +236,11 @@ func (s *BillingReconcileService) ReconcileOnce(ctx context.Context, batchSize i
 			continue
 		}
 
-		bt := int8(entry.billingType)
+		bt, ok := billingTypeFromLedger[entry.billingType]
+		if !ok {
+			result.Errors++
+			continue
+		}
 		switch bt {
 		case BillingTypeBalance:
 			if err := s.userRepo.DeductBalance(txCtx, entry.userID, entry.deltaUSD); err != nil {

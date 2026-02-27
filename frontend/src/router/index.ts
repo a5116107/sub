@@ -538,6 +538,7 @@ router.onError((error) => {
     error.message?.includes('Failed to fetch dynamically imported module') ||
     error.message?.includes('Loading chunk') ||
     error.message?.includes('Loading CSS chunk') ||
+    error.message?.includes('Unable to preload CSS for') ||
     error.name === 'ChunkLoadError'
 
   if (isChunkLoadError) {
@@ -547,7 +548,7 @@ router.onError((error) => {
     const now = Date.now()
 
     // Allow reload if never attempted or more than 10 seconds ago
-    if (!lastReload || now - parseInt(lastReload) > 10000) {
+    if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
       sessionStorage.setItem(reloadKey, now.toString())
       console.warn('Chunk load error detected, reloading page to fetch latest version...')
       window.location.reload()

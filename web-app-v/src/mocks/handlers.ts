@@ -316,8 +316,8 @@ export const handlers = [
     });
   }),
 
-  // Dashboard
-  http.get('/api/v1/user/dashboard', () => {
+  // Usage dashboard stats
+  http.get('/api/v1/usage/dashboard/stats', () => {
     return HttpResponse.json({
       code: 200,
       message: 'success',
@@ -326,7 +326,7 @@ export const handlers = [
   }),
 
   // API Keys
-  http.get('/api/v1/user/api-keys', () => {
+  http.get('/api/v1/keys', () => {
     return HttpResponse.json({
       code: 200,
       message: 'success',
@@ -334,7 +334,7 @@ export const handlers = [
     });
   }),
 
-  http.post('/api/v1/user/api-keys', async ({ request }) => {
+  http.post('/api/v1/keys', async ({ request }) => {
     const body = await request.json() as { name: string; group_id?: number };
     const newKey = {
       id: Date.now(),
@@ -359,7 +359,7 @@ export const handlers = [
     });
   }),
 
-  http.delete('/api/v1/user/api-keys/:id', () => {
+  http.delete('/api/v1/keys/:id', () => {
     return HttpResponse.json({
       code: 200,
       message: 'success',
@@ -368,7 +368,7 @@ export const handlers = [
   }),
 
   // Usage
-  http.get('/api/v1/user/usage/summary', () => {
+  http.get('/api/v1/usage/stats', () => {
     return HttpResponse.json({
       code: 200,
       message: 'success',
@@ -376,7 +376,7 @@ export const handlers = [
     });
   }),
 
-  http.get('/api/v1/user/usage', ({ request }) => {
+  http.get('/api/v1/usage', ({ request }) => {
     const url = new URL(request.url);
     const pageSize = parseInt(url.searchParams.get('page_size') || '10');
     return HttpResponse.json({
@@ -389,7 +389,7 @@ export const handlers = [
     });
   }),
 
-  http.get('/api/v1/user/usage/models', () => {
+  http.get('/api/v1/usage/dashboard/models', () => {
     return HttpResponse.json({
       code: 200,
       message: 'success',
@@ -413,7 +413,7 @@ export const handlers = [
     });
   }),
 
-  http.get('/api/v1/admin/dashboard/trends', () => {
+  http.get('/api/v1/admin/dashboard/trend', () => {
     const trends = Array.from({ length: 7 }, (_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - (6 - i));
@@ -518,7 +518,7 @@ export const handlers = [
   }),
 
   // User subscriptions
-  http.get('/api/v1/user/subscriptions', () => {
+  http.get('/api/v1/subscriptions', () => {
     return HttpResponse.json({
       code: 200,
       message: 'success',
@@ -526,7 +526,7 @@ export const handlers = [
     });
   }),
 
-  http.get('/api/v1/user/subscriptions/:id/progress', ({ params }) => {
+  http.get('/api/v1/subscriptions/:id/progress', ({ params }) => {
     const sub = mockSubscriptions.find(s => s.id === Number(params.id));
     return HttpResponse.json({
       code: 200,
@@ -544,7 +544,7 @@ export const handlers = [
   }),
 
   // Redeem
-  http.post('/api/v1/user/redeem', async ({ request }) => {
+  http.post('/api/v1/redeem', async ({ request }) => {
     const body = await request.json() as { code: string };
     const isValid = body.code && body.code.length >= 8;
     return HttpResponse.json({
@@ -559,7 +559,7 @@ export const handlers = [
     });
   }),
 
-  http.get('/api/v1/user/redeem/history', () => {
+  http.get('/api/v1/redeem/history', () => {
     return HttpResponse.json({
       code: 200,
       message: 'success',
@@ -677,28 +677,13 @@ export const handlers = [
     });
   }),
 
-  http.put('/api/v1/admin/accounts/:id/status', () => {
-    return HttpResponse.json({
-      code: 200,
-      message: 'success',
-      data: null,
-    });
-  }),
-
   // Admin User actions
-  http.put('/api/v1/admin/users/:id/status', () => {
+  http.put('/api/v1/admin/users/:id', async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
     return HttpResponse.json({
       code: 200,
       message: 'success',
-      data: null,
-    });
-  }),
-
-  http.put('/api/v1/admin/users/:id/role', () => {
-    return HttpResponse.json({
-      code: 200,
-      message: 'success',
-      data: null,
+      data: { ...body, updated_at: new Date().toISOString() },
     });
   }),
 

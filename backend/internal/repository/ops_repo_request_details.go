@@ -135,6 +135,7 @@ WITH combined AS (
 )
 `
 
+	// #nosec G201 -- cte/where are constructed from fixed SQL fragments with bound placeholders only.
 	countQuery := fmt.Sprintf(`%s SELECT COUNT(1) FROM combined %s`, cte, where)
 	var total int64
 	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
@@ -157,6 +158,7 @@ WITH combined AS (
 		}
 	}
 
+	// #nosec G201 -- sort is allowlisted; LIMIT/OFFSET and filters remain parameterized.
 	listQuery := fmt.Sprintf(`
 %s
 SELECT

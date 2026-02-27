@@ -18,6 +18,10 @@ type OpsErrorLog struct {
 
 	Severity string `json:"severity"`
 
+	// Optional failover keyword classification extracted from upstream_errors JSON.
+	FailoverMatchCategory string `json:"failover_match_category,omitempty"`
+	FailoverMatchKeyword  string `json:"failover_match_keyword,omitempty"`
+
 	StatusCode int    `json:"status_code"`
 	Platform   string `json:"platform"`
 	Model      string `json:"model"`
@@ -94,6 +98,10 @@ type OpsErrorLogFilter struct {
 	Resolved         *bool
 	Query            string
 	UserQuery        string // Search by user email
+
+	// Optional failover keyword filters extracted from upstream_errors events.
+	FailoverCategory string
+	FailoverKeyword  string
 
 	// Optional correlation keys for exact matching.
 	RequestID       string

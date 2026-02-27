@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { Button } from './Button';
 import { Skeleton } from './Skeleton';
@@ -33,10 +34,11 @@ export function Table<T>({
   data = [],
   loading = false,
   rowKey,
-  emptyText = 'No data',
+  emptyText,
   onRowClick,
   pagination,
 }: TableProps<T>) {
+  const { t } = useTranslation('common');
   // Ensure data is always an array
   const safeData = Array.isArray(data) ? data : [];
 
@@ -67,14 +69,14 @@ export function Table<T>({
 
   return (
     <div className="w-full overflow-x-auto">
-      <table className="w-full">
+      <table className="w-full rounded-lg overflow-hidden">
         <thead>
-          <tr className="border-b border-[#2A2A30]">
+          <tr className="border-b border-[var(--border-color)] bg-[var(--bg-secondary)]/65">
             {columns.map((col) => (
               <th
                 key={col.key}
                 className={`
-                  py-3 px-4 text-xs font-medium text-gray-400 uppercase tracking-wider
+                  py-3 px-4 text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider
                   ${getAlignClass(col.align)}
                 `}
                 style={{ width: col.width }}
@@ -87,7 +89,7 @@ export function Table<T>({
         <tbody>
           {loading ? (
             Array.from({ length: 5 }).map((_, i) => (
-              <tr key={i} className="border-b border-[#2A2A30]/50">
+              <tr key={i} className="border-b border-[var(--border-color-subtle)]">
                 {columns.map((_col, j) => (
                   <td key={j} className="py-3 px-4">
                     <Skeleton height={20} />
@@ -99,9 +101,9 @@ export function Table<T>({
             <tr>
               <td
                 colSpan={columns.length}
-                className="py-12 text-center text-gray-500"
+                className="py-12 text-center text-[var(--text-muted)]"
               >
-                {emptyText}
+                {emptyText || t('table.noData')}
               </td>
             </tr>
           ) : (
@@ -109,8 +111,8 @@ export function Table<T>({
               <tr
                 key={getRowKey(item, index)}
                 className={`
-                  border-b border-[#2A2A30]/50
-                  ${onRowClick ? 'cursor-pointer hover:bg-white/5' : ''}
+                  border-b border-[var(--border-color-subtle)]
+                  ${onRowClick ? 'cursor-pointer hover:bg-[var(--accent-soft)]/55' : ''}
                   transition-colors
                 `}
                 onClick={() => onRowClick?.(item)}
@@ -119,7 +121,7 @@ export function Table<T>({
                   <td
                     key={col.key}
                     className={`
-                      py-3 px-4 text-sm text-gray-300
+                      py-3 px-4 text-sm text-[var(--text-secondary)]
                       ${getAlignClass(col.align)}
                     `}
                   >
@@ -136,11 +138,13 @@ export function Table<T>({
 
       {/* Pagination */}
       {pagination && totalPages > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[#2A2A30]">
-          <div className="text-sm text-gray-500">
-            Showing {(pagination.current - 1) * pagination.pageSize + 1} to{' '}
-            {Math.min(pagination.current * pagination.pageSize, pagination.total)} of{' '}
-            {pagination.total} entries
+        <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--border-color)]">
+          <div className="text-sm text-[var(--text-muted)]">
+            {t('table.showing', {
+              start: (pagination.current - 1) * pagination.pageSize + 1,
+              end: Math.min(pagination.current * pagination.pageSize, pagination.total),
+              total: pagination.total,
+            })}
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -159,8 +163,8 @@ export function Table<T>({
             >
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <span className="text-sm text-gray-400 px-2">
-              Page {pagination.current} of {totalPages}
+            <span className="text-sm text-[var(--text-secondary)] px-2">
+              {t('table.page', { current: pagination.current, total: totalPages })}
             </span>
             <Button
               variant="ghost"

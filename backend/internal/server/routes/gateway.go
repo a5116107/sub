@@ -36,6 +36,12 @@ func RegisterGatewayRoutes(
 		gateway.GET("/usage", h.Gateway.Usage)
 		// OpenAI Responses API
 		gateway.POST("/responses", h.OpenAIGateway.Responses)
+		gateway.POST("/responses/compact", h.OpenAIGateway.ResponsesCompact)
+		gateway.POST("/responses/input_tokens", h.OpenAIGateway.ResponsesInputTokens)
+		gateway.GET("/responses/:response_id", h.OpenAIGateway.ResponseGet)
+		gateway.DELETE("/responses/:response_id", h.OpenAIGateway.ResponseDelete)
+		gateway.POST("/responses/:response_id/cancel", h.OpenAIGateway.ResponseCancel)
+		gateway.GET("/responses/:response_id/input_items", h.OpenAIGateway.ResponseInputItems)
 		// OpenAI Chat Completions / Completions compatibility
 		gateway.POST("/chat/completions", h.OpenAIGateway.ChatCompletions)
 		gateway.POST("/completions", h.OpenAIGateway.Completions)
@@ -67,6 +73,12 @@ func RegisterGatewayRoutes(
 
 	// OpenAI Responses API（不带v1前缀的别名）
 	r.POST("/responses", bodyLimit, clientRequestID, opsErrorLogger, gin.HandlerFunc(apiKeyAuth), h.OpenAIGateway.Responses)
+	r.POST("/responses/compact", bodyLimit, clientRequestID, opsErrorLogger, gin.HandlerFunc(apiKeyAuth), h.OpenAIGateway.ResponsesCompact)
+	r.POST("/responses/input_tokens", bodyLimit, clientRequestID, opsErrorLogger, gin.HandlerFunc(apiKeyAuth), h.OpenAIGateway.ResponsesInputTokens)
+	r.GET("/responses/:response_id", bodyLimit, clientRequestID, opsErrorLogger, gin.HandlerFunc(apiKeyAuth), h.OpenAIGateway.ResponseGet)
+	r.DELETE("/responses/:response_id", bodyLimit, clientRequestID, opsErrorLogger, gin.HandlerFunc(apiKeyAuth), h.OpenAIGateway.ResponseDelete)
+	r.POST("/responses/:response_id/cancel", bodyLimit, clientRequestID, opsErrorLogger, gin.HandlerFunc(apiKeyAuth), h.OpenAIGateway.ResponseCancel)
+	r.GET("/responses/:response_id/input_items", bodyLimit, clientRequestID, opsErrorLogger, gin.HandlerFunc(apiKeyAuth), h.OpenAIGateway.ResponseInputItems)
 
 	// Antigravity 模型列表
 	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), h.Gateway.AntigravityModels)
@@ -117,10 +129,22 @@ func RegisterGatewayRoutes(
 		providerOpenAI.POST("/chat/completions", h.OpenAIGateway.ChatCompletions)
 		providerOpenAI.POST("/completions", h.OpenAIGateway.Completions)
 		providerOpenAI.POST("/responses", h.OpenAIGateway.Responses)
+		providerOpenAI.POST("/responses/compact", h.OpenAIGateway.ResponsesCompact)
+		providerOpenAI.POST("/responses/input_tokens", h.OpenAIGateway.ResponsesInputTokens)
+		providerOpenAI.GET("/responses/:response_id", h.OpenAIGateway.ResponseGet)
+		providerOpenAI.DELETE("/responses/:response_id", h.OpenAIGateway.ResponseDelete)
+		providerOpenAI.POST("/responses/:response_id/cancel", h.OpenAIGateway.ResponseCancel)
+		providerOpenAI.GET("/responses/:response_id/input_items", h.OpenAIGateway.ResponseInputItems)
 
 		openaiV1 := providerOpenAI.Group("/v1")
 		openaiV1.GET("/models", h.Gateway.Models)
 		openaiV1.POST("/responses", h.OpenAIGateway.Responses)
+		openaiV1.POST("/responses/compact", h.OpenAIGateway.ResponsesCompact)
+		openaiV1.POST("/responses/input_tokens", h.OpenAIGateway.ResponsesInputTokens)
+		openaiV1.GET("/responses/:response_id", h.OpenAIGateway.ResponseGet)
+		openaiV1.DELETE("/responses/:response_id", h.OpenAIGateway.ResponseDelete)
+		openaiV1.POST("/responses/:response_id/cancel", h.OpenAIGateway.ResponseCancel)
+		openaiV1.GET("/responses/:response_id/input_items", h.OpenAIGateway.ResponseInputItems)
 		openaiV1.POST("/chat/completions", h.OpenAIGateway.ChatCompletions)
 		openaiV1.POST("/completions", h.OpenAIGateway.Completions)
 	}

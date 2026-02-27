@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	mathrand "math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -18,8 +17,10 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/tidwall/gjson"
 )
 
 const (
@@ -27,6 +28,12 @@ const (
 	antigravityMaxRetries       = 3
 	antigravityRetryBaseDelay   = 1 * time.Second
 	antigravityRetryMaxDelay    = 16 * time.Second
+
+	// Single-account 503 backoff retry (MODEL_CAPACITY_EXHAUSTED) settings.
+	antigravitySingleAccountRetryMaxAttempts       = 3
+	antigravitySingleAccountRetryMaxWait           = 15 * time.Second
+	antigravitySingleAccountRetryTotalMaxWait      = 30 * time.Second
+	antigravitySingleAccountRetryLongDelayThreshold = 7 * time.Second
 )
 
 const antigravityScopeRateLimitEnv = "GATEWAY_ANTIGRAVITY_429_SCOPE_LIMIT"
@@ -171,6 +178,22 @@ urlFallbackLoop:
 				respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 				_ = resp.Body.Close()
 
+				// Single-account 503 backoff retry: when upstream explicitly tells us to wait (RetryInfo.retryDelay),
+				// do a bounded in-place retry so we don't poison the only account with a long cooldown.
+				if resp.StatusCode == http.StatusServiceUnavailable &&
+					attempt == 1 &&
+					isSingleAccountRetry(p.ctx) &&
+					isModelCapacityExhausted(respBody) {
+					retryResp, handled, retryErr := retrySingleAccount503InPlace(p, baseURL, resp.Header, respBody)
+					if handled {
+						if retryErr != nil {
+							return nil, retryErr
+						}
+						resp = retryResp
+						break urlFallbackLoop
+					}
+				}
+
 				if attempt < antigravityMaxRetries {
 					upstreamMsg := strings.TrimSpace(extractAntigravityErrorMessage(respBody))
 					upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
@@ -228,6 +251,170 @@ func isURLLevelRateLimit(body []byte) bool {
 	bodyStr := string(body)
 	return strings.Contains(bodyStr, "Resource has been exhausted") &&
 		!strings.Contains(bodyStr, "capacity on this model")
+}
+
+// isSingleAccountRetry checks whether the handler requested single-account 503 backoff retry mode.
+func isSingleAccountRetry(ctx context.Context) bool {
+	v, _ := ctx.Value(ctxkey.SingleAccountRetry).(bool)
+	return v
+}
+
+func isModelCapacityExhausted(body []byte) bool {
+	if len(body) == 0 {
+		return false
+	}
+	// Fast path for the common Google rpc reason string.
+	if bytes.Contains(body, []byte("MODEL_CAPACITY_EXHAUSTED")) {
+		return true
+	}
+	// Best-effort structured parse (do not fail closed).
+	var envelope struct {
+		Error struct {
+			Details []map[string]any `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return false
+	}
+	for _, detail := range envelope.Error.Details {
+		t, _ := detail["@type"].(string)
+		reason, _ := detail["reason"].(string)
+		if strings.Contains(t, "google.rpc.ErrorInfo") && reason == "MODEL_CAPACITY_EXHAUSTED" {
+			return true
+		}
+	}
+	return false
+}
+
+func extractGoogleRetryDelay(body []byte) (time.Duration, bool) {
+	if len(body) == 0 {
+		return 0, false
+	}
+	var envelope struct {
+		Error struct {
+			Details []map[string]any `json:"details"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return 0, false
+	}
+	for _, detail := range envelope.Error.Details {
+		t, _ := detail["@type"].(string)
+		if !strings.Contains(t, "google.rpc.RetryInfo") {
+			continue
+		}
+		if s, ok := detail["retryDelay"].(string); ok {
+			d, err := time.ParseDuration(strings.TrimSpace(s))
+			if err == nil && d > 0 {
+				return d, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// retrySingleAccount503InPlace implements bounded in-place retries for 503 + MODEL_CAPACITY_EXHAUSTED when
+// the handler indicated we are in a single-account group (ctxkey.SingleAccountRetry).
+//
+// It returns (resp, handled=true) when it consumed the error and produced a final response.
+// When handled=false, the caller should continue with the default retry/backoff logic.
+func retrySingleAccount503InPlace(
+	p antigravityRetryLoopParams,
+	baseURL string,
+	respHeader http.Header,
+	respBody []byte,
+) (*http.Response, bool, error) {
+	retryDelay, ok := extractGoogleRetryDelay(respBody)
+	if !ok || retryDelay < antigravitySingleAccountRetryLongDelayThreshold {
+		return nil, false, nil
+	}
+
+	sleepWithContext := func(ctx context.Context, d time.Duration) bool {
+		if d <= 0 {
+			return true
+		}
+		timer := time.NewTimer(d)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return false
+		case <-timer.C:
+			return true
+		}
+	}
+
+	totalWait := time.Duration(0)
+	delay := retryDelay
+
+	lastStatus := http.StatusServiceUnavailable
+	lastHeader := respHeader.Clone()
+	lastBody := respBody
+
+	for attempt := 1; attempt <= antigravitySingleAccountRetryMaxAttempts; attempt++ {
+		waitFor := delay
+		if waitFor <= 0 {
+			waitFor = antigravitySingleAccountRetryLongDelayThreshold
+		}
+		if waitFor > antigravitySingleAccountRetryMaxWait {
+			waitFor = antigravitySingleAccountRetryMaxWait
+		}
+		if totalWait+waitFor > antigravitySingleAccountRetryTotalMaxWait {
+			waitFor = antigravitySingleAccountRetryTotalMaxWait - totalWait
+		}
+		if waitFor <= 0 {
+			break
+		}
+
+		log.Printf("%s status=503 single_account_retry attempt=%d/%d wait=%v base_url=%s",
+			p.prefix, attempt, antigravitySingleAccountRetryMaxAttempts, waitFor, baseURL)
+
+		if !sleepWithContext(p.ctx, waitFor) {
+			return nil, true, p.ctx.Err()
+		}
+		totalWait += waitFor
+
+		retryReq, err := antigravity.NewAPIRequestWithURL(p.ctx, baseURL, p.action, p.accessToken, p.body)
+		if err != nil {
+			// Fall back to the default retry logic.
+			return nil, false, nil
+		}
+		if p.c != nil && len(p.body) > 0 {
+			p.c.Set(OpsUpstreamRequestBodyKey, string(p.body))
+		}
+
+		retryResp, err := p.httpUpstream.Do(retryReq, p.proxyURL, p.account.ID, p.account.Concurrency)
+		if err != nil || retryResp == nil {
+			// Fall back to the default retry logic.
+			if retryResp != nil && retryResp.Body != nil {
+				_ = retryResp.Body.Close()
+			}
+			return nil, false, nil
+		}
+
+		if retryResp.StatusCode < 400 {
+			return retryResp, true, nil
+		}
+
+		body2, _ := io.ReadAll(io.LimitReader(retryResp.Body, 2<<20))
+		_ = retryResp.Body.Close()
+		lastStatus = retryResp.StatusCode
+		lastHeader = retryResp.Header.Clone()
+		lastBody = body2
+
+		// Only keep retrying on the same capacity error.
+		if retryResp.StatusCode != http.StatusServiceUnavailable || !isModelCapacityExhausted(body2) {
+			break
+		}
+		if d, ok := extractGoogleRetryDelay(body2); ok {
+			delay = d
+		}
+	}
+
+	return &http.Response{
+		StatusCode: lastStatus,
+		Header:     lastHeader.Clone(),
+		Body:       io.NopCloser(bytes.NewReader(lastBody)),
+	}, true, nil
 }
 
 // isAntigravityConnectionError 判断是否为连接错误（网络超时、DNS 失败、连接拒绝）
@@ -919,6 +1106,35 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		if resp.StatusCode >= 400 {
 			s.handleUpstreamError(ctx, prefix, account, resp.StatusCode, resp.Header, respBody, quotaScope)
 
+			// 精确匹配服务端配置类 400 错误，触发同账号重试 + failover（避免频繁换号）。
+			if resp.StatusCode == http.StatusBadRequest {
+				msg := strings.ToLower(strings.TrimSpace(extractAntigravityErrorMessage(respBody)))
+				if isGoogleProjectConfigError(msg) {
+					upstreamMsg := sanitizeUpstreamErrorMessage(strings.TrimSpace(extractAntigravityErrorMessage(respBody)))
+					logBody := s.settingService != nil && s.settingService.cfg != nil && s.settingService.cfg.Gateway.LogUpstreamErrorBody
+					maxBytes := 2048
+					if s.settingService != nil && s.settingService.cfg != nil && s.settingService.cfg.Gateway.LogUpstreamErrorBodyMaxBytes > 0 {
+						maxBytes = s.settingService.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+					}
+					upstreamDetail := ""
+					if logBody {
+						upstreamDetail = truncateString(string(respBody), maxBytes)
+					}
+					log.Printf("%s status=400 google_config_error failover=true upstream_message=%q account=%d", prefix, upstreamMsg, account.ID)
+					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+						Platform:           account.Platform,
+						AccountID:          account.ID,
+						AccountName:        account.Name,
+						UpstreamStatusCode: resp.StatusCode,
+						UpstreamRequestID:  resp.Header.Get("x-request-id"),
+						Kind:               "failover",
+						Message:            upstreamMsg,
+						Detail:             upstreamDetail,
+					})
+					return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody, RetryableOnSameAccount: true}
+				}
+			}
+
 			if s.shouldFailoverUpstreamError(resp.StatusCode) {
 				upstreamMsg := strings.TrimSpace(extractAntigravityErrorMessage(respBody))
 				upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
@@ -941,7 +1157,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 					Message:            upstreamMsg,
 					Detail:             upstreamDetail,
 				})
-				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
 			}
 
 			return nil, s.writeMappedClaudeError(c, account, resp.StatusCode, resp.Header.Get("x-request-id"), respBody)
@@ -1424,6 +1640,22 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		// Always record upstream context for Ops error logs, even when we will failover.
 		setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 
+		// 精确匹配服务端配置类 400 错误，触发同账号重试 + failover（避免频繁换号）。
+		if resp.StatusCode == http.StatusBadRequest && isGoogleProjectConfigError(strings.ToLower(upstreamMsg)) {
+			log.Printf("%s status=400 google_config_error failover=true upstream_message=%q account=%d", prefix, upstreamMsg, account.ID)
+			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				Platform:           account.Platform,
+				AccountID:          account.ID,
+				AccountName:        account.Name,
+				UpstreamStatusCode: resp.StatusCode,
+				UpstreamRequestID:  requestID,
+				Kind:               "failover",
+				Message:            upstreamMsg,
+				Detail:             upstreamDetail,
+			})
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: unwrappedForOps, RetryableOnSameAccount: true}
+		}
+
 		if s.shouldFailoverUpstreamError(resp.StatusCode) {
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 				Platform:           account.Platform,
@@ -1435,7 +1667,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 				Message:            upstreamMsg,
 				Detail:             upstreamDetail,
 			})
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: unwrappedForOps}
 		}
 
 		contentType := resp.Header.Get("Content-Type")
@@ -1521,14 +1753,10 @@ func (s *AntigravityGatewayService) shouldFailoverUpstreamError(statusCode int) 
 // sleepAntigravityBackoffWithContext 带 context 取消检查的退避等待
 // 返回 true 表示正常完成等待，false 表示 context 已取消
 func sleepAntigravityBackoffWithContext(ctx context.Context, attempt int) bool {
-	delay := antigravityRetryBaseDelay * time.Duration(1<<uint(attempt-1))
-	if delay > antigravityRetryMaxDelay {
-		delay = antigravityRetryMaxDelay
-	}
+	delay := boundedExponentialBackoff(antigravityRetryBaseDelay, antigravityRetryMaxDelay, attempt)
 
 	// +/- 20% jitter
-	r := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
-	jitter := time.Duration(float64(delay) * 0.2 * (r.Float64()*2 - 1))
+	jitter := time.Duration(float64(delay) * 0.2 * (cryptoRandUnitFloat64()*2 - 1))
 	sleepFor := delay + jitter
 	if sleepFor < 0 {
 		sleepFor = 0
@@ -1548,6 +1776,12 @@ func antigravityUseScopeRateLimit() bool {
 }
 
 func (s *AntigravityGatewayService) handleUpstreamError(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
+	// Single-account retry mode: for 503 (MODEL_CAPACITY_EXHAUSTED), do NOT set a long cooldown on the only account.
+	if statusCode == http.StatusServiceUnavailable && isSingleAccountRetry(ctx) && isModelCapacityExhausted(body) {
+		log.Printf("%s status=503 model_capacity_exhausted single_account_retry=true (skip cooldown)", prefix)
+		return
+	}
+
 	// 429 使用 Gemini 格式解析（从 body 解析重置时间）
 	if statusCode == 429 {
 		useScopeLimit := antigravityUseScopeRateLimit() && quotaScope != ""
@@ -1935,6 +2169,11 @@ returnResponse:
 	// 处理空响应情况
 	if last == nil && lastWithParts == nil {
 		log.Printf("[antigravity-Forward] warning: empty stream response, no valid chunks received")
+		return nil, &UpstreamFailoverError{
+			StatusCode:             http.StatusBadGateway,
+			ResponseBody:           []byte(`{"error":"empty stream response from upstream"}`),
+			RetryableOnSameAccount: true,
+		}
 	}
 
 	// 如果收集到了图片 parts，需要合并到最终响应中
@@ -2354,7 +2593,11 @@ returnResponse:
 	// 处理空响应情况
 	if last == nil && lastWithParts == nil {
 		log.Printf("[antigravity-Forward] warning: empty stream response, no valid chunks received")
-		return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Empty response from upstream")
+		return nil, &UpstreamFailoverError{
+			StatusCode:             http.StatusBadGateway,
+			ResponseBody:           []byte(`{"error":"empty stream response from upstream"}`),
+			RetryableOnSameAccount: true,
+		}
 	}
 
 	// 将收集的所有 parts 合并到最终响应中
@@ -2384,6 +2627,13 @@ returnResponse:
 		CacheCreationInputTokens: agUsage.CacheCreationInputTokens,
 		CacheReadInputTokens:     agUsage.CacheReadInputTokens,
 	}
+	// 解析嵌套的 cache_creation 对象中的 5m/1h 明细（如果存在）
+	cc5m := gjson.GetBytes(claudeResp, "usage.cache_creation.ephemeral_5m_input_tokens")
+	cc1h := gjson.GetBytes(claudeResp, "usage.cache_creation.ephemeral_1h_input_tokens")
+	if cc5m.Exists() || cc1h.Exists() {
+		usage.CacheCreation5mTokens = int(cc5m.Int())
+		usage.CacheCreation1hTokens = int(cc1h.Int())
+	}
 
 	return &antigravityStreamResult{usage: usage, firstTokenMs: firstTokenMs}, nil
 }
@@ -2411,17 +2661,27 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 	}
 	scanner.Buffer(make([]byte, 64*1024), maxLineSize)
 
+	// 记录嵌套 cache_creation 的 5m/1h token 明细（若 SSE 中存在）
+	cacheCreation5mTokens := 0
+	cacheCreation1hTokens := 0
+
 	// 辅助函数：转换 antigravity.ClaudeUsage 到 service.ClaudeUsage
 	convertUsage := func(agUsage *antigravity.ClaudeUsage) *ClaudeUsage {
 		if agUsage == nil {
-			return &ClaudeUsage{}
+			u := &ClaudeUsage{}
+			u.CacheCreation5mTokens = cacheCreation5mTokens
+			u.CacheCreation1hTokens = cacheCreation1hTokens
+			return u
 		}
-		return &ClaudeUsage{
+		u := &ClaudeUsage{
 			InputTokens:              agUsage.InputTokens,
 			OutputTokens:             agUsage.OutputTokens,
 			CacheCreationInputTokens: agUsage.CacheCreationInputTokens,
 			CacheReadInputTokens:     agUsage.CacheReadInputTokens,
 		}
+		u.CacheCreation5mTokens = cacheCreation5mTokens
+		u.CacheCreation1hTokens = cacheCreation1hTokens
+		return u
 	}
 
 	type scanEvent struct {
@@ -2507,6 +2767,29 @@ func (s *AntigravityGatewayService) handleClaudeStreamingResponse(c *gin.Context
 			claudeEvents := processor.ProcessLine(strings.TrimRight(line, "\r\n"))
 
 			if len(claudeEvents) > 0 {
+				// 解析嵌套 cache_creation 对象中的 5m/1h 明细（如果存在）
+				for _, ln := range strings.Split(string(claudeEvents), "\n") {
+					ln = strings.TrimSpace(ln)
+					if !strings.HasPrefix(ln, "data:") {
+						continue
+					}
+					data := strings.TrimSpace(strings.TrimPrefix(ln, "data:"))
+					if data == "" || data == "[DONE]" {
+						continue
+					}
+
+					cc5m := gjson.Get(data, "message.usage.cache_creation.ephemeral_5m_input_tokens")
+					cc1h := gjson.Get(data, "message.usage.cache_creation.ephemeral_1h_input_tokens")
+					if !cc5m.Exists() && !cc1h.Exists() {
+						cc5m = gjson.Get(data, "usage.cache_creation.ephemeral_5m_input_tokens")
+						cc1h = gjson.Get(data, "usage.cache_creation.ephemeral_1h_input_tokens")
+					}
+					if cc5m.Exists() || cc1h.Exists() {
+						cacheCreation5mTokens = int(cc5m.Int())
+						cacheCreation1hTokens = int(cc1h.Int())
+					}
+				}
+
 				if firstTokenMs == nil {
 					ms := int(time.Since(startTime).Milliseconds())
 					firstTokenMs = &ms

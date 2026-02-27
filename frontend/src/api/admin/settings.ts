@@ -69,6 +69,10 @@ export interface SystemSettings {
 
   // Gateway runtime toggles
   gateway_fix_orphaned_tool_results: boolean
+  gateway_failover_sensitive_400_keywords: string[]
+  gateway_failover_temporary_400_keywords: string[]
+  gateway_failover_request_error_keywords: string[]
+  gateway_codex_model_aliases: Record<string, string>
 
   // Ops Monitoring (vNext)
   ops_monitoring_enabled: boolean
@@ -123,6 +127,10 @@ export interface UpdateSettingsRequest {
   enable_identity_patch?: boolean
   identity_patch_prompt?: string
   gateway_fix_orphaned_tool_results?: boolean
+  gateway_failover_sensitive_400_keywords?: string[]
+  gateway_failover_temporary_400_keywords?: string[]
+  gateway_failover_request_error_keywords?: string[]
+  gateway_codex_model_aliases?: Record<string, string>
   ops_monitoring_enabled?: boolean
   ops_realtime_monitoring_enabled?: boolean
   ops_query_mode_default?: 'auto' | 'raw' | 'preagg' | string

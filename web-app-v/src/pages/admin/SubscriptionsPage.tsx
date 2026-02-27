@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   CreditCard,
   Plus,
@@ -8,6 +9,9 @@ import {
   ChevronRight,
   Search,
   XCircle,
+  UserPlus,
+  Users,
+  Eye,
 } from 'lucide-react';
 import { adminSubscriptionsApi, type AdminSubscriptionQueryParams } from '../../api/admin/subscriptions';
 import { adminGroupsApi } from '../../api/admin/groups';
@@ -23,16 +27,16 @@ import {
   Skeleton,
 } from '../../components/ui';
 
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, t: (key: string) => string) => {
   switch (status.toLowerCase()) {
     case 'active':
-      return <Badge variant="success">Active</Badge>;
+      return <Badge variant="success">{t('common:status.active')}</Badge>;
     case 'expired':
-      return <Badge variant="danger">Expired</Badge>;
+      return <Badge variant="danger">{t('common:status.expired')}</Badge>;
     case 'revoked':
-      return <Badge variant="danger">Revoked</Badge>;
+      return <Badge variant="danger">{t('common:status.revoked')}</Badge>;
     case 'pending':
-      return <Badge variant="info">Pending</Badge>;
+      return <Badge variant="info">{t('common:status.pending')}</Badge>;
     default:
       return <Badge variant="default">{status}</Badge>;
   }
@@ -70,6 +74,7 @@ interface SubscriptionStats {
 }
 
 export const SubscriptionsPage: React.FC = () => {
+  const { t } = useTranslation('admin');
   const [loading, setLoading] = useState(true);
   const [subscriptions, setSubscriptions] = useState<SubscriptionWithDetails[]>([]);
   const [total, setTotal] = useState(0);
@@ -87,9 +92,27 @@ export const SubscriptionsPage: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showRevokeModal, setShowRevokeModal] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showBulkAssignModal, setShowBulkAssignModal] = useState(false);
+  const [showProgressModal, setShowProgressModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [stats, setStats] = useState<SubscriptionStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [progressData, setProgressData] = useState<{
+    subscription: UserSubscription;
+    daily_usage: number;
+    daily_limit: number;
+    weekly_usage: number;
+    weekly_limit: number;
+    monthly_usage: number;
+    monthly_limit: number;
+  } | null>(null);
+  const [bulkAssignResult, setBulkAssignResult] = useState<{
+    success_count: number;
+    failed_count: number;
+    errors?: string[];
+  } | null>(null);
 
   // Form state for create
   const [createForm, setCreateForm] = useState({
@@ -107,6 +130,22 @@ export const SubscriptionsPage: React.FC = () => {
 
   // Form state for revoke
   const [revokeReason, setRevokeReason] = useState('');
+
+  // Form state for assign
+  const [assignForm, setAssignForm] = useState({
+    user_id: '',
+    group_id: '',
+    starts_at: new Date().toISOString().split('T')[0],
+    expires_at: '',
+  });
+
+  // Form state for bulk assign
+  const [bulkAssignForm, setBulkAssignForm] = useState({
+    user_ids: '',
+    group_id: '',
+    starts_at: new Date().toISOString().split('T')[0],
+    expires_at: '',
+  });
 
   const fetchSubscriptions = useCallback(async () => {
     setLoading(true);
@@ -235,6 +274,62 @@ export const SubscriptionsPage: React.FC = () => {
     }
   };
 
+  const handleAssign = async () => {
+    if (!assignForm.user_id || !assignForm.group_id || !assignForm.expires_at) return;
+    setActionLoading(true);
+    try {
+      await adminSubscriptionsApi.assign({
+        user_id: parseInt(assignForm.user_id),
+        group_id: parseInt(assignForm.group_id),
+        starts_at: new Date(assignForm.starts_at).toISOString(),
+        expires_at: new Date(assignForm.expires_at).toISOString(),
+      });
+      setShowAssignModal(false);
+      setAssignForm({ user_id: '', group_id: '', starts_at: new Date().toISOString().split('T')[0], expires_at: '' });
+      fetchSubscriptions();
+    } catch (error) {
+      console.error('Failed to assign subscription:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBulkAssign = async () => {
+    if (!bulkAssignForm.user_ids || !bulkAssignForm.group_id || !bulkAssignForm.expires_at) return;
+    setActionLoading(true);
+    setBulkAssignResult(null);
+    try {
+      const userIds = bulkAssignForm.user_ids.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+      const result = await adminSubscriptionsApi.bulkAssign({
+        user_ids: userIds,
+        group_id: parseInt(bulkAssignForm.group_id),
+        starts_at: new Date(bulkAssignForm.starts_at).toISOString(),
+        expires_at: new Date(bulkAssignForm.expires_at).toISOString(),
+      });
+      setBulkAssignResult(result);
+      fetchSubscriptions();
+    } catch (error) {
+      console.error('Failed to bulk assign subscriptions:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleViewProgress = async (sub: SubscriptionWithDetails) => {
+    setSelectedSubscription(sub);
+    setShowProgressModal(true);
+    setProgressLoading(true);
+    setProgressData(null);
+    try {
+      const data = await adminSubscriptionsApi.getProgress(sub.id);
+      setProgressData(data);
+    } catch (error) {
+      console.error('Failed to fetch progress:', error);
+    } finally {
+      setProgressLoading(false);
+    }
+  };
+
   const resetCreateForm = () => {
     setCreateForm({
       user_id: '',
@@ -256,14 +351,14 @@ export const SubscriptionsPage: React.FC = () => {
   const columns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('subscriptions.col.id'),
       render: (sub: SubscriptionWithDetails) => (
         <span className="text-sm text-gray-400">#{sub.id}</span>
       ),
     },
     {
       key: 'user',
-      title: 'User',
+      title: t('subscriptions.col.user'),
       render: (sub: SubscriptionWithDetails) => (
         <div>
           <p className="text-sm font-medium text-white">
@@ -275,7 +370,7 @@ export const SubscriptionsPage: React.FC = () => {
     },
     {
       key: 'group',
-      title: 'Group',
+      title: t('subscriptions.col.group'),
       render: (sub: SubscriptionWithDetails) => (
         <div>
           <p className="text-sm font-medium text-cyan-400">
@@ -286,12 +381,12 @@ export const SubscriptionsPage: React.FC = () => {
     },
     {
       key: 'status',
-      title: 'Status',
-      render: (sub: SubscriptionWithDetails) => getStatusBadge(sub.status),
+      title: t('subscriptions.col.status'),
+      render: (sub: SubscriptionWithDetails) => getStatusBadge(sub.status, t),
     },
     {
       key: 'period',
-      title: 'Period',
+      title: t('subscriptions.col.period'),
       render: (sub: SubscriptionWithDetails) => (
         <div className="text-sm">
           <p className="text-gray-400">{formatDate(sub.starts_at)}</p>
@@ -301,7 +396,7 @@ export const SubscriptionsPage: React.FC = () => {
     },
     {
       key: 'usage',
-      title: 'Usage (USD)',
+      title: t('subscriptions.col.usage'),
       render: (sub: SubscriptionWithDetails) => (
         <div className="text-sm">
           <p className="text-gray-400">D: ${sub.daily_usage_usd?.toFixed(2) || '0.00'}</p>
@@ -311,16 +406,23 @@ export const SubscriptionsPage: React.FC = () => {
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('subscriptions.col.actions'),
       render: (sub: SubscriptionWithDetails) => (
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => handleViewProgress(sub)}
+            className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-cyan-400 transition-colors"
+            title={t('subscriptions.viewProgress')}
+          >
+            <Eye className="w-4 h-4" />
+          </button>
           <button
             onClick={() => {
               setSelectedSubscription(sub);
               setShowExtendModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-cyan-400 transition-colors"
-            title="Extend Subscription"
+            title={t('subscriptions.extendTitle')}
             disabled={sub.status === 'revoked'}
           >
             <Clock className="w-4 h-4" />
@@ -331,7 +433,7 @@ export const SubscriptionsPage: React.FC = () => {
               setShowRevokeModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-amber-400 transition-colors"
-            title="Revoke Subscription"
+            title={t('subscriptions.revokeTitle')}
             disabled={sub.status === 'revoked'}
           >
             <XCircle className="w-4 h-4" />
@@ -342,7 +444,7 @@ export const SubscriptionsPage: React.FC = () => {
               setShowDeleteModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-red-400 transition-colors"
-            title="Delete Subscription"
+            title={t('subscriptions.deleteTitle')}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -356,17 +458,25 @@ export const SubscriptionsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Subscription Management</h1>
-          <p className="text-gray-400">Manage user subscriptions and access</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('subscriptions.title')}</h1>
+          <p className="text-gray-400">{t('subscriptions.subtitle')}</p>
         </div>
         <div className="flex gap-3">
           <Button variant="secondary" onClick={handleViewStats}>
             <CreditCard className="w-4 h-4 mr-2" />
-            Stats
+            {t('subscriptions.stats')}
+          </Button>
+          <Button variant="secondary" onClick={() => setShowAssignModal(true)}>
+            <UserPlus className="w-4 h-4 mr-2" />
+            {t('subscriptions.assign')}
+          </Button>
+          <Button variant="secondary" onClick={() => { setShowBulkAssignModal(true); setBulkAssignResult(null); }}>
+            <Users className="w-4 h-4 mr-2" />
+            {t('subscriptions.bulkAssign')}
           </Button>
           <Button onClick={() => setShowCreateModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Create Subscription
+            {t('subscriptions.create')}
           </Button>
         </div>
       </div>
@@ -378,7 +488,7 @@ export const SubscriptionsPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-500" />
               <Input
-                placeholder="User ID"
+                placeholder={t('subscriptions.filter.userId')}
                 value={userIdFilter}
                 onChange={(e) => {
                   setUserIdFilter(e.target.value);
@@ -395,7 +505,7 @@ export const SubscriptionsPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Groups</option>
+              <option value="">{t('subscriptions.filter.allGroups')}</option>
               {groups.map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name}
@@ -410,15 +520,15 @@ export const SubscriptionsPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="expired">Expired</option>
-              <option value="revoked">Revoked</option>
-              <option value="pending">Pending</option>
+              <option value="">{t('subscriptions.filter.allStatus')}</option>
+              <option value="active">{t('common:status.active')}</option>
+              <option value="expired">{t('common:status.expired')}</option>
+              <option value="revoked">{t('common:status.revoked')}</option>
+              <option value="pending">{t('common:status.pending')}</option>
             </select>
             <div className="flex items-center gap-2 text-sm text-gray-400 ml-auto">
               <CreditCard className="w-4 h-4" />
-              <span>{total} total subscriptions</span>
+              <span>{t('subscriptions.total', { count: total })}</span>
             </div>
           </div>
         </CardContent>
@@ -431,15 +541,14 @@ export const SubscriptionsPage: React.FC = () => {
             columns={columns}
             data={subscriptions}
             loading={loading}
-            emptyText="No subscriptions found"
+            emptyText={t('subscriptions.empty')}
           />
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#2A2A30]">
               <p className="text-sm text-gray-400">
-                Showing {(page - 1) * pageSize + 1} to{' '}
-                {Math.min(page * pageSize, total)} of {total} subscriptions
+                {t('common:table.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total), total })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -451,7 +560,7 @@ export const SubscriptionsPage: React.FC = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm text-gray-400">
-                  Page {page} of {totalPages}
+                  {t('common:table.page', { current: page, total: totalPages })}
                 </span>
                 <Button
                   variant="secondary"
@@ -474,26 +583,26 @@ export const SubscriptionsPage: React.FC = () => {
           setShowCreateModal(false);
           resetCreateForm();
         }}
-        title="Create Subscription"
+        title={t('subscriptions.createTitle')}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">User ID *</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.userId')} *</label>
             <Input
               type="number"
-              placeholder="Enter user ID"
+              placeholder={t('subscriptions.form.userId')}
               value={createForm.user_id}
               onChange={(e) => setCreateForm({ ...createForm, user_id: e.target.value })}
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Group *</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.group')} *</label>
             <select
               value={createForm.group_id}
               onChange={(e) => setCreateForm({ ...createForm, group_id: e.target.value })}
               className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">Select a group</option>
+              <option value="">{t('subscriptions.form.selectGroup')}</option>
               {groups.map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name} ({group.platform})
@@ -503,7 +612,7 @@ export const SubscriptionsPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Start Date *</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.startDate')} *</label>
               <Input
                 type="date"
                 value={createForm.starts_at}
@@ -511,7 +620,7 @@ export const SubscriptionsPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">End Date *</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.endDate')} *</label>
               <Input
                 type="date"
                 value={createForm.expires_at}
@@ -527,14 +636,14 @@ export const SubscriptionsPage: React.FC = () => {
                 resetCreateForm();
               }}
             >
-              Cancel
+              {t('common:btn.cancel')}
             </Button>
             <Button
               onClick={handleCreateSubscription}
               isLoading={actionLoading}
               disabled={!createForm.user_id || !createForm.group_id || !createForm.expires_at}
             >
-              Create Subscription
+              {t('subscriptions.create')}
             </Button>
           </div>
         </div>
@@ -548,18 +657,18 @@ export const SubscriptionsPage: React.FC = () => {
           setSelectedSubscription(null);
           resetExtendForm();
         }}
-        title="Extend Subscription"
+        title={t('subscriptions.extendTitle')}
       >
         {selectedSubscription && (
           <div className="space-y-4">
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-sm text-gray-400">Current expiration:</p>
+              <p className="text-sm text-gray-400">{t('subscriptions.currentExpiration')}:</p>
               <p className="text-white font-medium">
                 {formatDateTime(selectedSubscription.expires_at)}
               </p>
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Extend by (days) *</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.extendDays')} *</label>
               <Input
                 type="number"
                 min="1"
@@ -569,9 +678,9 @@ export const SubscriptionsPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Reason (optional)</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.reason')}</label>
               <Input
-                placeholder="Reason for extension"
+                placeholder={t('subscriptions.form.reasonRequired')}
                 value={extendForm.reason}
                 onChange={(e) => setExtendForm({ ...extendForm, reason: e.target.value })}
               />
@@ -585,14 +694,14 @@ export const SubscriptionsPage: React.FC = () => {
                   resetExtendForm();
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 onClick={handleExtendSubscription}
                 isLoading={actionLoading}
                 disabled={extendForm.days <= 0}
               >
-                Extend Subscription
+                {t('subscriptions.extendConfirm')}
               </Button>
             </div>
           </div>
@@ -607,27 +716,23 @@ export const SubscriptionsPage: React.FC = () => {
           setSelectedSubscription(null);
           setRevokeReason('');
         }}
-        title="Revoke Subscription"
+        title={t('subscriptions.revokeTitle')}
       >
         {selectedSubscription && (
           <div className="space-y-4">
             <p className="text-gray-400">
-              Are you sure you want to revoke the subscription for{' '}
-              <span className="text-white font-medium">
-                {selectedSubscription.user_email || `User #${selectedSubscription.user_id}`}
-              </span>
-              ?
+              {t('subscriptions.revokeConfirm', { user: selectedSubscription.user_email || `User #${selectedSubscription.user_id}` })}
             </p>
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Reason (optional)</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.reason')}</label>
               <Input
-                placeholder="Reason for revocation"
+                placeholder={t('subscriptions.form.revokeReason')}
                 value={revokeReason}
                 onChange={(e) => setRevokeReason(e.target.value)}
               />
             </div>
             <p className="text-sm text-amber-400">
-              This will immediately terminate the user's access to this group.
+              {t('subscriptions.revokeWarning')}
             </p>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -638,14 +743,14 @@ export const SubscriptionsPage: React.FC = () => {
                   setRevokeReason('');
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 variant="danger"
                 onClick={handleRevokeSubscription}
                 isLoading={actionLoading}
               >
-                Revoke Subscription
+                {t('subscriptions.revokeTitle')}
               </Button>
             </div>
           </div>
@@ -659,19 +764,15 @@ export const SubscriptionsPage: React.FC = () => {
           setShowDeleteModal(false);
           setSelectedSubscription(null);
         }}
-        title="Delete Subscription"
+        title={t('subscriptions.deleteTitle')}
       >
         {selectedSubscription && (
           <div className="space-y-4">
             <p className="text-gray-400">
-              Are you sure you want to delete the subscription for{' '}
-              <span className="text-white font-medium">
-                {selectedSubscription.user_email || `User #${selectedSubscription.user_id}`}
-              </span>
-              ?
+              {t('subscriptions.deleteConfirm', { user: selectedSubscription.user_email || `User #${selectedSubscription.user_id}` })}
             </p>
             <p className="text-sm text-red-400">
-              This action cannot be undone.
+              {t('subscriptions.deleteWarning')}
             </p>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -681,14 +782,14 @@ export const SubscriptionsPage: React.FC = () => {
                   setSelectedSubscription(null);
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 variant="danger"
                 onClick={handleDeleteSubscription}
                 isLoading={actionLoading}
               >
-                Delete Subscription
+                {t('subscriptions.deleteTitle')}
               </Button>
             </div>
           </div>
@@ -702,7 +803,7 @@ export const SubscriptionsPage: React.FC = () => {
           setShowStatsModal(false);
           setStats(null);
         }}
-        title="Subscription Statistics"
+        title={t('subscriptions.statsTitle')}
       >
         {statsLoading ? (
           <div className="space-y-4">
@@ -713,28 +814,248 @@ export const SubscriptionsPage: React.FC = () => {
         ) : stats ? (
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Subscriptions</p>
+              <p className="text-xs text-gray-500 mb-1">{t('subscriptions.stat.total')}</p>
               <p className="text-xl font-bold text-white">{stats.total_subscriptions}</p>
             </div>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Active</p>
+              <p className="text-xs text-gray-500 mb-1">{t('subscriptions.stat.active')}</p>
               <p className="text-xl font-bold text-emerald-400">{stats.active_subscriptions}</p>
             </div>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Expired</p>
+              <p className="text-xs text-gray-500 mb-1">{t('subscriptions.stat.expired')}</p>
               <p className="text-xl font-bold text-gray-400">{stats.expired_subscriptions}</p>
             </div>
             <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Revoked</p>
+              <p className="text-xs text-gray-500 mb-1">{t('subscriptions.stat.revoked')}</p>
               <p className="text-xl font-bold text-red-400">{stats.revoked_subscriptions}</p>
             </div>
             <div className="col-span-2 p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Value</p>
+              <p className="text-xs text-gray-500 mb-1">{t('subscriptions.stat.totalValue')}</p>
               <p className="text-xl font-bold text-cyan-400">${stats.total_value?.toFixed(2) || '0.00'}</p>
             </div>
           </div>
         ) : (
           <p className="text-gray-400">Failed to load stats</p>
+        )}
+      </Modal>
+
+      {/* Assign Modal */}
+      <Modal
+        isOpen={showAssignModal}
+        onClose={() => {
+          setShowAssignModal(false);
+          setAssignForm({ user_id: '', group_id: '', starts_at: new Date().toISOString().split('T')[0], expires_at: '' });
+        }}
+        title={t('subscriptions.assignTitle')}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.userId')} *</label>
+            <Input
+              type="number"
+              placeholder={t('subscriptions.form.userId')}
+              value={assignForm.user_id}
+              onChange={(e) => setAssignForm({ ...assignForm, user_id: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.group')} *</label>
+            <select
+              value={assignForm.group_id}
+              onChange={(e) => setAssignForm({ ...assignForm, group_id: e.target.value })}
+              className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
+            >
+              <option value="">{t('subscriptions.form.selectGroup')}</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name} ({group.platform})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.startDate')} *</label>
+              <Input
+                type="date"
+                value={assignForm.starts_at}
+                onChange={(e) => setAssignForm({ ...assignForm, starts_at: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.endDate')} *</label>
+              <Input
+                type="date"
+                value={assignForm.expires_at}
+                onChange={(e) => setAssignForm({ ...assignForm, expires_at: e.target.value })}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowAssignModal(false);
+                setAssignForm({ user_id: '', group_id: '', starts_at: new Date().toISOString().split('T')[0], expires_at: '' });
+              }}
+            >
+              {t('common:btn.cancel')}
+            </Button>
+            <Button
+              onClick={handleAssign}
+              isLoading={actionLoading}
+              disabled={!assignForm.user_id || !assignForm.group_id || !assignForm.expires_at}
+            >
+              {t('subscriptions.assign')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bulk Assign Modal */}
+      <Modal
+        isOpen={showBulkAssignModal}
+        onClose={() => {
+          setShowBulkAssignModal(false);
+          setBulkAssignForm({ user_ids: '', group_id: '', starts_at: new Date().toISOString().split('T')[0], expires_at: '' });
+          setBulkAssignResult(null);
+        }}
+        title={t('subscriptions.bulkAssignTitle')}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.userIds')} *</label>
+            <textarea
+              placeholder={t('subscriptions.form.userIdsPlaceholder')}
+              value={bulkAssignForm.user_ids}
+              onChange={(e) => setBulkAssignForm({ ...bulkAssignForm, user_ids: e.target.value })}
+              rows={3}
+              className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm font-mono focus:border-[#00F0FF] outline-none resize-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.group')} *</label>
+            <select
+              value={bulkAssignForm.group_id}
+              onChange={(e) => setBulkAssignForm({ ...bulkAssignForm, group_id: e.target.value })}
+              className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
+            >
+              <option value="">{t('subscriptions.form.selectGroup')}</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name} ({group.platform})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.startDate')} *</label>
+              <Input
+                type="date"
+                value={bulkAssignForm.starts_at}
+                onChange={(e) => setBulkAssignForm({ ...bulkAssignForm, starts_at: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">{t('subscriptions.form.endDate')} *</label>
+              <Input
+                type="date"
+                value={bulkAssignForm.expires_at}
+                onChange={(e) => setBulkAssignForm({ ...bulkAssignForm, expires_at: e.target.value })}
+              />
+            </div>
+          </div>
+
+          {bulkAssignResult && (
+            <div className="p-4 bg-[#0A0A0C] rounded-lg">
+              <p className="text-sm text-emerald-400 mb-1">
+                {t('subscriptions.bulkAssignSuccess', { count: bulkAssignResult.success_count })}
+              </p>
+              {bulkAssignResult.failed_count > 0 && (
+                <p className="text-sm text-red-400">
+                  {t('subscriptions.bulkAssignFailed', { count: bulkAssignResult.failed_count })}
+                </p>
+              )}
+              {bulkAssignResult.errors && bulkAssignResult.errors.length > 0 && (
+                <div className="mt-2 text-xs text-gray-500">
+                  {bulkAssignResult.errors.map((err, i) => (
+                    <p key={i}>{err}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowBulkAssignModal(false);
+                setBulkAssignForm({ user_ids: '', group_id: '', starts_at: new Date().toISOString().split('T')[0], expires_at: '' });
+                setBulkAssignResult(null);
+              }}
+            >
+              {t('common:btn.cancel')}
+            </Button>
+            <Button
+              onClick={handleBulkAssign}
+              isLoading={actionLoading}
+              disabled={!bulkAssignForm.user_ids || !bulkAssignForm.group_id || !bulkAssignForm.expires_at}
+            >
+              {t('subscriptions.bulkAssign')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Progress Modal */}
+      <Modal
+        isOpen={showProgressModal}
+        onClose={() => {
+          setShowProgressModal(false);
+          setSelectedSubscription(null);
+          setProgressData(null);
+        }}
+        title={t('subscriptions.progressTitle')}
+      >
+        {progressLoading ? (
+          <div className="space-y-4">
+            <Skeleton height={60} />
+            <Skeleton height={60} />
+            <Skeleton height={60} />
+          </div>
+        ) : progressData ? (
+          <div className="space-y-4">
+            {[
+              { label: t('subscriptions.progress.daily'), usage: progressData.daily_usage, limit: progressData.daily_limit },
+              { label: t('subscriptions.progress.weekly'), usage: progressData.weekly_usage, limit: progressData.weekly_limit },
+              { label: t('subscriptions.progress.monthly'), usage: progressData.monthly_usage, limit: progressData.monthly_limit },
+            ].map((item) => {
+              const pct = item.limit > 0 ? Math.min((item.usage / item.limit) * 100, 100) : 0;
+              const barColor = pct >= 90 ? 'bg-red-500' : pct >= 70 ? 'bg-amber-500' : 'bg-cyan-500';
+              return (
+                <div key={item.label} className="p-4 bg-[#0A0A0C] rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-400">{item.label}</p>
+                    <p className="text-sm text-white">
+                      ${item.usage.toFixed(2)} / {item.limit > 0 ? `$${item.limit.toFixed(2)}` : t('subscriptions.progress.unlimited')}
+                    </p>
+                  </div>
+                  {item.limit > 0 && (
+                    <div className="w-full h-2 bg-[#2A2A30] rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${barColor}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-gray-400">{t('subscriptions.progressFailed')}</p>
         )}
       </Modal>
     </div>

@@ -20,12 +20,12 @@ export const Badge: React.FC<BadgeProps> = ({
   };
 
   const variantStyles = {
-    default: 'bg-[#2A2A30] text-gray-300',
-    primary: 'bg-[#00F0FF]/10 text-[#00F0FF] border border-[#00F0FF]/20',
-    success: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
-    warning: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
-    danger: 'bg-red-500/10 text-red-400 border border-red-500/20',
-    info: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
+    default: 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] border border-[var(--border-color)]',
+    primary: 'bg-[var(--accent-soft)] text-[var(--accent-primary)] border border-[var(--accent-soft)]',
+    success: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20',
+    warning: 'bg-amber-500/14 text-amber-700 dark:text-amber-400 border border-amber-500/22',
+    danger: 'bg-red-500/12 text-red-600 dark:text-red-400 border border-red-500/22',
+    info: 'bg-blue-500/12 text-blue-600 dark:text-blue-400 border border-blue-500/22',
   };
 
   return (

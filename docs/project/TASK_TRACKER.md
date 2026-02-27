@@ -1,8 +1,7 @@
 # Task Tracker
 
-> **Last Updated**: 2026-02-03
-> **Last Updated**: 2026-02-03
-> **Active**: 0 | **Pending**: 3 | **Completed This Week**: 21
+> **Last Updated**: 2026-02-14
+> **Active**: 0 | **Pending**: 1 | **Completed This Week**: 7
 
 ---
 
@@ -61,15 +60,12 @@
 
 | ID | Task | Source Document | Created |
 |----|------|-----------------|---------|
+| COMP-021 | apply GitHub branch protection required checks for contract gate | `docs/project/tasks/COMP-021.md` | 2026-02-09 |
 
 ### P2 - Medium Priority (Next Cycle)
 
 | ID | Task | Source Document | Created |
 |----|------|-----------------|---------|
-| COMP-010 | Admin: Gemini Google One tier refresh UI wiring | `docs/project/tasks/COMP-010.md` | 2026-01-30 |
-| COMP-011 | Admin: Dashboard aggregation backfill UI wiring | `docs/project/tasks/COMP-011.md` | 2026-01-30 |
-| COMP-012 | Admin: Qwen OAuth poll + refresh UI wiring | `docs/project/tasks/COMP-012.md` | 2026-01-30 |
-| COMP-013 | Admin: OpenAI OAuth refresh helpers UI wiring | `docs/project/tasks/COMP-013.md` | 2026-01-30 |
 
 
 
@@ -85,6 +81,13 @@
 
 | ID | Task | Completed | Verified |
 |----|------|-----------|----------|
+| COMP-020 | CI gate for multi-frontend contract audit | 2026-02-09 | `python tools/audit_api_contracts.py --strict` PASS; `python tools/audit_api_contracts.py --include-mocks --strict` PASS |
+| COMP-019 | finalize cross-frontend alignment and SSOT closure | 2026-02-09 | `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS; `pnpm -C web-app build` PASS; `pnpm -C web-app-v build` PASS; `python tools/audit_api_contracts.py --strict` PASS |
+| COMP-018 | add multi-frontend contract regression audit workflow | 2026-02-09 | `python tools/audit_api_contracts.py --strict` PASS; `python tools/audit_api_contracts.py --include-mocks --strict` PASS |
+| COMP-017 | web-app-v mock handlers contract sync (non-runtime) | 2026-02-09 | `pnpm -C web-app-v build` PASS; `python tools/audit_api_contracts.py --include-mocks --strict` PASS |
+| COMP-016 | web-app auth/payment contract alignment (logout + cancel order) | 2026-02-09 | `pnpm -C web-app build` PASS; `python tools/audit_api_contracts.py --strict` PASS |
+| COMP-015 | web-app announcements contract alignment (user-side capabilities) | 2026-02-09 | `pnpm -C web-app build` PASS; `python tools/audit_api_contracts.py --strict` PASS |
+| COMP-014 | web-app admin API contract alignment (routes + methods) | 2026-02-09 | `pnpm -C web-app build` PASS; `python tools/audit_api_contracts.py --strict` PASS |
 | BILL-018 | Billing: default pricing missing policy must not undercharge unknown models | 2026-02-03 | `cd backend; go test ./...` PASS |
 | SEC-037 | Security/DoS: apply RequestBodyLimit to /api/v1 and return 413 for webhooks | 2026-02-03 | `cd backend; go test ./...` PASS |
 | SEC-035 | Security/DoS: cap remaining external HTTP response bodies | 2026-02-03 | `cd backend; go test ./...` PASS |
@@ -98,6 +101,10 @@
 | BILL-014 | Billing: close usage log insert bypass + fix idempotency undercharge | 2026-02-02 | `cd backend; go test ./...` PASS |
 | SEC-030 | XSS: harden public HomeContent rendering (v-html) | 2026-02-02 | `cd backend; go test ./...` PASS; `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS |
 | SEC-029 | Privacy: redact OAuth exchange logs (email/org/account uuid) | 2026-02-02 | `cd backend; go test ./...` PASS |
+| COMP-013 | Admin: OpenAI OAuth refresh helpers UI wiring | 2026-01-30 | `cd backend; go test ./...` PASS; `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS |
+| COMP-012 | Admin: Qwen OAuth poll + refresh UI wiring | 2026-01-30 | `cd backend; go test ./...` PASS; `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS |
+| COMP-011 | Admin: Dashboard aggregation backfill UI wiring | 2026-01-30 | `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS |
+| COMP-010 | Admin: Gemini Google One tier refresh UI wiring | 2026-01-30 | `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS |
 | SUB-007 | User: subscription single progress endpoint + contract alignment | 2026-01-30 | `cd backend; go test ./...` PASS; `pnpm -C frontend test:run` PASS; `pnpm -C frontend build` PASS |
 | SUB-006 | Admin: feature toggles for subscriptions/pricing | 2026-01-27 | `cd backend; go test ./...` PASS; `pnpm -C frontend build` PASS |
 | SEC-028 | Security: scope sticky session keys per-user (avoid cross-user pinning) | 2026-01-27 | `cd backend; go test ./...` PASS |

@@ -29,16 +29,34 @@ export const adminRedeemApi = {
     api.get<RedeemCode>(`/admin/redeem-codes/${id}`),
 
   // Create single redeem code
-  createCode: (data: Partial<RedeemCode>) =>
-    api.post<RedeemCode>('/admin/redeem-codes', data),
+  createCode: async (data: Partial<RedeemCode>) => {
+    const generated = await adminRedeemApi.generateCodes({
+      count: 1,
+      type: data.type || 'balance',
+      value: data.value || 0,
+      group_id: data.group_id,
+      validity_days: data.validity_days,
+    });
+    if (!generated.codes.length) {
+      throw new Error('Failed to create redeem code');
+    }
+    return adminRedeemApi.getCodeByValue(generated.codes[0]);
+  },
 
   // Generate multiple redeem codes
-  generateCodes: (data: GenerateRedeemCodesRequest) =>
-    api.post<{ codes: string[]; count: number }>('/admin/redeem-codes/generate', data),
+  generateCodes: async (data: GenerateRedeemCodesRequest) => {
+    const created = await api.post<RedeemCode[]>('/admin/redeem-codes/generate', data);
+    const codes = (created || []).map((item) => item.code).filter(Boolean);
+    return { codes, count: codes.length };
+  },
 
   // Update redeem code
-  updateCode: (id: number, data: Partial<RedeemCode>) =>
-    api.put<RedeemCode>(`/admin/redeem-codes/${id}`, data),
+  updateCode: async (id: number, data: Partial<RedeemCode>) => {
+    if ((data.status || '').toLowerCase() === 'expired') {
+      await api.post<void>(`/admin/redeem-codes/${id}/expire`, {});
+    }
+    return api.get<RedeemCode>(`/admin/redeem-codes/${id}`);
+  },
 
   // Delete redeem code
   deleteCode: (id: number) =>
@@ -46,7 +64,7 @@ export const adminRedeemApi = {
 
   // Revoke redeem code
   revokeCode: (id: number) =>
-    api.post<void>(`/admin/redeem-codes/${id}/revoke`, {}),
+    api.post<void>(`/admin/redeem-codes/${id}/expire`, {}),
 
   // Export redeem codes
   exportCodes: (params?: { status?: string; type?: string }) =>
@@ -61,4 +79,24 @@ export const adminRedeemApi = {
       revoked_codes: number;
       total_value_redeemed: number;
     }>('/admin/redeem-codes/stats'),
+
+  // Batch delete redeem codes
+  batchDelete: (ids: number[]) =>
+    api.post<{ deleted_count: number }>('/admin/redeem-codes/batch-delete', { ids }),
+
+  // Expire redeem code
+  expireCode: (id: number) =>
+    api.post<void>(`/admin/redeem-codes/${id}/expire`, {}),
+
+  // Lookup helper by generated code value
+  getCodeByValue: async (codeValue: string) => {
+    const response = await api.get<PaginatedResponse<RedeemCode>>('/admin/redeem-codes', {
+      params: { page: 1, page_size: 200, search: codeValue },
+    });
+    const found = (response?.items || []).find((item) => item.code === codeValue);
+    if (!found) {
+      throw new Error('Redeem code not found after generation');
+    }
+    return found;
+  },
 };

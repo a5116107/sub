@@ -13,7 +13,6 @@ import (
 	"io"
 	"log"
 	"log/slog"
-	mathrand "math/rand"
 	"net/http"
 	"os"
 	"regexp"
@@ -231,6 +230,8 @@ type ClaudeUsage struct {
 	OutputTokens             int `json:"output_tokens"`
 	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	CacheCreation5mTokens    int // 5分钟缓存创建token（来自嵌套 cache_creation 对象）
+	CacheCreation1hTokens    int // 1小时缓存创建token（来自嵌套 cache_creation 对象）
 }
 
 // ForwardResult 转发结果
@@ -255,11 +256,29 @@ type ForwardResult struct {
 
 // UpstreamFailoverError indicates an upstream error that should trigger account failover.
 type UpstreamFailoverError struct {
-	StatusCode int
+	StatusCode             int
+	ResponseBody           []byte // 上游响应体，用于错误透传规则匹配
+	ResponseHeaders        http.Header
+	ForceCacheBilling      bool // Antigravity 粘性会话切换时设为 true
+	RetryableOnSameAccount bool   // 临时性错误：应在同一账号上重试 N 次再切换
 }
 
 func (e *UpstreamFailoverError) Error() string {
 	return fmt.Sprintf("upstream error: %d (failover)", e.StatusCode)
+}
+
+// TempUnscheduleRetryableError 对 RetryableOnSameAccount 类型的 failover 错误触发临时封禁。
+// 由 handler 层在同账号重试全部用尽、切换账号时调用。
+func (s *GatewayService) TempUnscheduleRetryableError(ctx context.Context, accountID int64, failoverErr *UpstreamFailoverError) {
+	if s == nil || failoverErr == nil || !failoverErr.RetryableOnSameAccount {
+		return
+	}
+	// 根据状态码选择封禁策略
+	if failoverErr.StatusCode == http.StatusBadRequest {
+		tempUnscheduleGoogleConfigError(ctx, s.accountRepo, accountID, "[handler]")
+	} else if failoverErr.StatusCode == http.StatusBadGateway {
+		tempUnscheduleEmptyResponse(ctx, s.accountRepo, accountID, "[handler]")
+	}
 }
 
 // GatewayService handles API gateway operations
@@ -1332,6 +1351,16 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 	return accounts, useMixed, nil
 }
 
+// IsSingleAntigravityAccountGroup checks whether the specified group has exactly one schedulable
+// Antigravity account. Handlers use this to enable ctxkey.SingleAccountRetry mode for 503 backoff retries.
+func (s *GatewayService) IsSingleAntigravityAccountGroup(ctx context.Context, groupID *int64) bool {
+	accounts, _, err := s.listSchedulableAccounts(ctx, groupID, PlatformAntigravity, true)
+	if err != nil {
+		return false
+	}
+	return len(accounts) == 1
+}
+
 func (s *GatewayService) isAccountAllowedForPlatform(account *Account, platform string, useMixed bool) bool {
 	if account == nil {
 		return false
@@ -1516,7 +1545,6 @@ func shuffleWithinPriority(accounts []*Account) {
 	if len(accounts) <= 1 {
 		return
 	}
-	r := mathrand.New(mathrand.NewSource(time.Now().UnixNano()))
 	start := 0
 	for start < len(accounts) {
 		priority := accounts[start].Priority
@@ -1526,9 +1554,10 @@ func shuffleWithinPriority(accounts []*Account) {
 		}
 		// 对 [start, end) 范围内的账户随机打乱
 		if end-start > 1 {
-			r.Shuffle(end-start, func(i, j int) {
+			for i := end - start - 1; i > 0; i-- {
+				j := cryptoRandIntN(i + 1)
 				accounts[start+i], accounts[start+j] = accounts[start+j], accounts[start+i]
-			})
+			}
 		}
 		start = end
 	}
@@ -2049,7 +2078,7 @@ func (s *GatewayService) shouldRetryUpstreamError(account *Account, statusCode i
 // shouldFailoverUpstreamError determines whether an upstream error should trigger account failover.
 func (s *GatewayService) shouldFailoverUpstreamError(statusCode int) bool {
 	switch statusCode {
-	case 401, 403, 429, 529:
+	case 401, 402, 403, 429, 529:
 		return true
 	default:
 		return statusCode >= 500
@@ -2484,9 +2513,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				Kind:               "request_error",
 				Message:            safeErr,
 			})
-			if strings.TrimSpace(proxyURL) != "" {
-				// Proxy request errors are often transient per-exit; allow handler to failover to another account/proxy.
-				log.Printf("Account %d: upstream request error via proxy, triggering failover: %s", account.ID, safeErr)
+			if strings.TrimSpace(proxyURL) != "" || s.shouldFailoverOnGatewayRequestError(safeErr) {
+				// Request-layer transient failures should switch account to reduce user-visible failures.
+				log.Printf("Account %d: transient upstream request error, triggering failover: %s", account.ID, safeErr)
 				return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
 			}
 
@@ -2787,7 +2816,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					return ""
 				}(),
 			})
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
 		}
 		return s.handleRetryExhaustedError(ctx, resp, c, account)
 	}
@@ -2817,13 +2846,13 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				return ""
 			}(),
 		})
-		return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+		return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
 	}
 
 	// 处理错误响应（不可重试的错误）
 	if resp.StatusCode >= 400 {
 		// 可选：对部分 400 触发 failover（默认关闭以保持语义）
-		if resp.StatusCode == 400 && s.cfg != nil && s.cfg.Gateway.FailoverOn400 {
+		if resp.StatusCode == 400 {
 			respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 			if readErr != nil {
 				// ReadAll failed, fall back to normal error handling without consuming the stream
@@ -2832,7 +2861,63 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			_ = resp.Body.Close()
 			resp.Body = io.NopCloser(bytes.NewReader(respBody))
 
-			if s.shouldFailoverOn400(respBody) {
+			if match := s.matchFailoverOnSensitiveOrTemporary400(respBody); match != nil {
+				upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+				upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+				upstreamDetail := ""
+				if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+					maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+					if maxBytes <= 0 {
+						maxBytes = 2048
+					}
+					upstreamDetail = truncateString(string(respBody), maxBytes)
+				}
+
+				matchInfo := fmt.Sprintf("failover_400_match category=%s keyword=%q", match.Category, match.Keyword)
+				if upstreamDetail != "" {
+					upstreamDetail = matchInfo + "\n" + upstreamDetail
+				} else {
+					upstreamDetail = matchInfo
+				}
+
+				kind := "failover_on_400_sensitive"
+				if match.Category == Failover400KeywordCategoryTemporary {
+					kind = "failover_on_400_temporary"
+				}
+				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+					Platform:              account.Platform,
+					AccountID:             account.ID,
+					AccountName:           account.Name,
+					FailoverMatchCategory: match.Category,
+					FailoverMatchKeyword:  match.Keyword,
+					UpstreamStatusCode:    resp.StatusCode,
+					UpstreamRequestID:     resp.Header.Get("x-request-id"),
+					Kind:                  kind,
+					Message:               upstreamMsg,
+					Detail:                upstreamDetail,
+				})
+
+				if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+					log.Printf(
+						"Account %d: 400 keyword match category=%s keyword=%q, attempting failover: %s",
+						account.ID,
+						match.Category,
+						match.Keyword,
+						truncateForLog(respBody, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes),
+					)
+				} else {
+					log.Printf(
+						"Account %d: 400 keyword match category=%s keyword=%q, attempting failover",
+						account.ID,
+						match.Category,
+						match.Keyword,
+					)
+				}
+				s.handleFailoverSideEffects(ctx, resp, account)
+				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+			}
+
+			if s.cfg != nil && s.cfg.Gateway.FailoverOn400 && s.shouldFailoverOn400(respBody) {
 				upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 				upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 				upstreamDetail := ""
@@ -2864,7 +2949,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					log.Printf("Account %d: 400 error, attempting failover", account.ID)
 				}
 				s.handleFailoverSideEffects(ctx, resp, account)
-				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
 			}
 		}
 		return s.handleErrorResponse(ctx, resp, c, account)
@@ -3163,6 +3248,68 @@ func detectOrphanedToolResultError(respBody []byte) (bool, []string) {
 	return true, ids
 }
 
+func matchFailoverOnSensitiveOrTemporary400(respBody []byte) *Failover400KeywordMatch {
+	return matchFailoverOn400WithKeywords(
+		respBody,
+		defaultFailoverSensitive400Keywords,
+		defaultFailoverTemporary400Keywords,
+	)
+}
+
+func shouldFailoverOnSensitiveOrTemporary400(respBody []byte) bool {
+	return matchFailoverOnSensitiveOrTemporary400(respBody) != nil
+}
+
+func shouldFailoverOnGatewayRequestError(errMsg string) bool {
+	return shouldFailoverOnRequestErrorWithKeywords(errMsg, defaultFailoverRequestErrorKeywords)
+}
+
+func (s *GatewayService) matchFailoverOnSensitiveOrTemporary400(respBody []byte) *Failover400KeywordMatch {
+	return matchFailoverOn400WithKeywords(
+		respBody,
+		s.failoverSensitive400Keywords(),
+		s.failoverTemporary400Keywords(),
+	)
+}
+
+func (s *GatewayService) shouldFailoverOnSensitiveOrTemporary400(respBody []byte) bool {
+	return s.matchFailoverOnSensitiveOrTemporary400(respBody) != nil
+}
+
+func (s *GatewayService) shouldFailoverOnGatewayRequestError(errMsg string) bool {
+	return shouldFailoverOnRequestErrorWithKeywords(errMsg, s.failoverRequestErrorKeywords())
+}
+
+func (s *GatewayService) failoverSensitive400Keywords() []string {
+	if s != nil && s.rateLimitService != nil && s.rateLimitService.settingService != nil {
+		return s.rateLimitService.settingService.GetGatewayFailoverSensitive400Keywords(context.Background())
+	}
+	if s != nil && s.cfg != nil && len(s.cfg.Gateway.FailoverSensitive400Keywords) > 0 {
+		return s.cfg.Gateway.FailoverSensitive400Keywords
+	}
+	return defaultFailoverSensitive400Keywords
+}
+
+func (s *GatewayService) failoverTemporary400Keywords() []string {
+	if s != nil && s.rateLimitService != nil && s.rateLimitService.settingService != nil {
+		return s.rateLimitService.settingService.GetGatewayFailoverTemporary400Keywords(context.Background())
+	}
+	if s != nil && s.cfg != nil && len(s.cfg.Gateway.FailoverTemporary400Keywords) > 0 {
+		return s.cfg.Gateway.FailoverTemporary400Keywords
+	}
+	return defaultFailoverTemporary400Keywords
+}
+
+func (s *GatewayService) failoverRequestErrorKeywords() []string {
+	if s != nil && s.rateLimitService != nil && s.rateLimitService.settingService != nil {
+		return s.rateLimitService.settingService.GetGatewayFailoverRequestErrorKeywords(context.Background())
+	}
+	if s != nil && s.cfg != nil && len(s.cfg.Gateway.FailoverRequestErrorKeywords) > 0 {
+		return s.cfg.Gateway.FailoverRequestErrorKeywords
+	}
+	return defaultFailoverRequestErrorKeywords
+}
+
 func (s *GatewayService) shouldFailoverOn400(respBody []byte) bool {
 	// 只对“可能是兼容性差异导致”的 400 允许切换，避免无意义重试。
 	// 默认保守：无法识别则不切换。
@@ -3243,7 +3390,7 @@ func (s *GatewayService) handleErrorResponse(ctx context.Context, resp *http.Res
 		shouldDisable = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
 	}
 	if shouldDisable {
-		return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+		return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: body}
 	}
 
 	// 记录上游错误响应体摘要便于排障（可选：由配置控制；不回显到客户端）
@@ -3491,6 +3638,11 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 	}
 
 	needModelReplace := originalModel != mappedModel
+	cacheTTLOverrideEnabled := account != nil && account.IsCacheTTLOverrideEnabled()
+	overrideTarget := ""
+	if cacheTTLOverrideEnabled {
+		overrideTarget = account.GetCacheTTLOverrideTarget()
+	}
 	clientDisconnected := false // 客户端断开标志，断开后继续读取上游以获取完整usage
 
 	for {
@@ -3532,11 +3684,16 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 			// Extract data from SSE line (supports both "data: " and "data:" formats)
 			var data string
 			if sseDataRe.MatchString(line) {
-				data = sseDataRe.ReplaceAllString(line, "")
 				// 如果有模型映射，替换响应中的model字段
 				if needModelReplace {
 					line = s.replaceModelInSSELine(line, mappedModel, originalModel)
 				}
+				// Cache TTL Override: rewrite cache_creation TTL bucket in streaming events to match account config.
+				if cacheTTLOverrideEnabled {
+					line = rewriteCacheCreationTTLInSSELine(line, overrideTarget)
+				}
+				// Re-extract data after potential rewrites to keep billing usage aligned.
+				data = sseDataRe.ReplaceAllString(line, "")
 			}
 
 			// 写入客户端（统一处理 data 行和非 data 行）
@@ -3631,6 +3788,14 @@ func (s *GatewayService) parseSSEUsage(data string, usage *ClaudeUsage) {
 		usage.InputTokens = msgStart.Message.Usage.InputTokens
 		usage.CacheCreationInputTokens = msgStart.Message.Usage.CacheCreationInputTokens
 		usage.CacheReadInputTokens = msgStart.Message.Usage.CacheReadInputTokens
+
+		// 解析嵌套的 cache_creation 对象中的 5m/1h 明细
+		cc5m := gjson.Get(data, "message.usage.cache_creation.ephemeral_5m_input_tokens")
+		cc1h := gjson.Get(data, "message.usage.cache_creation.ephemeral_1h_input_tokens")
+		if cc5m.Exists() || cc1h.Exists() {
+			usage.CacheCreation5mTokens = int(cc5m.Int())
+			usage.CacheCreation1hTokens = int(cc1h.Int())
+		}
 	}
 
 	// 解析message_delta获取tokens（兼容GLM等把所有usage放在delta中的API）
@@ -3659,7 +3824,109 @@ func (s *GatewayService) parseSSEUsage(data string, usage *ClaudeUsage) {
 		if msgDelta.Usage.CacheReadInputTokens > 0 {
 			usage.CacheReadInputTokens = msgDelta.Usage.CacheReadInputTokens
 		}
+
+		// 解析嵌套的 cache_creation 对象中的 5m/1h 明细
+		cc5m := gjson.Get(data, "usage.cache_creation.ephemeral_5m_input_tokens")
+		cc1h := gjson.Get(data, "usage.cache_creation.ephemeral_1h_input_tokens")
+		if cc5m.Exists() || cc1h.Exists() {
+			usage.CacheCreation5mTokens = int(cc5m.Int())
+			usage.CacheCreation1hTokens = int(cc1h.Int())
+		}
 	}
+}
+
+// applyCacheTTLOverride reclassifies all cache creation tokens into the target TTL bucket.
+// target must be "5m" or "1h". Returns true if a change was applied.
+func applyCacheTTLOverride(usage *ClaudeUsage, target string) bool {
+	// Fallback: if only aggregate field exists without 5m/1h detail, bucket it into 5m by default.
+	if usage.CacheCreation5mTokens == 0 && usage.CacheCreation1hTokens == 0 && usage.CacheCreationInputTokens > 0 {
+		usage.CacheCreation5mTokens = usage.CacheCreationInputTokens
+	}
+
+	total := usage.CacheCreation5mTokens + usage.CacheCreation1hTokens
+	if total == 0 {
+		return false
+	}
+
+	switch target {
+	case "1h":
+		if usage.CacheCreation1hTokens == total {
+			return false
+		}
+		usage.CacheCreation1hTokens = total
+		usage.CacheCreation5mTokens = 0
+	default: // "5m"
+		if usage.CacheCreation5mTokens == total {
+			return false
+		}
+		usage.CacheCreation5mTokens = total
+		usage.CacheCreation1hTokens = 0
+	}
+	return true
+}
+
+// rewriteCacheCreationJSON rewrites the cache_creation nested object TTL classification in a usage JSON object.
+// usageObj is the decoded usage JSON (map[string]any).
+func rewriteCacheCreationJSON(usageObj map[string]any, target string) {
+	ccObj, ok := usageObj["cache_creation"].(map[string]any)
+	if !ok {
+		return
+	}
+	v5m, _ := ccObj["ephemeral_5m_input_tokens"].(float64)
+	v1h, _ := ccObj["ephemeral_1h_input_tokens"].(float64)
+	total := v5m + v1h
+	if total == 0 {
+		return
+	}
+	switch target {
+	case "1h":
+		ccObj["ephemeral_1h_input_tokens"] = total
+		ccObj["ephemeral_5m_input_tokens"] = float64(0)
+	default: // "5m"
+		ccObj["ephemeral_5m_input_tokens"] = total
+		ccObj["ephemeral_1h_input_tokens"] = float64(0)
+	}
+}
+
+func rewriteCacheCreationTTLInSSELine(line, target string) string {
+	if !sseDataRe.MatchString(line) {
+		return line
+	}
+	data := sseDataRe.ReplaceAllString(line, "")
+	if data == "" || data == "[DONE]" {
+		return line
+	}
+	// Fast path: avoid JSON parse when the payload clearly has no cache_creation.
+	if !strings.Contains(data, "cache_creation") {
+		return line
+	}
+
+	var event map[string]any
+	if err := json.Unmarshal([]byte(data), &event); err != nil {
+		return line
+	}
+
+	eventType, _ := event["type"].(string)
+	switch eventType {
+	case "message_start":
+		if msg, ok := event["message"].(map[string]any); ok {
+			if u, ok := msg["usage"].(map[string]any); ok {
+				rewriteCacheCreationJSON(u, target)
+			}
+		}
+	case "message_delta":
+		if u, ok := event["usage"].(map[string]any); ok {
+			rewriteCacheCreationJSON(u, target)
+		}
+	default:
+		return line
+	}
+
+	newData, err := json.Marshal(event)
+	if err != nil {
+		return line
+	}
+	return "data: " + string(newData)
 }
 
 func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*ClaudeUsage, error) {
@@ -3677,6 +3944,27 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("parse response: %w", err)
+	}
+
+	// 解析嵌套的 cache_creation 对象中的 5m/1h 明细
+	cc5m := gjson.GetBytes(body, "usage.cache_creation.ephemeral_5m_input_tokens")
+	cc1h := gjson.GetBytes(body, "usage.cache_creation.ephemeral_1h_input_tokens")
+	if cc5m.Exists() || cc1h.Exists() {
+		response.Usage.CacheCreation5mTokens = int(cc5m.Int())
+		response.Usage.CacheCreation1hTokens = int(cc1h.Int())
+	}
+
+	// Cache TTL Override: rewrite non-streaming response usage classification to match account config.
+	if account.IsCacheTTLOverrideEnabled() {
+		overrideTarget := account.GetCacheTTLOverrideTarget()
+		if applyCacheTTLOverride(&response.Usage, overrideTarget) {
+			if newBody, err := sjson.SetBytes(body, "usage.cache_creation.ephemeral_5m_input_tokens", response.Usage.CacheCreation5mTokens); err == nil {
+				body = newBody
+			}
+			if newBody, err := sjson.SetBytes(body, "usage.cache_creation.ephemeral_1h_input_tokens", response.Usage.CacheCreation1hTokens); err == nil {
+				body = newBody
+			}
+		}
 	}
 
 	// 如果有模型映射，替换响应中的model字段
@@ -3760,6 +4048,11 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		return fmt.Errorf("billing service not initialized")
 	}
 
+	// Cache TTL Override: ensure billing uses the configured TTL bucket classification.
+	if account != nil && account.IsCacheTTLOverrideEnabled() {
+		applyCacheTTLOverride(&result.Usage, account.GetCacheTTLOverrideTarget())
+	}
+
 	// 获取费率倍数
 	multiplier := s.cfg.Default.RateMultiplier
 	if apiKey.GroupID != nil && apiKey.Group != nil {
@@ -3807,10 +4100,12 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 	} else {
 		// Token 计费
 		tokens := UsageTokens{
-			InputTokens:         result.Usage.InputTokens,
-			OutputTokens:        result.Usage.OutputTokens,
-			CacheCreationTokens: result.Usage.CacheCreationInputTokens,
-			CacheReadTokens:     result.Usage.CacheReadInputTokens,
+			InputTokens:           result.Usage.InputTokens,
+			OutputTokens:          result.Usage.OutputTokens,
+			CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
+			CacheReadTokens:       result.Usage.CacheReadInputTokens,
+			CacheCreation5mTokens: result.Usage.CacheCreation5mTokens,
+			CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		}
 		var err error
 		pricingModel := strings.TrimSpace(result.BilledModel)
@@ -3844,6 +4139,8 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		OutputTokens:          result.Usage.OutputTokens,
 		CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
 		CacheReadTokens:       result.Usage.CacheReadInputTokens,
+		CacheCreation5mTokens: result.Usage.CacheCreation5mTokens,
+		CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		InputCost:             cost.InputCost,
 		OutputCost:            cost.OutputCost,
 		CacheCreationCost:     cost.CacheCreationCost,
@@ -4167,7 +4464,20 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 	// 发送请求
 	resp, err := s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
 	if err != nil {
-		setOpsUpstreamError(c, 0, sanitizeUpstreamErrorMessage(err.Error()), "")
+		safeErr := sanitizeUpstreamErrorMessage(err.Error())
+		setOpsUpstreamError(c, 0, safeErr, "")
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: 0,
+			Kind:               "request_error",
+			Message:            safeErr,
+		})
+		if strings.TrimSpace(proxyURL) != "" || s.shouldFailoverOnGatewayRequestError(safeErr) {
+			log.Printf("Account %d: count_tokens transient upstream request error, triggering failover: %s", account.ID, safeErr)
+			return &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
+		}
 		s.countTokensError(c, http.StatusBadGateway, "upstream_error", "Request failed")
 		return fmt.Errorf("upstream request failed: %w", err)
 	}
@@ -4228,6 +4538,91 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 
 	// 处理错误响应
 	if resp.StatusCode >= 400 {
+		if resp.StatusCode == http.StatusBadRequest {
+			if match := s.matchFailoverOnSensitiveOrTemporary400(respBody); match != nil {
+				upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+				upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+				upstreamDetail := ""
+				if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+					maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+					if maxBytes <= 0 {
+						maxBytes = 2048
+					}
+					upstreamDetail = truncateString(string(respBody), maxBytes)
+				}
+
+				matchInfo := fmt.Sprintf("failover_400_match category=%s keyword=%q", match.Category, match.Keyword)
+				if upstreamDetail != "" {
+					upstreamDetail = matchInfo + "\n" + upstreamDetail
+				} else {
+					upstreamDetail = matchInfo
+				}
+
+				kind := "failover_on_400_sensitive"
+				if match.Category == Failover400KeywordCategoryTemporary {
+					kind = "failover_on_400_temporary"
+				}
+
+				appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+					Platform:              account.Platform,
+					AccountID:             account.ID,
+					AccountName:           account.Name,
+					FailoverMatchCategory: match.Category,
+					FailoverMatchKeyword:  match.Keyword,
+					UpstreamStatusCode:    resp.StatusCode,
+					UpstreamRequestID:     resp.Header.Get("x-request-id"),
+					Kind:                  kind,
+					Message:               upstreamMsg,
+					Detail:                upstreamDetail,
+				})
+
+				if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+					log.Printf(
+						"CountTokens account %d: 400 keyword match category=%s keyword=%q, triggering failover: %s",
+						account.ID,
+						match.Category,
+						match.Keyword,
+						truncateForLog(respBody, s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes),
+					)
+				} else {
+					log.Printf(
+						"CountTokens account %d: 400 keyword match category=%s keyword=%q, triggering failover",
+						account.ID,
+						match.Category,
+						match.Keyword,
+					)
+				}
+
+				s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+				return &UpstreamFailoverError{StatusCode: resp.StatusCode}
+			}
+		}
+
+		if s.shouldFailoverUpstreamError(resp.StatusCode) {
+			upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
+			upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+			upstreamDetail := ""
+			if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+				maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+				if maxBytes <= 0 {
+					maxBytes = 2048
+				}
+				upstreamDetail = truncateString(string(respBody), maxBytes)
+			}
+			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				Platform:           account.Platform,
+				AccountID:          account.ID,
+				AccountName:        account.Name,
+				UpstreamStatusCode: resp.StatusCode,
+				UpstreamRequestID:  resp.Header.Get("x-request-id"),
+				Kind:               "failover",
+				Message:            upstreamMsg,
+				Detail:             upstreamDetail,
+			})
+			s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
+			return &UpstreamFailoverError{StatusCode: resp.StatusCode}
+		}
+
 		// 标记账号状态（429/529等）
 		s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, respBody)
 

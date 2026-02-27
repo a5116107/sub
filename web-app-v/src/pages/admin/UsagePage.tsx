@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Activity,
   ChevronLeft,
@@ -58,45 +59,46 @@ interface CleanupResult {
   dry_run: boolean;
 }
 
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'pending':
-      return <Badge variant="default">Pending</Badge>;
-    case 'running':
-      return (
-        <Badge variant="info" className="flex items-center gap-1">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          Running
-        </Badge>
-      );
-    case 'completed':
-      return (
-        <Badge variant="success" className="flex items-center gap-1">
-          <CheckCircle className="w-3 h-3" />
-          Completed
-        </Badge>
-      );
-    case 'failed':
-      return (
-        <Badge variant="danger" className="flex items-center gap-1">
-          <AlertCircle className="w-3 h-3" />
-          Failed
-        </Badge>
-      );
-    case 'cancelled':
-      return (
-        <Badge variant="default" className="flex items-center gap-1">
-          <X className="w-3 h-3" />
-          Cancelled
-        </Badge>
-      );
-    default:
-      return <Badge variant="default">{status}</Badge>;
-  }
-};
-
 export const UsagePage: React.FC = () => {
+  const { t } = useTranslation('admin');
   const [activeTab, setActiveTab] = useState<TabType>('logs');
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return <Badge variant="default">{t('usage.status.pending')}</Badge>;
+      case 'running':
+        return (
+          <Badge variant="info" className="flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            {t('usage.status.running')}
+          </Badge>
+        );
+      case 'completed':
+        return (
+          <Badge variant="success" className="flex items-center gap-1">
+            <CheckCircle className="w-3 h-3" />
+            {t('usage.status.completed')}
+          </Badge>
+        );
+      case 'failed':
+        return (
+          <Badge variant="danger" className="flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            {t('usage.status.failed')}
+          </Badge>
+        );
+      case 'cancelled':
+        return (
+          <Badge variant="default" className="flex items-center gap-1">
+            <X className="w-3 h-3" />
+            {t('usage.status.cancelled')}
+          </Badge>
+        );
+      default:
+        return <Badge variant="default">{status}</Badge>;
+    }
+  };
 
   // Logs tab state
   const [loading, setLoading] = useState(true);
@@ -111,6 +113,14 @@ export const UsagePage: React.FC = () => {
   const [modelFilter, setModelFilter] = useState<string>('');
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
+
+  // Autocomplete states
+  const [userSuggestions, setUserSuggestions] = useState<Array<{ id: number; username: string; email: string }>>([]);
+  const [apiKeySuggestions, setApiKeySuggestions] = useState<Array<{ id: number; name: string; user_id: number; username: string }>>([]);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showApiKeyDropdown, setShowApiKeyDropdown] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [apiKeySearchQuery, setApiKeySearchQuery] = useState('');
 
   // Modal states
   const [showStatsModal, setShowStatsModal] = useState(false);
@@ -157,9 +167,10 @@ export const UsagePage: React.FC = () => {
     setCleanupTasksLoading(true);
     try {
       const tasks = await adminUsageApi.getCleanupTasks();
-      setCleanupTasks(tasks);
+      setCleanupTasks(Array.isArray(tasks) ? tasks : []);
     } catch (error) {
       console.error('Failed to fetch cleanup tasks:', error);
+      setCleanupTasks([]);
     } finally {
       setCleanupTasksLoading(false);
     }
@@ -183,6 +194,42 @@ export const UsagePage: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [activeTab, fetchCleanupTasks]);
+
+  // Debounced user search
+  useEffect(() => {
+    if (!userSearchQuery || userSearchQuery.length < 2) {
+      setUserSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const results = await adminUsageApi.searchUsers(userSearchQuery, 5);
+        setUserSuggestions(Array.isArray(results) ? results : []);
+        setShowUserDropdown(true);
+      } catch (error) {
+        console.error('Failed to search users:', error);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [userSearchQuery]);
+
+  // Debounced API key search
+  useEffect(() => {
+    if (!apiKeySearchQuery || apiKeySearchQuery.length < 2) {
+      setApiKeySuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const results = await adminUsageApi.searchApiKeys(apiKeySearchQuery, 5);
+        setApiKeySuggestions(Array.isArray(results) ? results : []);
+        setShowApiKeyDropdown(true);
+      } catch (error) {
+        console.error('Failed to search API keys:', error);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [apiKeySearchQuery]);
 
   const handleViewStats = async () => {
     setShowStatsModal(true);
@@ -263,6 +310,8 @@ export const UsagePage: React.FC = () => {
     setModelFilter('');
     setDateFrom('');
     setDateTo('');
+    setUserSearchQuery('');
+    setApiKeySearchQuery('');
     setPage(1);
   };
 
@@ -271,14 +320,14 @@ export const UsagePage: React.FC = () => {
   const logColumns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('usage.col.id'),
       render: (log: UsageLog) => (
         <span className="text-xs text-gray-500">#{log.id}</span>
       ),
     },
     {
       key: 'user',
-      title: 'User',
+      title: t('usage.col.user'),
       render: (log: UsageLog) => (
         <div className="text-sm">
           <p className="text-gray-400">User #{log.user_id}</p>
@@ -288,45 +337,45 @@ export const UsagePage: React.FC = () => {
     },
     {
       key: 'model',
-      title: 'Model',
+      title: t('usage.col.model'),
       render: (log: UsageLog) => (
         <div>
           <p className="text-sm text-cyan-400 font-mono">{log.model}</p>
           {log.billed_model && log.billed_model !== log.model && (
-            <p className="text-xs text-gray-500">Billed: {log.billed_model}</p>
+            <p className="text-xs text-gray-500">{t('usage.billed', { model: log.billed_model })}</p>
           )}
         </div>
       ),
     },
     {
       key: 'tokens',
-      title: 'Tokens',
+      title: t('usage.col.tokens'),
       render: (log: UsageLog) => (
         <div className="text-sm">
           <p className="text-gray-400">
-            In: {log.input_tokens.toLocaleString()}
+            {t('usage.inputTokens', { count: log.input_tokens })}
           </p>
           <p className="text-gray-500">
-            Out: {log.output_tokens.toLocaleString()}
+            {t('usage.outputTokens', { count: log.output_tokens })}
           </p>
         </div>
       ),
     },
     {
       key: 'cost',
-      title: 'Cost',
+      title: t('usage.col.cost'),
       render: (log: UsageLog) => (
         <div className="text-sm">
           <p className="text-emerald-400">{formatCost(log.total_cost)}</p>
           {log.rate_multiplier !== 1 && (
-            <p className="text-xs text-gray-500">{log.rate_multiplier}x rate</p>
+            <p className="text-xs text-gray-500">{t('usage.rateMultiplier', { value: log.rate_multiplier })}</p>
           )}
         </div>
       ),
     },
     {
       key: 'latency',
-      title: 'Latency',
+      title: t('usage.col.latency'),
       render: (log: UsageLog) => (
         <div className="text-sm">
           {log.duration_ms ? (
@@ -344,7 +393,7 @@ export const UsagePage: React.FC = () => {
     },
     {
       key: 'stream',
-      title: 'Stream',
+      title: t('usage.col.stream'),
       render: (log: UsageLog) => (
         <Badge variant={log.stream ? 'info' : 'default'}>
           {log.stream ? 'Yes' : 'No'}
@@ -353,7 +402,7 @@ export const UsagePage: React.FC = () => {
     },
     {
       key: 'time',
-      title: 'Time',
+      title: t('usage.col.time'),
       render: (log: UsageLog) => (
         <span className="text-xs text-gray-400">{formatDate(log.created_at)}</span>
       ),
@@ -363,26 +412,26 @@ export const UsagePage: React.FC = () => {
   const taskColumns = [
     {
       key: 'id',
-      title: 'ID',
+      title: t('usage.col.id'),
       render: (task: CleanupTask) => (
         <span className="text-xs text-gray-500">#{task.id}</span>
       ),
     },
     {
       key: 'status',
-      title: 'Status',
+      title: t('usage.col.status'),
       render: (task: CleanupTask) => getStatusBadge(task.status),
     },
     {
       key: 'before_date',
-      title: 'Before Date',
+      title: t('usage.col.beforeDate'),
       render: (task: CleanupTask) => (
         <span className="text-sm text-gray-300">{formatDate(task.before_date)}</span>
       ),
     },
     {
       key: 'dry_run',
-      title: 'Dry Run',
+      title: t('usage.col.dryRun'),
       render: (task: CleanupTask) => (
         <Badge variant={task.dry_run ? 'info' : 'default'}>
           {task.dry_run ? 'Yes' : 'No'}
@@ -391,7 +440,7 @@ export const UsagePage: React.FC = () => {
     },
     {
       key: 'deleted_count',
-      title: 'Deleted',
+      title: t('usage.col.deleted'),
       render: (task: CleanupTask) => (
         <span className="text-sm text-gray-300">
           {task.deleted_count.toLocaleString()}
@@ -400,14 +449,14 @@ export const UsagePage: React.FC = () => {
     },
     {
       key: 'created_at',
-      title: 'Created',
+      title: t('usage.col.created'),
       render: (task: CleanupTask) => (
         <span className="text-xs text-gray-400">{formatDate(task.created_at)}</span>
       ),
     },
     {
       key: 'completed_at',
-      title: 'Completed',
+      title: t('usage.col.completed'),
       render: (task: CleanupTask) => (
         <span className="text-xs text-gray-400">
           {task.completed_at ? formatDate(task.completed_at) : '-'}
@@ -416,15 +465,15 @@ export const UsagePage: React.FC = () => {
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('usage.col.actions'),
       render: (task: CleanupTask) => (
         <div className="flex items-center gap-2">
           {(task.status === 'pending' || task.status === 'running') && (
             <button
               onClick={() => handleCancelTask(task.id)}
               disabled={cancelTaskLoading === task.id}
-              className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-red-400 transition-colors"
-              title="Cancel Task"
+              className="p-1.5 rounded hover:bg-[var(--accent-soft)] text-[var(--text-secondary)] hover:text-red-400 transition-colors"
+              title={t('usage.action.cancelTask')}
             >
               {cancelTaskLoading === task.id ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -443,53 +492,53 @@ export const UsagePage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Usage Management</h1>
-          <p className="text-gray-400">View usage logs and manage cleanup tasks</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-1">{t('usage.title')}</h1>
+          <p className="text-[var(--text-secondary)]">{t('usage.subtitle')}</p>
         </div>
         {activeTab === 'logs' && (
           <div className="flex gap-3">
             <Button variant="secondary" onClick={handleViewStats}>
               <BarChart3 className="w-4 h-4 mr-2" />
-              Stats
+              {t('usage.stats')}
             </Button>
             <Button variant="secondary" onClick={handleOpenCleanup}>
               <Trash2 className="w-4 h-4 mr-2" />
-              Quick Cleanup
+              {t('usage.quickCleanup')}
             </Button>
           </div>
         )}
         {activeTab === 'cleanup-tasks' && (
           <Button onClick={() => setShowCreateTaskModal(true)}>
             <Play className="w-4 h-4 mr-2" />
-            New Cleanup Task
+            {t('usage.newCleanupTask')}
           </Button>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-[#2A2A30]">
+      <div className="flex gap-1 mb-6 border-b border-[var(--border-color)]">
         <button
           onClick={() => setActiveTab('logs')}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
             activeTab === 'logs'
               ? 'text-red-400 border-red-400'
-              : 'text-gray-400 border-transparent hover:text-white'
+              : 'text-[var(--text-secondary)] border-transparent hover:text-[var(--text-primary)]'
           }`}
         >
           <List className="w-4 h-4" />
-          Usage Logs
+          {t('usage.tab.logs')}
         </button>
         <button
           onClick={() => setActiveTab('cleanup-tasks')}
           className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
             activeTab === 'cleanup-tasks'
               ? 'text-red-400 border-red-400'
-              : 'text-gray-400 border-transparent hover:text-white'
+              : 'text-[var(--text-secondary)] border-transparent hover:text-[var(--text-primary)]'
           }`}
         >
           <Clock className="w-4 h-4" />
-          Cleanup Tasks
-          {cleanupTasks.some(t => t.status === 'running' || t.status === 'pending') && (
+          {t('usage.tab.cleanupTasks')}
+          {cleanupTasks.some(ct => ct.status === 'running' || ct.status === 'pending') && (
             <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
           )}
         </button>
@@ -502,29 +551,91 @@ export const UsagePage: React.FC = () => {
           <Card className="mb-6">
             <CardContent className="p-4">
               <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2">
-                  <Search className="w-4 h-4 text-gray-500" />
+                <div className="relative flex items-center gap-2">
+                  <Search className="w-4 h-4 text-[var(--text-muted)]" />
+                  <div className="relative">
+                    <Input
+                      placeholder={t('usage.filter.userId')}
+                      value={userIdFilter || userSearchQuery}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (/^\d*$/.test(val)) {
+                          setUserIdFilter(val);
+                          setUserSearchQuery('');
+                          setPage(1);
+                        } else {
+                          setUserSearchQuery(val);
+                          setUserIdFilter('');
+                        }
+                      }}
+                      onFocus={() => userSuggestions.length > 0 && setShowUserDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
+                      className="w-40"
+                    />
+                    {showUserDropdown && userSuggestions.length > 0 && (
+                      <div className="absolute top-full left-0 mt-1 w-64 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
+                        {userSuggestions.map((user) => (
+                          <button
+                            key={user.id}
+                            className="w-full px-3 py-2 text-left hover:bg-[var(--accent-soft)] transition-colors"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setUserIdFilter(String(user.id));
+                              setUserSearchQuery('');
+                              setShowUserDropdown(false);
+                              setPage(1);
+                            }}
+                          >
+                            <p className="text-sm text-[var(--text-primary)]">{user.username}</p>
+                            <p className="text-xs text-[var(--text-muted)]">{user.email} (ID: {user.id})</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="relative">
                   <Input
-                    placeholder="User ID"
-                    value={userIdFilter}
+                    placeholder={t('usage.filter.apiKeyId')}
+                    value={apiKeyIdFilter || apiKeySearchQuery}
                     onChange={(e) => {
-                      setUserIdFilter(e.target.value);
-                      setPage(1);
+                      const val = e.target.value;
+                      if (/^\d*$/.test(val)) {
+                        setApiKeyIdFilter(val);
+                        setApiKeySearchQuery('');
+                        setPage(1);
+                      } else {
+                        setApiKeySearchQuery(val);
+                        setApiKeyIdFilter('');
+                      }
                     }}
-                    className="w-24"
+                    onFocus={() => apiKeySuggestions.length > 0 && setShowApiKeyDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowApiKeyDropdown(false), 200)}
+                    className="w-40"
                   />
+                  {showApiKeyDropdown && apiKeySuggestions.length > 0 && (
+                    <div className="absolute top-full left-0 mt-1 w-64 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
+                      {apiKeySuggestions.map((key) => (
+                        <button
+                          key={key.id}
+                          className="w-full px-3 py-2 text-left hover:bg-[var(--accent-soft)] transition-colors"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setApiKeyIdFilter(String(key.id));
+                            setApiKeySearchQuery('');
+                            setShowApiKeyDropdown(false);
+                            setPage(1);
+                          }}
+                        >
+                          <p className="text-sm text-[var(--text-primary)]">{key.name}</p>
+                          <p className="text-xs text-[var(--text-muted)]">{key.username} (ID: {key.id})</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <Input
-                  placeholder="API Key ID"
-                  value={apiKeyIdFilter}
-                  onChange={(e) => {
-                    setApiKeyIdFilter(e.target.value);
-                    setPage(1);
-                  }}
-                  className="w-28"
-                />
-                <Input
-                  placeholder="Model"
+                  placeholder={t('usage.filter.model')}
                   value={modelFilter}
                   onChange={(e) => {
                     setModelFilter(e.target.value);
@@ -553,12 +664,12 @@ export const UsagePage: React.FC = () => {
                 {(userIdFilter || apiKeyIdFilter || modelFilter || dateFrom || dateTo) && (
                   <Button variant="secondary" size="sm" onClick={handleClearFilters}>
                     <RotateCcw className="w-4 h-4 mr-1" />
-                    Clear
+                    {t('common:btn.clear')}
                   </Button>
                 )}
-                <div className="flex items-center gap-2 text-sm text-gray-400 ml-auto">
+                <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] ml-auto">
                   <Activity className="w-4 h-4" />
-                  <span>{(total || 0).toLocaleString()} records</span>
+                  <span>{t('usage.totalRecords', { count: total || 0 })}</span>
                 </div>
               </div>
             </CardContent>
@@ -571,15 +682,14 @@ export const UsagePage: React.FC = () => {
                 columns={logColumns}
                 data={logs}
                 loading={loading}
-                emptyText="No usage logs found"
+                emptyText={t('usage.empty.logs')}
               />
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-between px-6 py-4 border-t border-[#2A2A30]">
-                  <p className="text-sm text-gray-400">
-                    Showing {(page - 1) * pageSize + 1} to{' '}
-                    {Math.min(page * pageSize, total || 0)} of {(total || 0).toLocaleString()} records
+                <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border-color)]">
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {t('common:table.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total || 0), total: (total || 0).toLocaleString() })}
                   </p>
                   <div className="flex items-center gap-2">
                     <Button
@@ -590,8 +700,8 @@ export const UsagePage: React.FC = () => {
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <span className="text-sm text-gray-400">
-                      Page {page} of {totalPages}
+                    <span className="text-sm text-[var(--text-secondary)]">
+                      {t('common:table.page', { current: page, total: totalPages })}
                     </span>
                     <Button
                       variant="secondary"
@@ -617,7 +727,7 @@ export const UsagePage: React.FC = () => {
               columns={taskColumns}
               data={cleanupTasks}
               loading={cleanupTasksLoading}
-              emptyText="No cleanup tasks found"
+              emptyText={t('usage.empty.tasks')}
             />
           </CardContent>
         </Card>
@@ -630,7 +740,7 @@ export const UsagePage: React.FC = () => {
           setShowStatsModal(false);
           setStats(null);
         }}
-        title="Usage Statistics"
+        title={t('usage.modal.statsTitle')}
       >
         {statsLoading ? (
           <div className="space-y-4">
@@ -640,33 +750,33 @@ export const UsagePage: React.FC = () => {
           </div>
         ) : stats ? (
           <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Requests</p>
-              <p className="text-xl font-bold text-white">{stats.total_requests.toLocaleString()}</p>
+            <div className="p-4 bg-[var(--surface-elevated)] rounded-lg border border-[var(--border-color-subtle)]">
+              <p className="text-xs text-[var(--text-muted)] mb-1">{t('usage.stats.totalRequests')}</p>
+              <p className="text-xl font-bold text-[var(--text-primary)]">{stats.total_requests.toLocaleString()}</p>
             </div>
-            <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Tokens</p>
+            <div className="p-4 bg-[var(--surface-elevated)] rounded-lg border border-[var(--border-color-subtle)]">
+              <p className="text-xs text-[var(--text-muted)] mb-1">{t('usage.stats.totalTokens')}</p>
               <p className="text-xl font-bold text-cyan-400">{stats.total_tokens.toLocaleString()}</p>
             </div>
-            <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Cost</p>
+            <div className="p-4 bg-[var(--surface-elevated)] rounded-lg border border-[var(--border-color-subtle)]">
+              <p className="text-xs text-[var(--text-muted)] mb-1">{t('usage.stats.totalCost')}</p>
               <p className="text-xl font-bold text-emerald-400">${stats.total_cost.toFixed(4)}</p>
             </div>
-            <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Actual Cost</p>
+            <div className="p-4 bg-[var(--surface-elevated)] rounded-lg border border-[var(--border-color-subtle)]">
+              <p className="text-xs text-[var(--text-muted)] mb-1">{t('usage.stats.actualCost')}</p>
               <p className="text-xl font-bold text-purple-400">${stats.actual_cost.toFixed(4)}</p>
             </div>
-            <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Unique Users</p>
-              <p className="text-xl font-bold text-white">{stats.unique_users}</p>
+            <div className="p-4 bg-[var(--surface-elevated)] rounded-lg border border-[var(--border-color-subtle)]">
+              <p className="text-xs text-[var(--text-muted)] mb-1">{t('usage.stats.uniqueUsers')}</p>
+              <p className="text-xl font-bold text-[var(--text-primary)]">{stats.unique_users}</p>
             </div>
-            <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Unique Models</p>
-              <p className="text-xl font-bold text-white">{stats.unique_models}</p>
+            <div className="p-4 bg-[var(--surface-elevated)] rounded-lg border border-[var(--border-color-subtle)]">
+              <p className="text-xs text-[var(--text-muted)] mb-1">{t('usage.stats.uniqueModels')}</p>
+              <p className="text-xl font-bold text-[var(--text-primary)]">{stats.unique_models}</p>
             </div>
           </div>
         ) : (
-          <p className="text-gray-400">Failed to load stats</p>
+          <p className="text-[var(--text-secondary)]">{t('usage.stats.failedLoad')}</p>
         )}
       </Modal>
 
@@ -678,15 +788,15 @@ export const UsagePage: React.FC = () => {
           setCleanupResult(null);
           setCleanupDate('');
         }}
-        title="Quick Usage Log Cleanup"
+        title={t('usage.modal.cleanupTitle')}
       >
         <div className="space-y-6">
           {/* Create new cleanup task */}
-          <div className="p-4 bg-[#0A0A0C] rounded-lg">
-            <h3 className="text-sm font-medium text-white mb-3">Delete Old Logs</h3>
+          <div className="p-4 bg-[var(--surface-elevated)] rounded-lg border border-[var(--border-color-subtle)]">
+            <h3 className="text-sm font-medium text-[var(--text-primary)] mb-3">{t('usage.cleanup.deleteOldLogs')}</h3>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">Delete logs before</label>
+                <label className="block text-xs text-[var(--text-muted)] mb-1">{t('usage.cleanup.deleteBefore')}</label>
                 <Input
                   type="date"
                   value={cleanupDate}
@@ -701,12 +811,12 @@ export const UsagePage: React.FC = () => {
                   variant="danger"
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
+                  {t('common:btn.delete')}
                 </Button>
               </div>
             </div>
             <p className="text-xs text-amber-400 mt-2">
-              Warning: This will permanently delete all usage logs before the selected date.
+              {t('usage.cleanup.warning')}
             </p>
           </div>
 
@@ -714,7 +824,7 @@ export const UsagePage: React.FC = () => {
           {cleanupResult && (
             <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
               <p className="text-sm text-emerald-400">
-                Successfully deleted {cleanupResult.deleted_count.toLocaleString()} records
+                {t('usage.cleanup.deleted', { count: cleanupResult.deleted_count })}
               </p>
             </div>
           )}
@@ -729,20 +839,20 @@ export const UsagePage: React.FC = () => {
           setNewTaskDate('');
           setNewTaskDryRun(false);
         }}
-        title="Create Cleanup Task"
+        title={t('usage.modal.createTaskTitle')}
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">
-              Delete logs before <span className="text-red-400">*</span>
+            <label className="block text-sm text-[var(--text-secondary)] mb-1">
+              {t('usage.task.deleteBefore')} <span className="text-red-400">*</span>
             </label>
             <Input
               type="date"
               value={newTaskDate}
               onChange={(e) => setNewTaskDate(e.target.value)}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              All usage logs before this date will be deleted
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              {t('usage.task.deleteBeforeDesc')}
             </p>
           </div>
 
@@ -750,7 +860,7 @@ export const UsagePage: React.FC = () => {
             <button
               onClick={() => setNewTaskDryRun(!newTaskDryRun)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                newTaskDryRun ? 'bg-blue-500' : 'bg-[#2A2A30]'
+                newTaskDryRun ? 'bg-blue-500' : 'bg-[var(--border-color)]'
               }`}
             >
               <span
@@ -760,9 +870,9 @@ export const UsagePage: React.FC = () => {
               />
             </button>
             <div>
-              <span className="text-sm text-gray-300">Dry Run</span>
-              <p className="text-xs text-gray-500">
-                Simulate the cleanup without actually deleting records
+              <span className="text-sm text-[var(--text-secondary)]">{t('usage.task.dryRunLabel')}</span>
+              <p className="text-xs text-[var(--text-muted)]">
+                {t('usage.task.dryRunDesc')}
               </p>
             </div>
           </div>
@@ -776,14 +886,14 @@ export const UsagePage: React.FC = () => {
                 setNewTaskDryRun(false);
               }}
             >
-              Cancel
+              {t('common:btn.cancel')}
             </Button>
             <Button
               onClick={handleCreateTask}
               isLoading={createTaskLoading}
               disabled={!newTaskDate}
             >
-              Create Task
+              {t('usage.createTask')}
             </Button>
           </div>
         </div>

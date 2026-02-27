@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	apiKeyRateLimitKeyPrefix   = "apikey:ratelimit:"
-	apiKeyRateLimitDuration    = 24 * time.Hour
+	apiKeyRateLimitKeyPrefix = "apikey:ratelimit:"
+	apiKeyRateLimitDuration  = 24 * time.Hour
+	// #nosec G101 -- Redis key prefix for cache namespace, not credentials.
 	apiKeyAuthCachePrefix      = "apikey:auth:"
 	authCacheInvalidateChannel = "auth:cache:invalidate"
 )

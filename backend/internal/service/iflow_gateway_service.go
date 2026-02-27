@@ -250,7 +250,7 @@ func (s *IFlowGatewayService) ForwardChatCompletions(ctx context.Context, c *gin
 				Message:            upstreamMsg,
 				Detail:             upstreamDetail,
 			})
-			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
+			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
 		}
 
 		if c != nil {

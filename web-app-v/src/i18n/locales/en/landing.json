@@ -1,0 +1,113 @@
+{
+  "hero": {
+    "badge": "Nexus V2.0 is now live",
+    "title": {
+      "part1": "The",
+      "part2": "Infrastructure",
+      "part3": "for the Future."
+    },
+    "description": "Deploy serverless functions, manage edge databases, and orchestrate AI pipelines.",
+    "highlight": "All with zero config.",
+    "cta": {
+      "primary": "Start Deploying",
+      "secondary": "Read Documentation"
+    },
+    "trustedBy": "Trusted by engineering teams at"
+  },
+  "stats": {
+    "globalLatency": "Global Latency",
+    "uptimeSLA": "Uptime SLA",
+    "edgeRegions": "Edge Regions",
+    "dailyRequests": "Daily Requests"
+  },
+  "globalNetwork": {
+    "badge": "Global Infrastructure",
+    "title": "Deploy globally, instantly.",
+    "description": "Your code runs within milliseconds of your users. Our intelligent edge network automatically routes traffic to the nearest healthy node.",
+    "regions": {
+      "northAmerica": "North America",
+      "europe": "Europe",
+      "asiaPacific": "Asia Pacific",
+      "southAmerica": "South America"
+    },
+    "status": "Operational",
+    "locations": "40+ locations"
+  },
+  "features": {
+    "lightningFast": {
+      "title": "Lightning Fast",
+      "description": "Deploy to 150+ edge locations worldwide in under a second. Your code runs closer to your users than ever before."
+    },
+    "secureByDefault": {
+      "title": "Secure by Default",
+      "description": "Enterprise-grade security with automatic HTTPS, DDoS protection, and edge authentication."
+    },
+    "realtimeAnalytics": {
+      "title": "Real-time Analytics",
+      "description": "Monitor performance, errors, and usage in real-time with detailed insights."
+    },
+    "aiGateway": {
+      "title": "AI Gateway",
+      "description": "Unified API for all major AI providers. Route requests intelligently, manage costs, and monitor usage across all your AI workloads."
+    }
+  },
+  "developerExperience": {
+    "badge": "Developer Experience",
+    "title": {
+      "part1": "Just write code.",
+      "part2": "We handle the rest."
+    },
+    "description": "Forget about Kubernetes, Dockerfiles, or load balancers. Just write a function and we deploy it to 150+ edge locations instantly. Focus on your logic, not the infrastructure.",
+    "serverless": {
+      "title": "Serverless",
+      "description": "Zero management, auto-scaling."
+    },
+    "edgeCompute": {
+      "title": "Edge Compute",
+      "description": "V8 Isolate runtime, <10ms startup."
+    },
+    "checklist": {
+      "gitPush": "Instant git-push deployments",
+      "cicd": "Built-in CI/CD pipelines",
+      "logs": "Real-time logs & analytics"
+    }
+  },
+  "cta": {
+    "title": "Ready to ship your next big thing?",
+    "description": "Join 100,000+ developers building the future on Nexus.",
+    "credits": "Get ${{amount}} in free credits when you sign up today.",
+    "primary": "Get Started for Free",
+    "secondary": "Contact Sales",
+    "disclaimer": "No credit card required for free tier."
+  },
+  "footer": {
+    "product": {
+      "title": "Product",
+      "edgeFunctions": "Edge Functions",
+      "edgeConfig": "Edge Config",
+      "aiGateway": "AI Gateway",
+      "cli": "CLI"
+    },
+    "resources": {
+      "title": "Resources",
+      "documentation": "Documentation",
+      "guides": "Guides",
+      "helpCenter": "Help Center",
+      "apiReference": "API Reference"
+    },
+    "company": {
+      "title": "Company",
+      "about": "About",
+      "blog": "Blog",
+      "careers": "Careers",
+      "contact": "Contact"
+    },
+    "legal": {
+      "title": "Legal",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "cookies": "Cookie Policy"
+    },
+    "copyright": "© {{year}} Nexus Cloud Inc. All rights reserved."
+  }
+}

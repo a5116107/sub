@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Globe,
   Plus,
@@ -10,6 +11,7 @@ import {
   BarChart3,
   CheckCircle,
   XCircle,
+  Upload,
 } from 'lucide-react';
 import { adminProxiesApi, type ProxyQueryParams } from '../../api/admin/proxies';
 import type { Proxy } from '../../types';
@@ -24,14 +26,14 @@ import {
   Skeleton,
 } from '../../components/ui';
 
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, t: (key: string) => string) => {
   switch (status.toLowerCase()) {
     case 'active':
-      return <Badge variant="success">Active</Badge>;
+      return <Badge variant="success">{t('common:status.active')}</Badge>;
     case 'disabled':
-      return <Badge variant="danger">Disabled</Badge>;
+      return <Badge variant="danger">{t('common:status.disabled')}</Badge>;
     case 'error':
-      return <Badge variant="danger">Error</Badge>;
+      return <Badge variant="danger">{t('common:status.failed')}</Badge>;
     default:
       return <Badge variant="default">{status}</Badge>;
   }
@@ -73,6 +75,7 @@ interface TestResult {
 }
 
 export const ProxiesPage: React.FC = () => {
+  const { t } = useTranslation('admin');
   const [loading, setLoading] = useState(true);
   const [proxies, setProxies] = useState<Proxy[]>([]);
   const [total, setTotal] = useState(0);
@@ -92,6 +95,15 @@ export const ProxiesPage: React.FC = () => {
   const [statsLoading, setStatsLoading] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [testLoading, setTestLoading] = useState(false);
+  const [showBatchImportModal, setShowBatchImportModal] = useState(false);
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
+  const [batchImportData, setBatchImportData] = useState('');
+  const [batchImportLoading, setBatchImportLoading] = useState(false);
+  const [batchImportResult, setBatchImportResult] = useState<{ success_count: number; failed_count: number; errors: string[] } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [batchDeleteLoading, setBatchDeleteLoading] = useState(false);
+  const [proxyAccounts, setProxyAccounts] = useState<Array<{ id: number; name: string; platform: string; status: string; last_used_at?: string }>>([]);
+  const [proxyAccountsLoading, setProxyAccountsLoading] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<Partial<Proxy> & { password?: string }>({
@@ -184,7 +196,7 @@ export const ProxiesPage: React.FC = () => {
     try {
       const result = await adminProxiesApi.testProxy(proxy.id);
       setTestResult(result);
-    } catch (error) {
+    } catch {
       setTestResult({
         success: false,
         latency_ms: 0,
@@ -199,6 +211,8 @@ export const ProxiesPage: React.FC = () => {
     setSelectedProxy(proxy);
     setShowStatsModal(true);
     setStatsLoading(true);
+    setProxyAccounts([]);
+    setProxyAccountsLoading(true);
     try {
       const statsData = await adminProxiesApi.getProxyStats(proxy.id);
       setStats(statsData);
@@ -207,6 +221,50 @@ export const ProxiesPage: React.FC = () => {
     } finally {
       setStatsLoading(false);
     }
+    try {
+      const accounts = await adminProxiesApi.getProxyAccounts(proxy.id);
+      setProxyAccounts(accounts);
+    } catch (error) {
+      console.error('Failed to fetch proxy accounts:', error);
+    } finally {
+      setProxyAccountsLoading(false);
+    }
+  };
+
+  const handleBatchImport = async () => {
+    if (!batchImportData) return;
+    setBatchImportLoading(true);
+    setBatchImportResult(null);
+    try {
+      const parsed = JSON.parse(batchImportData);
+      const proxiesArray = Array.isArray(parsed) ? parsed : [parsed];
+      const result = await adminProxiesApi.batchCreate({ proxies: proxiesArray });
+      setBatchImportResult(result);
+      fetchProxies();
+    } catch (error) {
+      console.error('Failed to batch import proxies:', error);
+    } finally {
+      setBatchImportLoading(false);
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setBatchDeleteLoading(true);
+    try {
+      await adminProxiesApi.batchDelete(selectedIds);
+      setSelectedIds([]);
+      setShowBatchDeleteModal(false);
+      fetchProxies();
+    } catch (error) {
+      console.error('Failed to batch delete proxies:', error);
+    } finally {
+      setBatchDeleteLoading(false);
+    }
+  };
+
+  const toggleSelectProxy = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
   const openEditModal = (proxy: Proxy) => {
@@ -239,27 +297,39 @@ export const ProxiesPage: React.FC = () => {
 
   const columns = [
     {
+      key: 'select',
+      title: '',
+      render: (proxy: Proxy) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.includes(proxy.id)}
+          onChange={() => toggleSelectProxy(proxy.id)}
+          className="rounded border-[#2A2A30] bg-[#0A0A0C] text-cyan-500 focus:ring-cyan-500"
+        />
+      ),
+    },
+    {
       key: 'id',
-      title: 'ID',
+      title: t('proxies.col.id'),
       render: (proxy: Proxy) => (
         <span className="text-sm text-gray-400">#{proxy.id}</span>
       ),
     },
     {
       key: 'name',
-      title: 'Name',
+      title: t('proxies.col.name'),
       render: (proxy: Proxy) => (
         <p className="text-sm font-medium text-white">{proxy.name}</p>
       ),
     },
     {
       key: 'protocol',
-      title: 'Protocol',
+      title: t('proxies.col.protocol'),
       render: (proxy: Proxy) => getProtocolBadge(proxy.protocol),
     },
     {
       key: 'address',
-      title: 'Address',
+      title: t('proxies.col.address'),
       render: (proxy: Proxy) => (
         <code className="text-sm font-mono text-gray-400">
           {proxy.host}:{proxy.port}
@@ -268,7 +338,7 @@ export const ProxiesPage: React.FC = () => {
     },
     {
       key: 'auth',
-      title: 'Auth',
+      title: t('proxies.col.auth'),
       render: (proxy: Proxy) => (
         <span className="text-sm text-gray-400">
           {proxy.username ? proxy.username : '-'}
@@ -277,39 +347,39 @@ export const ProxiesPage: React.FC = () => {
     },
     {
       key: 'status',
-      title: 'Status',
-      render: (proxy: Proxy) => getStatusBadge(proxy.status),
+      title: t('proxies.col.status'),
+      render: (proxy: Proxy) => getStatusBadge(proxy.status, t),
     },
     {
       key: 'created',
-      title: 'Created',
+      title: t('proxies.col.created'),
       render: (proxy: Proxy) => (
         <span className="text-sm text-gray-400">{formatDate(proxy.created_at)}</span>
       ),
     },
     {
       key: 'actions',
-      title: 'Actions',
+      title: t('proxies.col.actions'),
       render: (proxy: Proxy) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => handleTestProxy(proxy)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-emerald-400 transition-colors"
-            title="Test Proxy"
+            title={t('proxies.testTitle', { name: proxy.name })}
           >
             <Play className="w-4 h-4" />
           </button>
           <button
             onClick={() => handleViewStats(proxy)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-cyan-400 transition-colors"
-            title="View Stats"
+            title={t('proxies.statsTitle', { name: proxy.name })}
           >
             <BarChart3 className="w-4 h-4" />
           </button>
           <button
             onClick={() => openEditModal(proxy)}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-white transition-colors"
-            title="Edit Proxy"
+            title={t('proxies.editTitle')}
           >
             <Edit className="w-4 h-4" />
           </button>
@@ -319,7 +389,7 @@ export const ProxiesPage: React.FC = () => {
               setShowDeleteModal(true);
             }}
             className="p-1.5 rounded hover:bg-[#2A2A30] text-gray-400 hover:text-red-400 transition-colors"
-            title="Delete Proxy"
+            title={t('proxies.deleteTitle')}
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -331,7 +401,7 @@ export const ProxiesPage: React.FC = () => {
   const ProxyForm = ({ isEdit = false }: { isEdit?: boolean }) => (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm text-gray-400 mb-1">Name *</label>
+        <label className="block text-sm text-gray-400 mb-1">{t('proxies.form.name')} *</label>
         <Input
           placeholder="My Proxy"
           value={formData.name}
@@ -340,7 +410,7 @@ export const ProxiesPage: React.FC = () => {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Protocol *</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('proxies.form.protocol')} *</label>
           <select
             value={formData.protocol}
             onChange={(e) => setFormData({ ...formData, protocol: e.target.value })}
@@ -353,20 +423,20 @@ export const ProxiesPage: React.FC = () => {
           </select>
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Status</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('proxies.form.status')}</label>
           <select
             value={formData.status}
             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
             className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
           >
-            <option value="active">Active</option>
-            <option value="disabled">Disabled</option>
+            <option value="active">{t('common:status.active')}</option>
+            <option value="disabled">{t('common:status.disabled')}</option>
           </select>
         </div>
       </div>
       <div className="grid grid-cols-3 gap-4">
         <div className="col-span-2">
-          <label className="block text-sm text-gray-400 mb-1">Host *</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('proxies.form.host')} *</label>
           <Input
             placeholder="proxy.example.com"
             value={formData.host}
@@ -374,7 +444,7 @@ export const ProxiesPage: React.FC = () => {
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Port *</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('proxies.form.port')} *</label>
           <Input
             type="number"
             min="1"
@@ -387,7 +457,7 @@ export const ProxiesPage: React.FC = () => {
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Username</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('proxies.form.username')}</label>
           <Input
             placeholder="Optional"
             value={formData.username}
@@ -395,10 +465,10 @@ export const ProxiesPage: React.FC = () => {
           />
         </div>
         <div>
-          <label className="block text-sm text-gray-400 mb-1">Password</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('proxies.form.password')}</label>
           <Input
             type="password"
-            placeholder={isEdit ? 'Leave empty to keep current' : 'Optional'}
+            placeholder={isEdit ? t('proxies.form.passwordEditHint') : 'Optional'}
             value={formData.password}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
           />
@@ -408,19 +478,23 @@ export const ProxiesPage: React.FC = () => {
         <Button
           variant="secondary"
           onClick={() => {
-            isEdit ? setShowEditModal(false) : setShowCreateModal(false);
+            if (isEdit) {
+              setShowEditModal(false);
+            } else {
+              setShowCreateModal(false);
+            }
             resetForm();
             setSelectedProxy(null);
           }}
         >
-          Cancel
+          {t('common:btn.cancel')}
         </Button>
         <Button
           onClick={isEdit ? handleUpdateProxy : handleCreateProxy}
           isLoading={actionLoading}
           disabled={!formData.name || !formData.host || !formData.port}
         >
-          {isEdit ? 'Update Proxy' : 'Create Proxy'}
+          {isEdit ? t('proxies.updateProxy') : t('proxies.createProxy')}
         </Button>
       </div>
     </div>
@@ -431,13 +505,25 @@ export const ProxiesPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white mb-1">Proxy Management</h1>
-          <p className="text-gray-400">Configure and manage proxy servers</p>
+          <h1 className="text-2xl font-bold text-white mb-1">{t('proxies.title')}</h1>
+          <p className="text-gray-400">{t('proxies.subtitle')}</p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Proxy
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          {selectedIds.length > 0 && (
+            <Button variant="danger" onClick={() => setShowBatchDeleteModal(true)}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              {t('proxies.deleteSelected', { count: selectedIds.length })}
+            </Button>
+          )}
+          <Button variant="secondary" onClick={() => { setShowBatchImportModal(true); setBatchImportResult(null); setBatchImportData(''); }}>
+            <Upload className="w-4 h-4 mr-2" />
+            {t('proxies.batchImport')}
+          </Button>
+          <Button onClick={() => setShowCreateModal(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            {t('proxies.addProxy')}
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -452,14 +538,14 @@ export const ProxiesPage: React.FC = () => {
               }}
               className="bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm focus:border-[#00F0FF] outline-none"
             >
-              <option value="">All Status</option>
-              <option value="active">Active</option>
-              <option value="disabled">Disabled</option>
-              <option value="error">Error</option>
+              <option value="">{t('proxies.filter.allStatus')}</option>
+              <option value="active">{t('common:status.active')}</option>
+              <option value="disabled">{t('common:status.disabled')}</option>
+              <option value="error">{t('common:status.failed')}</option>
             </select>
             <div className="flex items-center gap-2 text-sm text-gray-400 ml-auto">
               <Globe className="w-4 h-4" />
-              <span>{total} total proxies</span>
+              <span>{t('proxies.total', { count: total })}</span>
             </div>
           </div>
         </CardContent>
@@ -472,15 +558,14 @@ export const ProxiesPage: React.FC = () => {
             columns={columns}
             data={proxies}
             loading={loading}
-            emptyText="No proxies found"
+            emptyText={t('proxies.empty')}
           />
 
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-[#2A2A30]">
               <p className="text-sm text-gray-400">
-                Showing {(page - 1) * pageSize + 1} to{' '}
-                {Math.min(page * pageSize, total)} of {total} proxies
+                {t('common:table.showing', { start: (page - 1) * pageSize + 1, end: Math.min(page * pageSize, total), total })}
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -492,7 +577,7 @@ export const ProxiesPage: React.FC = () => {
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
                 <span className="text-sm text-gray-400">
-                  Page {page} of {totalPages}
+                  {t('common:table.page', { current: page, total: totalPages })}
                 </span>
                 <Button
                   variant="secondary"
@@ -515,7 +600,7 @@ export const ProxiesPage: React.FC = () => {
           setShowCreateModal(false);
           resetForm();
         }}
-        title="Add Proxy"
+        title={t('proxies.createTitle')}
       >
         <ProxyForm />
       </Modal>
@@ -528,7 +613,7 @@ export const ProxiesPage: React.FC = () => {
           setSelectedProxy(null);
           resetForm();
         }}
-        title="Edit Proxy"
+        title={t('proxies.editTitle')}
       >
         <ProxyForm isEdit />
       </Modal>
@@ -540,16 +625,15 @@ export const ProxiesPage: React.FC = () => {
           setShowDeleteModal(false);
           setSelectedProxy(null);
         }}
-        title="Delete Proxy"
+        title={t('proxies.deleteTitle')}
       >
         {selectedProxy && (
           <div className="space-y-4">
             <p className="text-gray-400">
-              Are you sure you want to delete proxy{' '}
-              <span className="text-white font-medium">{selectedProxy.name}</span>?
+              {t('proxies.deleteConfirm', { name: selectedProxy.name })}
             </p>
             <p className="text-sm text-red-400">
-              This action cannot be undone. Accounts using this proxy will be affected.
+              {t('proxies.deleteWarning')}
             </p>
             <div className="flex justify-end gap-3 pt-4">
               <Button
@@ -559,14 +643,14 @@ export const ProxiesPage: React.FC = () => {
                   setSelectedProxy(null);
                 }}
               >
-                Cancel
+                {t('common:btn.cancel')}
               </Button>
               <Button
                 variant="danger"
                 onClick={handleDeleteProxy}
                 isLoading={actionLoading}
               >
-                Delete Proxy
+                {t('proxies.deleteProxy')}
               </Button>
             </div>
           </div>
@@ -581,12 +665,12 @@ export const ProxiesPage: React.FC = () => {
           setSelectedProxy(null);
           setTestResult(null);
         }}
-        title={`Test: ${selectedProxy?.name || ''}`}
+        title={t('proxies.testTitle', { name: selectedProxy?.name || '' })}
       >
         {testLoading ? (
           <div className="flex flex-col items-center py-8">
             <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-gray-400">Testing proxy connection...</p>
+            <p className="text-gray-400">{t('proxies.testing')}</p>
           </div>
         ) : testResult ? (
           <div className="space-y-4">
@@ -600,14 +684,14 @@ export const ProxiesPage: React.FC = () => {
               )}
               <div>
                 <p className={`font-medium ${testResult.success ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {testResult.success ? 'Connection Successful' : 'Connection Failed'}
+                  {testResult.success ? t('proxies.testSuccess') : t('proxies.testFailed')}
                 </p>
                 <p className="text-sm text-gray-400">{testResult.message}</p>
               </div>
             </div>
             {testResult.success && (
               <div className="p-4 bg-[#0A0A0C] rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Latency</p>
+                <p className="text-xs text-gray-500 mb-1">{t('proxies.testLatency')}</p>
                 <p className="text-xl font-bold text-cyan-400">{testResult.latency_ms}ms</p>
               </div>
             )}
@@ -622,8 +706,9 @@ export const ProxiesPage: React.FC = () => {
           setShowStatsModal(false);
           setSelectedProxy(null);
           setStats(null);
+          setProxyAccounts([]);
         }}
-        title={`Stats: ${selectedProxy?.name || ''}`}
+        title={t('proxies.statsTitle', { name: selectedProxy?.name || '' })}
       >
         {statsLoading ? (
           <div className="space-y-4">
@@ -632,23 +717,142 @@ export const ProxiesPage: React.FC = () => {
             <Skeleton height={60} />
           </div>
         ) : stats ? (
-          <div className="grid grid-cols-1 gap-4">
-            <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Accounts</p>
-              <p className="text-xl font-bold text-white">{stats.total_accounts}</p>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="p-4 bg-[#0A0A0C] rounded-lg">
+                <p className="text-xs text-gray-500 mb-1">{t('proxies.stat.totalAccounts')}</p>
+                <p className="text-xl font-bold text-white">{stats.total_accounts}</p>
+              </div>
+              <div className="p-4 bg-[#0A0A0C] rounded-lg">
+                <p className="text-xs text-gray-500 mb-1">{t('proxies.stat.totalRequests')}</p>
+                <p className="text-xl font-bold text-cyan-400">{stats.total_requests.toLocaleString()}</p>
+              </div>
+              <div className="p-4 bg-[#0A0A0C] rounded-lg">
+                <p className="text-xs text-gray-500 mb-1">{t('proxies.stat.avgLatency')}</p>
+                <p className="text-xl font-bold text-emerald-400">{stats.avg_latency}ms</p>
+              </div>
             </div>
-            <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Total Requests</p>
-              <p className="text-xl font-bold text-cyan-400">{stats.total_requests.toLocaleString()}</p>
-            </div>
-            <div className="p-4 bg-[#0A0A0C] rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Average Latency</p>
-              <p className="text-xl font-bold text-emerald-400">{stats.avg_latency}ms</p>
+
+            {/* Proxy Accounts Section */}
+            <div className="border-t border-[#2A2A30] pt-4">
+              <p className="text-sm text-gray-400 mb-3">{t('proxies.associatedAccounts')}</p>
+              {proxyAccountsLoading ? (
+                <Skeleton height={80} />
+              ) : proxyAccounts.length > 0 ? (
+                <div className="max-h-48 overflow-y-auto">
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-[#121215]">
+                      <tr className="border-b border-[#2A2A30]">
+                        <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">{t('proxies.account.name')}</th>
+                        <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">{t('proxies.account.platform')}</th>
+                        <th className="text-left text-xs text-gray-500 font-medium py-2 px-3">{t('proxies.account.status')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {proxyAccounts.map((account) => (
+                        <tr key={account.id} className="border-b border-[#2A2A30]/50">
+                          <td className="py-2 px-3 text-sm text-white">{account.name}</td>
+                          <td className="py-2 px-3 text-sm text-gray-400">{account.platform}</td>
+                          <td className="py-2 px-3">
+                            {getStatusBadge(account.status, t)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">{t('proxies.noAccounts')}</p>
+              )}
             </div>
           </div>
         ) : (
           <p className="text-gray-400">Failed to load stats</p>
         )}
+      </Modal>
+
+      {/* Batch Import Modal */}
+      <Modal
+        isOpen={showBatchImportModal}
+        onClose={() => {
+          setShowBatchImportModal(false);
+          setBatchImportData('');
+          setBatchImportResult(null);
+        }}
+        title={t('proxies.batchImportTitle')}
+      >
+        <div className="space-y-4">
+          <p className="text-gray-400">{t('proxies.batchImportDesc')}</p>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">JSON</label>
+            <textarea
+              placeholder={'[{"name": "Proxy 1", "protocol": "http", "host": "1.2.3.4", "port": 8080}]'}
+              value={batchImportData}
+              onChange={(e) => setBatchImportData(e.target.value)}
+              rows={8}
+              className="w-full bg-[#0A0A0C] border border-[#2A2A30] rounded-lg px-3 py-2 text-white text-sm font-mono focus:border-[#00F0FF] outline-none resize-none"
+            />
+          </div>
+          {batchImportResult && (
+            <div className="p-4 bg-[#0A0A0C] rounded-lg">
+              <p className="text-sm text-emerald-400 mb-1">
+                {t('proxies.batchImportSuccess', { count: batchImportResult.success_count })}
+              </p>
+              {batchImportResult.failed_count > 0 && (
+                <p className="text-sm text-red-400">
+                  {t('proxies.batchImportFailed', { count: batchImportResult.failed_count })}
+                </p>
+              )}
+              {batchImportResult.errors.length > 0 && (
+                <div className="mt-2 text-xs text-gray-500">
+                  {batchImportResult.errors.map((err, i) => (
+                    <p key={i}>{err}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowBatchImportModal(false);
+                setBatchImportData('');
+                setBatchImportResult(null);
+              }}
+            >
+              {t('common:btn.cancel')}
+            </Button>
+            <Button onClick={handleBatchImport} isLoading={batchImportLoading} disabled={!batchImportData}>
+              <Upload className="w-4 h-4 mr-2" />
+              {t('proxies.batchImport')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Batch Delete Modal */}
+      <Modal
+        isOpen={showBatchDeleteModal}
+        onClose={() => setShowBatchDeleteModal(false)}
+        title={t('proxies.batchDeleteTitle')}
+      >
+        <div className="space-y-4">
+          <p className="text-gray-400">
+            {t('proxies.batchDeleteConfirm', { count: selectedIds.length })}
+          </p>
+          <p className="text-sm text-red-400">
+            {t('proxies.deleteWarning')}
+          </p>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="secondary" onClick={() => setShowBatchDeleteModal(false)}>
+              {t('common:btn.cancel')}
+            </Button>
+            <Button variant="danger" onClick={handleBatchDelete} isLoading={batchDeleteLoading}>
+              {t('proxies.deleteSelected', { count: selectedIds.length })}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

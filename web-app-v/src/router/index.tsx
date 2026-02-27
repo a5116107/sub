@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React from 'react';
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -7,43 +8,62 @@ import { PublicLayout } from '../layouts/PublicLayout';
 import { UserLayout } from '../layouts/UserLayout';
 import { AdminLayout } from '../layouts/AdminLayout';
 
+type LazyPageModule = Record<string, unknown>;
+
+function isLazyPageComponent(value: unknown): value is React.ComponentType<unknown> {
+  return typeof value === 'function' || (typeof value === 'object' && value !== null);
+}
+
+const lazyPage = (importer: () => Promise<LazyPageModule>, exportName: string) =>
+  React.lazy(async () => {
+    const module = await importer();
+
+    const component = module[exportName];
+    if (!isLazyPageComponent(component)) {
+      throw new Error(`Lazy page export "${exportName}" is missing or invalid.`);
+    }
+
+    return { default: component };
+  });
+
 // Public Pages
-import { LandingPage } from '../pages/public/LandingPage';
+const LandingPage = lazyPage(() => import('../pages/public/LandingPage'), 'LandingPage');
 
 // Auth Pages
-import { LoginPage } from '../pages/auth/LoginPage';
-import { RegisterPage } from '../pages/auth/RegisterPage';
-import { ForgotPasswordPage } from '../pages/auth/ForgotPasswordPage';
-import { OAuthCallbackPage } from '../pages/auth/OAuthCallbackPage';
+const LoginPage = lazyPage(() => import('../pages/auth/LoginPage'), 'LoginPage');
+const RegisterPage = lazyPage(() => import('../pages/auth/RegisterPage'), 'RegisterPage');
+const ForgotPasswordPage = lazyPage(() => import('../pages/auth/ForgotPasswordPage'), 'ForgotPasswordPage');
+const OAuthCallbackPage = lazyPage(() => import('../pages/auth/OAuthCallbackPage'), 'OAuthCallbackPage');
 
 // User Pages
-import { DashboardPage } from '../pages/user/DashboardPage';
-import { ApiKeysPage } from '../pages/user/ApiKeysPage';
-import { UsagePage } from '../pages/user/UsagePage';
-import { SubscriptionsPage } from '../pages/user/SubscriptionsPage';
-import { RedeemPage } from '../pages/user/RedeemPage';
-import { BillingPage } from '../pages/user/BillingPage';
-import { ProfilePage } from '../pages/user/settings/ProfilePage';
-import { SecurityPage } from '../pages/user/settings/SecurityPage';
-import { TwoFactorPage } from '../pages/user/settings/TwoFactorPage';
+const DashboardPage = lazyPage(() => import('../pages/user/DashboardPage'), 'DashboardPage');
+const ApiKeysPage = lazyPage(() => import('../pages/user/ApiKeysPage'), 'ApiKeysPage');
+const UsagePage = lazyPage(() => import('../pages/user/UsagePage'), 'UsagePage');
+const SubscriptionsPage = lazyPage(() => import('../pages/user/SubscriptionsPage'), 'SubscriptionsPage');
+const RedeemPage = lazyPage(() => import('../pages/user/RedeemPage'), 'RedeemPage');
+const BillingPage = lazyPage(() => import('../pages/user/BillingPage'), 'BillingPage');
+const DocsPage = lazyPage(() => import('../pages/user/DocsPage'), 'DocsPage');
+const ProfilePage = lazyPage(() => import('../pages/user/settings/ProfilePage'), 'ProfilePage');
+const SecurityPage = lazyPage(() => import('../pages/user/settings/SecurityPage'), 'SecurityPage');
+const TwoFactorPage = lazyPage(() => import('../pages/user/settings/TwoFactorPage'), 'TwoFactorPage');
 
 // Admin Pages
-import { AdminDashboardPage } from '../pages/admin/DashboardPage';
-import { UsersPage as AdminUsersPage } from '../pages/admin/UsersPage';
-import { GroupsPage as AdminGroupsPage } from '../pages/admin/GroupsPage';
-import { AccountsPage as AdminAccountsPage } from '../pages/admin/AccountsPage';
-import { SubscriptionsPage as AdminSubscriptionsPage } from '../pages/admin/SubscriptionsPage';
-import { RedeemCodesPage as AdminRedeemCodesPage } from '../pages/admin/RedeemCodesPage';
-import { PromoCodesPage as AdminPromoCodesPage } from '../pages/admin/PromoCodesPage';
-import { ProxiesPage as AdminProxiesPage } from '../pages/admin/ProxiesPage';
-import { UsagePage as AdminUsagePage } from '../pages/admin/UsagePage';
-import { AnnouncementsPage as AdminAnnouncementsPage } from '../pages/admin/AnnouncementsPage';
-import { SettingsPage as AdminSettingsPage } from '../pages/admin/SettingsPage';
-import { ModelPricingPage as AdminModelPricingPage } from '../pages/admin/ModelPricingPage';
-import { OpsPage as AdminOpsPage } from '../pages/admin/OpsPage';
-import { DocsPage as AdminDocsPage } from '../pages/admin/DocsPage';
-import { UserAttributesPage as AdminUserAttributesPage } from '../pages/admin/UserAttributesPage';
-import { SystemPage as AdminSystemPage } from '../pages/admin/SystemPage';
+const AdminDashboardPage = lazyPage(() => import('../pages/admin/DashboardPage'), 'AdminDashboardPage');
+const AdminUsersPage = lazyPage(() => import('../pages/admin/UsersPage'), 'UsersPage');
+const AdminGroupsPage = lazyPage(() => import('../pages/admin/GroupsPage'), 'GroupsPage');
+const AdminAccountsPage = lazyPage(() => import('../pages/admin/AccountsPage'), 'AccountsPage');
+const AdminSubscriptionsPage = lazyPage(() => import('../pages/admin/SubscriptionsPage'), 'SubscriptionsPage');
+const AdminRedeemCodesPage = lazyPage(() => import('../pages/admin/RedeemCodesPage'), 'RedeemCodesPage');
+const AdminPromoCodesPage = lazyPage(() => import('../pages/admin/PromoCodesPage'), 'PromoCodesPage');
+const AdminProxiesPage = lazyPage(() => import('../pages/admin/ProxiesPage'), 'ProxiesPage');
+const AdminUsagePage = lazyPage(() => import('../pages/admin/UsagePage'), 'UsagePage');
+const AdminAnnouncementsPage = lazyPage(() => import('../pages/admin/AnnouncementsPage'), 'AnnouncementsPage');
+const AdminSettingsPage = lazyPage(() => import('../pages/admin/SettingsPage'), 'SettingsPage');
+const AdminModelPricingPage = lazyPage(() => import('../pages/admin/ModelPricingPage'), 'ModelPricingPage');
+const AdminOpsPage = lazyPage(() => import('../pages/admin/OpsPage'), 'OpsPage');
+const AdminDocsPage = lazyPage(() => import('../pages/admin/DocsPage'), 'DocsPage');
+const AdminUserAttributesPage = lazyPage(() => import('../pages/admin/UserAttributesPage'), 'UserAttributesPage');
+const AdminSystemPage = lazyPage(() => import('../pages/admin/SystemPage'), 'SystemPage');
 
 // Protected Route Components
 const ProtectedRoute: React.FC = () => {
@@ -51,8 +71,8 @@ const ProtectedRoute: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0C] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#00F0FF] border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[var(--accent-primary)] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -69,7 +89,7 @@ const AdminRoute: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0A0A0C] flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -127,6 +147,10 @@ export const router = createBrowserRouter([
         path: 'oauth/callback',
         element: <OAuthCallbackPage />,
       },
+      {
+        path: 'auth/linuxdo/callback',
+        element: <OAuthCallbackPage />,
+      },
     ],
   },
   {
@@ -163,6 +187,10 @@ export const router = createBrowserRouter([
           {
             path: 'redeem',
             element: <RedeemPage />,
+          },
+          {
+            path: 'docs',
+            element: <DocsPage />,
           },
           {
             path: 'settings',

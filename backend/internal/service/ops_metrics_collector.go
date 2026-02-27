@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"os"
+	pathpkg "path"
 	"runtime"
 	"strconv"
 	"strings"
@@ -35,6 +36,9 @@ const (
 	opsMetricsCollectorHeartbeatTimeout = 2 * time.Second
 
 	bytesPerMB = 1024 * 1024
+	maxInt64MB = int64(9223372036854775807)
+
+	opsMetricsCollectorCgroupRoot = "/sys/fs/cgroup"
 )
 
 var opsMetricsCollectorAdvisoryLockID = hashAdvisoryLockID(opsMetricsCollectorLeaderLockKey)
@@ -573,10 +577,10 @@ func (c *OpsMetricsCollector) collectSystemStats(ctx context.Context) (*opsColle
 
 	cgroupUsed, cgroupTotal, cgroupOK := readCgroupMemoryBytes()
 	if cgroupOK {
-		usedMB := int64(cgroupUsed / bytesPerMB)
+		usedMB := uint64MBToInt64(cgroupUsed)
 		out.memoryUsedMB = &usedMB
 		if cgroupTotal > 0 {
-			totalMB := int64(cgroupTotal / bytesPerMB)
+			totalMB := uint64MBToInt64(cgroupTotal)
 			out.memoryTotalMB = &totalMB
 			pct := roundTo1DP(float64(cgroupUsed) / float64(cgroupTotal) * 100)
 			out.memoryUsagePercent = &pct
@@ -595,11 +599,11 @@ func (c *OpsMetricsCollector) collectSystemStats(ctx context.Context) (*opsColle
 	if out.memoryUsedMB == nil || out.memoryTotalMB == nil || out.memoryUsagePercent == nil {
 		if vm, err := mem.VirtualMemoryWithContext(ctx); err == nil && vm != nil {
 			if out.memoryUsedMB == nil {
-				usedMB := int64(vm.Used / bytesPerMB)
+				usedMB := uint64MBToInt64(vm.Used)
 				out.memoryUsedMB = &usedMB
 			}
 			if out.memoryTotalMB == nil {
-				totalMB := int64(vm.Total / bytesPerMB)
+				totalMB := uint64MBToInt64(vm.Total)
 				out.memoryTotalMB = &totalMB
 			}
 			if out.memoryUsagePercent == nil {
@@ -615,6 +619,15 @@ func (c *OpsMetricsCollector) collectSystemStats(ctx context.Context) (*opsColle
 	}
 
 	return out, nil
+}
+
+func uint64MBToInt64(bytes uint64) int64 {
+	mb := bytes / bytesPerMB
+	v, err := strconv.ParseInt(strconv.FormatUint(mb, 10), 10, 64)
+	if err != nil {
+		return maxInt64MB
+	}
+	return v
 }
 
 func (c *OpsMetricsCollector) tryCgroupCPUPercent(now time.Time) *float64 {
@@ -753,8 +766,8 @@ func readCgroupCPULimitCores() float64 {
 }
 
 func readUintFile(path string) (uint64, bool) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
+	raw, ok := readCgroupFile(path)
+	if !ok {
 		return 0, false
 	}
 	s := strings.TrimSpace(string(raw))
@@ -769,8 +782,8 @@ func readUintFile(path string) (uint64, bool) {
 }
 
 func readIntFile(path string) (int64, bool) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
+	raw, ok := readCgroupFile(path)
+	if !ok {
 		return 0, false
 	}
 	s := strings.TrimSpace(string(raw))
@@ -782,6 +795,28 @@ func readIntFile(path string) (int64, bool) {
 		return 0, false
 	}
 	return v, true
+}
+
+func readCgroupFile(path string) ([]byte, bool) {
+	cleanPath := pathpkg.Clean(path)
+	prefix := opsMetricsCollectorCgroupRoot + "/"
+	if !strings.HasPrefix(cleanPath, prefix) {
+		return nil, false
+	}
+	relativePath := strings.TrimPrefix(cleanPath, prefix)
+	if relativePath == "" || relativePath == "." || strings.Contains(relativePath, "..") {
+		return nil, false
+	}
+	root, err := os.OpenRoot(opsMetricsCollectorCgroupRoot)
+	if err != nil {
+		return nil, false
+	}
+	defer func() { _ = root.Close() }()
+	data, err := root.ReadFile(relativePath)
+	if err != nil {
+		return nil, false
+	}
+	return data, true
 }
 
 func (c *OpsMetricsCollector) checkDB(ctx context.Context) bool {

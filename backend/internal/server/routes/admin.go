@@ -59,6 +59,9 @@ func RegisterAdminRoutes(
 		// 模型定价（计费用）
 		registerModelPricingRoutes(admin, h)
 
+		// 错误透传规则
+		registerErrorPassthroughRoutes(admin, h)
+
 		// 文档管理
 		registerDocsRoutes(admin, h)
 
@@ -194,6 +197,17 @@ func registerModelPricingRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		pricing.POST("/import", h.Admin.ModelPricing.Import)
 		pricing.PUT("/override", h.Admin.ModelPricing.SetOverride)
 		pricing.POST("/sync", h.Admin.ModelPricing.Sync)
+	}
+}
+
+func registerErrorPassthroughRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	rules := admin.Group("/error-passthrough-rules")
+	{
+		rules.GET("", h.Admin.ErrorPassthrough.List)
+		rules.GET("/:id", h.Admin.ErrorPassthrough.GetByID)
+		rules.POST("", h.Admin.ErrorPassthrough.Create)
+		rules.PUT("/:id", h.Admin.ErrorPassthrough.Update)
+		rules.DELETE("/:id", h.Admin.ErrorPassthrough.Delete)
 	}
 }
 

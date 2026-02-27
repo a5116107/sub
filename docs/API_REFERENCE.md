@@ -30,7 +30,7 @@ Standard response envelope (most endpoints):
 - (none)
 **Request body**: JSON
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ### POST `/api/v1/auth/login`
 **Path params**
@@ -39,7 +39,7 @@ Standard response envelope (most endpoints):
 - (none)
 **Request body**: JSON
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ### POST `/api/v1/auth/login/2fa`
 **Path params**
@@ -48,9 +48,36 @@ Standard response envelope (most endpoints):
 - (none)
 **Request body**: JSON
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
+
+### POST `/api/v1/auth/refresh`
+**Path params**
+- (none)
+**Query params**
+- (none)
+**Request body**: JSON
+**Auth**
+- none
+
+### POST `/api/v1/auth/logout`
+**Path params**
+- (none)
+**Query params**
+- (none)
+**Request body**: JSON
+**Auth**
+- none
 
 ### GET `/api/v1/auth/me`
+**Path params**
+- (none)
+**Query params**
+- (none)
+**Request body**: JSON
+**Auth**
+- `Authorization: Bearer <jwt>`
+
+### POST `/api/v1/auth/revoke-all-sessions`
 **Path params**
 - (none)
 **Query params**
@@ -68,7 +95,7 @@ Standard response envelope (most endpoints):
 - `error_description`
 - `state`
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ### GET `/api/v1/auth/oauth/linuxdo/start`
 **Path params**
@@ -80,7 +107,7 @@ Standard response envelope (most endpoints):
 - `redirect`
 - `state`
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ### POST `/api/v1/auth/register`
 **Path params**
@@ -89,7 +116,7 @@ Standard response envelope (most endpoints):
 - (none)
 **Request body**: JSON
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ### POST `/api/v1/auth/reset-password`
 **Path params**
@@ -98,7 +125,7 @@ Standard response envelope (most endpoints):
 - (none)
 **Request body**: JSON
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ### POST `/api/v1/auth/send-verify-code`
 **Path params**
@@ -107,7 +134,7 @@ Standard response envelope (most endpoints):
 - (none)
 **Request body**: JSON
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ### POST `/api/v1/auth/validate-promo-code`
 **Path params**
@@ -116,7 +143,7 @@ Standard response envelope (most endpoints):
 - (none)
 **Request body**: JSON
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ### GET `/api/v1/docs/:key`
 **Path params**
@@ -124,7 +151,7 @@ Standard response envelope (most endpoints):
 **Query params**
 - `lang`
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ### GET `/api/v1/docs/pages`
 **Path params**
@@ -132,7 +159,7 @@ Standard response envelope (most endpoints):
 **Query params**
 - `lang`
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ### GET `/api/v1/settings/public`
 **Path params**
@@ -140,7 +167,7 @@ Standard response envelope (most endpoints):
 **Query params**
 - `lang`
 **Auth**
-- `Authorization: Bearer <jwt>`
+- none
 
 ## User (JWT)
 

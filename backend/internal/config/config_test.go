@@ -70,6 +70,40 @@ func TestLoadSchedulingConfigFromEnv(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultFailoverKeywords(t *testing.T) {
+	viper.Reset()
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if len(cfg.Gateway.FailoverSensitive400Keywords) == 0 {
+		t.Fatalf("FailoverSensitive400Keywords should not be empty")
+	}
+	if len(cfg.Gateway.FailoverTemporary400Keywords) == 0 {
+		t.Fatalf("FailoverTemporary400Keywords should not be empty")
+	}
+	if len(cfg.Gateway.FailoverRequestErrorKeywords) == 0 {
+		t.Fatalf("FailoverRequestErrorKeywords should not be empty")
+	}
+	if !containsString(cfg.Gateway.FailoverSensitive400Keywords, "insufficient balance") {
+		t.Fatalf("FailoverSensitive400Keywords missing default keyword")
+	}
+	if !containsString(cfg.Gateway.FailoverRequestErrorKeywords, "eof") {
+		t.Fatalf("FailoverRequestErrorKeywords missing default keyword")
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestLoadDefaultSecurityToggles(t *testing.T) {
 	viper.Reset()
 
