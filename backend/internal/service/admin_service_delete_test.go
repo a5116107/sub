@@ -373,6 +373,14 @@ func (s *billingCacheStub) FinalizeSubscriptionUsage(ctx context.Context, userID
 	panic("unexpected FinalizeSubscriptionUsage call")
 }
 
+func (s *billingCacheStub) ReserveSubscriptionUsageByKey(ctx context.Context, userID, groupID int64, key string, reserveUSD float64, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD *float64) (int, error) {
+	panic("unexpected ReserveSubscriptionUsageByKey call")
+}
+
+func (s *billingCacheStub) FinalizeSubscriptionUsageByKey(ctx context.Context, userID, groupID int64, key string, reservedUSD, actualUSD float64) error {
+	panic("unexpected FinalizeSubscriptionUsageByKey call")
+}
+
 func (s *billingCacheStub) InvalidateSubscriptionCache(ctx context.Context, userID, groupID int64) error {
 	s.invalidations <- subscriptionInvalidateCall{userID: userID, groupID: groupID}
 	return nil

@@ -21,6 +21,7 @@ func TestIsAntigravityModelSupported(t *testing.T) {
 		{"直接支持 - gemini-2.5-flash", "gemini-2.5-flash", true},
 		{"直接支持 - gemini-2.5-flash-lite", "gemini-2.5-flash-lite", true},
 		{"直接支持 - gemini-3-pro-high", "gemini-3-pro-high", true},
+		{"直接支持 - gemini-3.1-flash-image", "gemini-3.1-flash-image", true},
 
 		// 可映射的模型
 		{"可映射 - claude-3-5-sonnet-20241022", "claude-3-5-sonnet-20241022", true},
@@ -152,6 +153,32 @@ func TestAntigravityGatewayService_GetMappedModel(t *testing.T) {
 			requestedModel: "gemini-future-model",
 			accountMapping: nil,
 			expected:       "gemini-future-model",
+		},
+
+		// 3b. Gemini 图片模型映射
+		{
+			name:           "Gemini图片映射 - gemini-3.1-flash-image",
+			requestedModel: "gemini-3.1-flash-image",
+			accountMapping: nil,
+			expected:       "gemini-3.1-flash-image",
+		},
+		{
+			name:           "Gemini图片映射 - gemini-3.1-flash-image-preview → gemini-3.1-flash-image",
+			requestedModel: "gemini-3.1-flash-image-preview",
+			accountMapping: nil,
+			expected:       "gemini-3.1-flash-image",
+		},
+		{
+			name:           "Gemini图片映射 - gemini-3-pro-image → gemini-3.1-flash-image",
+			requestedModel: "gemini-3-pro-image",
+			accountMapping: nil,
+			expected:       "gemini-3.1-flash-image",
+		},
+		{
+			name:           "Gemini图片映射 - gemini-2.5-flash-image → gemini-3.1-flash-image",
+			requestedModel: "gemini-2.5-flash-image",
+			accountMapping: nil,
+			expected:       "gemini-3.1-flash-image",
 		},
 
 		// 4. 直接支持的模型

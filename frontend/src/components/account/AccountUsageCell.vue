@@ -531,8 +531,15 @@ const antigravity3ProUsageFromAPI = computed(() =>
 // Gemini 3 Flash from API
 const antigravity3FlashUsageFromAPI = computed(() => getAntigravityUsageFromAPI(['gemini-3-flash']))
 
-// Gemini 3 Image from API
-const antigravity3ImageUsageFromAPI = computed(() => getAntigravityUsageFromAPI(['gemini-3-pro-image']))
+// Gemini Image from API
+const antigravity3ImageUsageFromAPI = computed(() =>
+  getAntigravityUsageFromAPI([
+    'gemini-3.1-flash-image',
+    'gemini-3.1-flash-image-preview',
+    'gemini-3-pro-image',
+    'gemini-3-pro-image-preview'
+  ])
+)
 
 // Claude 4.5 from API
 const antigravityClaude45UsageFromAPI = computed(() =>

@@ -245,7 +245,7 @@ type ForwardResult struct {
 	FirstTokenMs     *int // 首字时间（流式请求）
 	ClientDisconnect bool // 客户端是否在流式传输过程中断开
 
-	// 图片生成计费字段（仅 gemini-3-pro-image 使用）
+	// 图片生成计费字段（图片生成模型使用）
 	ImageCount int    // 生成的图片数量
 	ImageSize  string // 图片尺寸 "1K", "2K", "4K"
 
@@ -260,7 +260,7 @@ type UpstreamFailoverError struct {
 	ResponseBody           []byte // 上游响应体，用于错误透传规则匹配
 	ResponseHeaders        http.Header
 	ForceCacheBilling      bool // Antigravity 粘性会话切换时设为 true
-	RetryableOnSameAccount bool   // 临时性错误：应在同一账号上重试 N 次再切换
+	RetryableOnSameAccount bool // 临时性错误：应在同一账号上重试 N 次再切换
 }
 
 func (e *UpstreamFailoverError) Error() string {

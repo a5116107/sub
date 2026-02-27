@@ -30,9 +30,9 @@ const (
 	antigravityRetryMaxDelay    = 16 * time.Second
 
 	// Single-account 503 backoff retry (MODEL_CAPACITY_EXHAUSTED) settings.
-	antigravitySingleAccountRetryMaxAttempts       = 3
-	antigravitySingleAccountRetryMaxWait           = 15 * time.Second
-	antigravitySingleAccountRetryTotalMaxWait      = 30 * time.Second
+	antigravitySingleAccountRetryMaxAttempts        = 3
+	antigravitySingleAccountRetryMaxWait            = 15 * time.Second
+	antigravitySingleAccountRetryTotalMaxWait       = 30 * time.Second
 	antigravitySingleAccountRetryLongDelayThreshold = 7 * time.Second
 )
 
@@ -470,7 +470,7 @@ var antigravitySupportedModels = map[string]bool{
 	"gemini-3-flash":             true,
 	"gemini-3-pro-low":           true,
 	"gemini-3-pro-high":          true,
-	"gemini-3-pro-image":         true,
+	"gemini-3.1-flash-image":     true,
 }
 
 // Antigravity 前缀映射表（按前缀长度降序排列，确保最长匹配优先）
@@ -480,12 +480,13 @@ var antigravityPrefixMapping = []struct {
 	target string
 }{
 	// 长前缀优先
-	{"gemini-2.5-flash-image", "gemini-3-pro-image"}, // gemini-2.5-flash-image → 3-pro-image
-	{"gemini-3-pro-image", "gemini-3-pro-image"},     // gemini-3-pro-image-preview 等
-	{"gemini-3-flash", "gemini-3-flash"},             // gemini-3-flash-preview 等 → gemini-3-flash
-	{"claude-3-5-sonnet", "claude-sonnet-4-5"},       // 旧版 claude-3-5-sonnet-xxx
-	{"claude-sonnet-4-5", "claude-sonnet-4-5"},       // claude-sonnet-4-5-xxx
-	{"claude-haiku-4-5", "claude-sonnet-4-5"},        // claude-haiku-4-5-xxx → sonnet
+	{"gemini-3.1-flash-image", "gemini-3.1-flash-image"}, // gemini-3.1-flash-image-preview 等
+	{"gemini-2.5-flash-image", "gemini-3.1-flash-image"}, // gemini-2.5-flash-image → 3.1-flash-image
+	{"gemini-3-pro-image", "gemini-3.1-flash-image"},     // gemini-3-pro-image-preview 等 → 3.1-flash-image
+	{"gemini-3-flash", "gemini-3-flash"},                 // gemini-3-flash-preview 等 → gemini-3-flash
+	{"claude-3-5-sonnet", "claude-sonnet-4-5"},           // 旧版 claude-3-5-sonnet-xxx
+	{"claude-sonnet-4-5", "claude-sonnet-4-5"},           // claude-sonnet-4-5-xxx
+	{"claude-haiku-4-5", "claude-sonnet-4-5"},            // claude-haiku-4-5-xxx → sonnet
 	{"claude-opus-4-5", "claude-opus-4-5-thinking"},
 	{"claude-3-haiku", "claude-sonnet-4-5"}, // 旧版 claude-3-haiku-xxx → sonnet
 	{"claude-sonnet-4", "claude-sonnet-4-5"},
@@ -2838,14 +2839,17 @@ func (s *AntigravityGatewayService) extractImageSize(body []byte) string {
 }
 
 // isImageGenerationModel 判断模型是否为图片生成模型
-// 支持的模型：gemini-3-pro-image, gemini-3-pro-image-preview, gemini-2.5-flash-image 等
+// 支持的模型：gemini-3.1-flash-image, gemini-3-pro-image, gemini-2.5-flash-image 等
 func isImageGenerationModel(model string) bool {
 	modelLower := strings.ToLower(model)
 	// 移除 models/ 前缀
 	modelLower = strings.TrimPrefix(modelLower, "models/")
 
 	// 精确匹配或前缀匹配
-	return modelLower == "gemini-3-pro-image" ||
+	return modelLower == "gemini-3.1-flash-image" ||
+		modelLower == "gemini-3.1-flash-image-preview" ||
+		strings.HasPrefix(modelLower, "gemini-3.1-flash-image-") ||
+		modelLower == "gemini-3-pro-image" ||
 		modelLower == "gemini-3-pro-image-preview" ||
 		strings.HasPrefix(modelLower, "gemini-3-pro-image-") ||
 		modelLower == "gemini-2.5-flash-image" ||

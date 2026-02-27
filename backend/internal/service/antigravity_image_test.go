@@ -15,6 +15,13 @@ func TestIsImageGenerationModel_GeminiProImage(t *testing.T) {
 	require.True(t, isImageGenerationModel("models/gemini-3-pro-image"))
 }
 
+// TestIsImageGenerationModel_Gemini31FlashImage 测试 gemini-3.1-flash-image 识别
+func TestIsImageGenerationModel_Gemini31FlashImage(t *testing.T) {
+	require.True(t, isImageGenerationModel("gemini-3.1-flash-image"))
+	require.True(t, isImageGenerationModel("gemini-3.1-flash-image-preview"))
+	require.True(t, isImageGenerationModel("models/gemini-3.1-flash-image"))
+}
+
 // TestIsImageGenerationModel_GeminiFlashImage 测试 gemini-2.5-flash-image 识别
 func TestIsImageGenerationModel_GeminiFlashImage(t *testing.T) {
 	require.True(t, isImageGenerationModel("gemini-2.5-flash-image"))
@@ -37,6 +44,8 @@ func TestIsImageGenerationModel_RegularModel(t *testing.T) {
 func TestIsImageGenerationModel_CaseInsensitive(t *testing.T) {
 	require.True(t, isImageGenerationModel("GEMINI-3-PRO-IMAGE"))
 	require.True(t, isImageGenerationModel("Gemini-3-Pro-Image"))
+	require.True(t, isImageGenerationModel("GEMINI-3.1-FLASH-IMAGE"))
+	require.True(t, isImageGenerationModel("Gemini-3.1-Flash-Image"))
 	require.True(t, isImageGenerationModel("GEMINI-2.5-FLASH-IMAGE"))
 }
 

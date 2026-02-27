@@ -1182,7 +1182,7 @@ export default {
       },
       imagePricing: {
         title: 'Image Generation Pricing',
-        description: 'Configure pricing for gemini-3-pro-image model. Leave empty to use default prices.'
+        description: 'Configure pricing for image generation models. Leave empty to use default prices.'
       },
       claudeCode: {
         title: 'Claude Code Client Restriction',
@@ -2007,7 +2007,7 @@ export default {
         geminiFlashDaily: 'Flash',
         gemini3Pro: 'G3P',
         gemini3Flash: 'G3F',
-        gemini3Image: 'G3I',
+        gemini3Image: 'GImage',
         claude45: 'C4.5'
       },
       tier: {

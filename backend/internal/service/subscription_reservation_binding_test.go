@@ -51,10 +51,12 @@ func TestGatewayService_FinalizeReservation_BindsToUsageLogID(t *testing.T) {
 	cacheSvc := &BillingCacheService{cache: cacheSpy, cfg: cfg}
 
 	repo := &usageLogRepoBillingSpy{}
+	userSubRepo := &userSubRepoIncrementSpy{}
 	svc := &GatewayService{
 		cfg:                 cfg,
 		billingService:      billing,
 		usageLogRepo:        repo,
+		userSubRepo:         userSubRepo,
 		billingCacheService: cacheSvc,
 		deferredService:     &DeferredService{},
 	}
@@ -111,10 +113,12 @@ func TestOpenAIGatewayService_FinalizeReservation_BindsToUsageLogID(t *testing.T
 	cacheSvc := &BillingCacheService{cache: cacheSpy, cfg: cfg}
 
 	repo := &usageLogRepoBillingSpy{}
+	userSubRepo := &userSubRepoIncrementSpy{}
 	svc := &OpenAIGatewayService{
 		cfg:                 cfg,
 		billingService:      billing,
 		usageLogRepo:        repo,
+		userSubRepo:         userSubRepo,
 		billingCacheService: cacheSvc,
 		deferredService:     &DeferredService{},
 	}
