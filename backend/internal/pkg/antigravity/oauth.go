@@ -41,8 +41,10 @@ const (
 		"https://www.googleapis.com/auth/cclog " +
 		"https://www.googleapis.com/auth/experimentsandconfigs"
 
-	// User-Agent（与 Antigravity-Manager 保持一致）
-	UserAgent = "antigravity/1.15.8 windows/amd64"
+	// Antigravity User-Agent version override.
+	AntigravityUserAgentVersionEnvVar = "ANTIGRAVITY_USER_AGENT_VERSION"
+	// DefaultUserAgentVersion keeps parity with the upstream repo default.
+	DefaultUserAgentVersion = "1.19.6"
 
 	// Session 过期时间
 	SessionTTL = 30 * time.Minute
@@ -50,6 +52,15 @@ const (
 	// URL 可用性 TTL（不可用 URL 的恢复时间）
 	URLAvailabilityTTL = 5 * time.Minute
 )
+
+// GetUserAgent returns the User-Agent string for Antigravity upstream requests.
+func GetUserAgent() string {
+	version := strings.TrimSpace(os.Getenv(AntigravityUserAgentVersionEnvVar))
+	if version == "" {
+		version = DefaultUserAgentVersion
+	}
+	return fmt.Sprintf("antigravity/%s windows/amd64", version)
+}
 
 func oauthClientID() string {
 	if v := strings.TrimSpace(os.Getenv(AntigravityOAuthClientIDEnvVar)); v != "" {
