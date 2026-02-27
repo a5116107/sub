@@ -897,8 +897,9 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 	}
 
 	originalModel := claudeReq.Model
-	mappedModel := s.getMappedModel(account, claudeReq.Model)
-	quotaScope, _ := resolveAntigravityQuotaScope(originalModel)
+	mappedModel := s.getMappedModel(account, originalModel)
+	billingModel := mappedModel
+	quotaScope, _ := resolveAntigravityQuotaScope(billingModel)
 
 	// 获取 access_token
 	if s.tokenProvider == nil {
@@ -1195,7 +1196,8 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 	return &ForwardResult{
 		RequestID:    requestID,
 		Usage:        *usage,
-		Model:        originalModel, // 使用原始模型用于计费和日志
+		Model:        originalModel, // Requested model from the client (may be mapped upstream).
+		BilledModel:  billingModel,  // Mapped/final model used for pricing.
 		Stream:       claudeReq.Stream,
 		Duration:     time.Since(startTime),
 		FirstTokenMs: firstTokenMs,
@@ -1480,7 +1482,6 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 	if len(body) == 0 {
 		return nil, s.writeGoogleError(c, http.StatusBadRequest, "Request body is empty")
 	}
-	quotaScope, _ := resolveAntigravityQuotaScope(originalModel)
 
 	// 解析请求以获取 image_size（用于图片计费）
 	imageSize := s.extractImageSize(body)
@@ -1504,6 +1505,8 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 	}
 
 	mappedModel := s.getMappedModel(account, originalModel)
+	billingModel := mappedModel
+	quotaScope, _ := resolveAntigravityQuotaScope(billingModel)
 
 	// 获取 access_token
 	if s.tokenProvider == nil {
@@ -1601,6 +1604,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 						if err == nil && fallbackResp.StatusCode < 400 {
 							_ = resp.Body.Close()
 							resp = fallbackResp
+							billingModel = fallbackModel
 						} else if fallbackResp != nil {
 							_ = fallbackResp.Body.Close()
 						}
@@ -1725,7 +1729,7 @@ handleSuccess:
 
 	// 判断是否为图片生成模型
 	imageCount := 0
-	if isImageGenerationModel(mappedModel) {
+	if isImageGenerationModel(billingModel) {
 		// Gemini 图片生成 API 每次请求只生成一张图片（API 限制）
 		imageCount = 1
 	}
@@ -1734,6 +1738,7 @@ handleSuccess:
 		RequestID:    requestID,
 		Usage:        *usage,
 		Model:        originalModel,
+		BilledModel:  billingModel,
 		Stream:       stream,
 		Duration:     time.Since(startTime),
 		FirstTokenMs: firstTokenMs,
