@@ -108,6 +108,8 @@ func runSetupServer() {
 		log.Printf("Warning: failed to disable trusted proxies for setup server: %v", err)
 	}
 	r.Use(middleware.Recovery())
+	r.Use(middleware.ClientRequestID())
+	r.Use(middleware.Logger())
 	r.Use(middleware.CORS(config.CORSConfig{}))
 	r.Use(middleware.SecurityHeaders(config.CSPConfig{Enabled: true, Policy: config.DefaultCSPPolicy}))
 
