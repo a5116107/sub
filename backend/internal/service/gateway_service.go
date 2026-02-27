@@ -4085,6 +4085,12 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 
 	var cost *CostBreakdown
 
+	// pricingModel is the final model used for pricing after mapping (when provided).
+	pricingModel := strings.TrimSpace(result.BilledModel)
+	if pricingModel == "" {
+		pricingModel = result.Model
+	}
+
 	// 根据请求类型选择计费方式
 	if result.ImageCount > 0 {
 		// 图片生成计费
@@ -4096,7 +4102,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 				Price4K: apiKey.Group.ImagePrice4K,
 			}
 		}
-		cost = s.billingService.CalculateImageCost(result.Model, result.ImageSize, result.ImageCount, groupConfig, multiplier)
+		cost = s.billingService.CalculateImageCost(pricingModel, result.ImageSize, result.ImageCount, groupConfig, multiplier)
 	} else {
 		// Token 计费
 		tokens := UsageTokens{
@@ -4108,10 +4114,6 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 			CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		}
 		var err error
-		pricingModel := strings.TrimSpace(result.BilledModel)
-		if pricingModel == "" {
-			pricingModel = result.Model
-		}
 		cost, err = s.billingService.CalculateCost(pricingModel, tokens, multiplier)
 		if err != nil {
 			log.Printf("[Billing] Calculate cost failed: %v", err)

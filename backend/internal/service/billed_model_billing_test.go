@@ -174,3 +174,59 @@ func TestGatewayService_RecordUsage_BillsByBilledModel(t *testing.T) {
 		t.Fatalf("expected billed_model=real-model, got %#v", repo.created.BilledModel)
 	}
 }
+
+func TestGatewayService_RecordUsage_ImageBillsByBilledModel(t *testing.T) {
+	cfg := &config.Config{
+		RunMode: config.RunModeSimple,
+	}
+	cfg.Default.RateMultiplier = 1.0
+	cfg.Pricing.MissingPolicy = "fail_close"
+
+	pricing := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"real-image-model": {
+				OutputCostPerImage: 0.5,
+			},
+		},
+	}
+	billing := NewBillingService(cfg, pricing)
+
+	repo := &usageLogRepoBilledModelStub{}
+	svc := &GatewayService{
+		cfg:             cfg,
+		billingService:  billing,
+		usageLogRepo:    repo,
+		deferredService: &DeferredService{},
+	}
+
+	user := &User{ID: 1, Status: StatusActive, Role: RoleUser}
+	apiKey := &APIKey{ID: 2, UserID: user.ID, Status: StatusActive, User: user}
+	account := &Account{ID: 3, Status: StatusActive}
+
+	result := &ForwardResult{
+		RequestID:   "rid",
+		Model:       "alias-image-model",
+		BilledModel: "real-image-model",
+		ImageCount:  1,
+		ImageSize:   "1K",
+	}
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result:  result,
+		APIKey:  apiKey,
+		User:    user,
+		Account: account,
+	})
+	if err != nil {
+		t.Fatalf("RecordUsage returned error: %v", err)
+	}
+	if repo.created == nil {
+		t.Fatalf("expected usage log to be created")
+	}
+	if repo.created.TotalCost != 0.5 {
+		t.Fatalf("expected TotalCost=0.5 when billed_model has output_cost_per_image; got %v", repo.created.TotalCost)
+	}
+	if repo.created.BilledModel == nil || *repo.created.BilledModel != "real-image-model" {
+		t.Fatalf("expected billed_model=real-image-model, got %#v", repo.created.BilledModel)
+	}
+}
