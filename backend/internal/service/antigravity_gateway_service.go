@@ -953,6 +953,10 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
 		}
+		// Distinguish client disconnection from upstream retry failure.
+		if c.Request != nil && c.Request.Context().Err() != nil {
+			return nil, s.writeClaudeError(c, http.StatusBadGateway, "client_disconnected", "Client disconnected before upstream response")
+		}
 		if strings.TrimSpace(proxyURL) != "" {
 			log.Printf("%s upstream request error via proxy, triggering failover: %v", prefix, err)
 			return nil, &UpstreamFailoverError{StatusCode: http.StatusBadGateway}
@@ -1568,6 +1572,10 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil, err
+		}
+		// Distinguish client disconnection from upstream retry failure.
+		if c.Request != nil && c.Request.Context().Err() != nil {
+			return nil, s.writeGoogleError(c, http.StatusBadGateway, "Client disconnected before upstream response")
 		}
 		if strings.TrimSpace(proxyURL) != "" {
 			log.Printf("%s upstream request error via proxy, triggering failover: %v", prefix, err)
