@@ -1765,6 +1765,9 @@ export default {
       mixedSchedulingHint: '启用后可参与 Anthropic/Gemini 分组的调度',
       mixedSchedulingTooltip:
         '！！注意！！ Antigravity Claude 和 Anthropic Claude 无法在同个上下文中使用，如果你同时有 Anthropic 账号和 Antigravity 账号，开启此选项会导致经常 400 报错。开启后，请用分组功能做好 Antigravity 账号和 Anthropic 账号的隔离。一定要弄明白再开启！！',
+      mixedChannelWarningTitle: '混合渠道风险提示',
+      mixedChannelWarning:
+        "分组“{groupName}”同时包含 {currentPlatform} 和 {otherPlatform} 账号。混合渠道可能导致 thinking block 的签名校验问题，历史消息将回退为非 thinking 模式。仍要继续吗？",
       creating: '创建中...',
       updating: '更新中...',
       accountCreated: '账号创建成功',

@@ -1638,6 +1638,9 @@ export default {
       mixedSchedulingHint: 'Enable to participate in Anthropic/Gemini group scheduling',
       mixedSchedulingTooltip:
         '!! WARNING !! Antigravity Claude and Anthropic Claude cannot be used in the same context. If you have both Anthropic and Antigravity accounts, enabling this option will cause frequent 400 errors. When enabled, please use the group feature to isolate Antigravity accounts from Anthropic accounts. Make sure you understand this before enabling!!',
+      mixedChannelWarningTitle: 'Mixed Channel Warning',
+      mixedChannelWarning:
+        "Group '{groupName}' contains both {currentPlatform} and {otherPlatform} accounts. Mixing channels in the same context may cause thinking block signature validation issues, which will fallback to non-thinking mode for historical messages. Continue anyway?",
       creating: 'Creating...',
       updating: 'Updating...',
       accountCreated: 'Account created successfully',

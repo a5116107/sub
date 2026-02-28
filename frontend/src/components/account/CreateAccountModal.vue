@@ -2063,6 +2063,17 @@
       </div>
     </template>
   </BaseDialog>
+
+  <ConfirmDialog
+    :show="showMixedChannelWarning"
+    :title="t('admin.accounts.mixedChannelWarningTitle')"
+    :message="mixedChannelWarningMessageText"
+    :confirm-text="t('common.confirm')"
+    :cancel-text="t('common.cancel')"
+    :danger="true"
+    @confirm="handleMixedChannelConfirm"
+    @cancel="handleMixedChannelCancel"
+  />
 </template>
 
 <script setup lang="ts">
@@ -2081,8 +2092,9 @@ import { useOpenAIOAuth } from '@/composables/useOpenAIOAuth'
 import { useGeminiOAuth } from '@/composables/useGeminiOAuth'
 import { useAntigravityOAuth } from '@/composables/useAntigravityOAuth'
 import { useQwenOAuth } from '@/composables/useQwenOAuth'
-import type { Proxy, AdminGroup, AccountPlatform, AccountType } from '@/types'
+import type { Proxy, AdminGroup, AccountPlatform, AccountType, CreateAccountRequest, CheckMixedChannelResponse } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import GroupSelector from '@/components/common/GroupSelector.vue'
@@ -2213,6 +2225,13 @@ interface TempUnschedRuleForm {
 // State
 const step = ref(1)
 const submitting = ref(false)
+const showMixedChannelWarning = ref(false)
+const mixedChannelWarningDetails = ref<{ groupName: string; currentPlatform: string; otherPlatform: string } | null>(
+  null
+)
+const mixedChannelWarningRawMessage = ref('')
+const mixedChannelWarningAction = ref<(() => Promise<void>) | null>(null)
+const antigravityMixedChannelConfirmed = ref(false)
 const accountCategory = ref<'oauth-based' | 'apikey'>('oauth-based') // UI selection for account category
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
@@ -2611,8 +2630,157 @@ const splitTempUnschedKeywords = (value: string) => {
     .filter((item) => item.length > 0)
 }
 
+const mixedChannelWarningMessageText = computed(() => {
+  if (mixedChannelWarningDetails.value) {
+    return t('admin.accounts.mixedChannelWarning', mixedChannelWarningDetails.value)
+  }
+  return mixedChannelWarningRawMessage.value
+})
+
+const needsMixedChannelCheck = (platform: AccountPlatform) => platform === 'antigravity' || platform === 'anthropic'
+
+const buildMixedChannelDetails = (resp?: CheckMixedChannelResponse) => {
+  const details = resp?.details
+  if (!details) {
+    return null
+  }
+  return {
+    groupName: details.group_name || 'Unknown',
+    currentPlatform: details.current_platform || 'Unknown',
+    otherPlatform: details.other_platform || 'Unknown'
+  }
+}
+
+const clearMixedChannelDialog = () => {
+  showMixedChannelWarning.value = false
+  mixedChannelWarningDetails.value = null
+  mixedChannelWarningRawMessage.value = ''
+  mixedChannelWarningAction.value = null
+}
+
+const openMixedChannelDialog = (opts: {
+  response?: CheckMixedChannelResponse
+  message?: string
+  onConfirm: () => Promise<void>
+}) => {
+  mixedChannelWarningDetails.value = buildMixedChannelDetails(opts.response)
+  mixedChannelWarningRawMessage.value =
+    opts.message || opts.response?.message || t('admin.accounts.failedToCreate')
+  mixedChannelWarningAction.value = opts.onConfirm
+  showMixedChannelWarning.value = true
+}
+
+const withAntigravityConfirmFlag = (payload: CreateAccountRequest): CreateAccountRequest => {
+  if (needsMixedChannelCheck(payload.platform) && antigravityMixedChannelConfirmed.value) {
+    return {
+      ...payload,
+      confirm_mixed_channel_risk: true
+    }
+  }
+  const cloned = { ...payload }
+  delete cloned.confirm_mixed_channel_risk
+  return cloned
+}
+
+const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<void>): Promise<boolean> => {
+  if (!needsMixedChannelCheck(form.platform)) {
+    return true
+  }
+  if (antigravityMixedChannelConfirmed.value) {
+    return true
+  }
+  if (!form.group_ids || form.group_ids.length === 0) {
+    return true
+  }
+
+  try {
+    const result = await adminAPI.accounts.checkMixedChannelRisk({
+      platform: form.platform,
+      group_ids: form.group_ids
+    })
+    if (!result.has_risk) {
+      return true
+    }
+    openMixedChannelDialog({
+      response: result,
+      onConfirm: async () => {
+        antigravityMixedChannelConfirmed.value = true
+        await onConfirm()
+      }
+    })
+    return false
+  } catch (error: any) {
+    appStore.showError(error?.message || t('admin.accounts.failedToCreate'))
+    return false
+  }
+}
+
+const isMixedChannelWarningError = (error: any): boolean => {
+  const status = error?.status ?? error?.response?.status
+  if (status !== 409) {
+    return false
+  }
+  const msg = String(error?.message || error?.response?.data?.message || '')
+  return msg.includes('mixed_channel_warning')
+}
+
+const submitCreateAccount = async (payload: CreateAccountRequest) => {
+  submitting.value = true
+  try {
+    await adminAPI.accounts.create(withAntigravityConfirmFlag(payload))
+    appStore.showSuccess(t('admin.accounts.accountCreated'))
+    emit('created')
+    handleClose()
+  } catch (error: any) {
+    if (isMixedChannelWarningError(error) && needsMixedChannelCheck(form.platform)) {
+      openMixedChannelDialog({
+        message: error?.message,
+        onConfirm: async () => {
+          antigravityMixedChannelConfirmed.value = true
+          await submitCreateAccount(payload)
+        }
+      })
+      return
+    }
+    appStore.showError(error?.message || t('admin.accounts.failedToCreate'))
+  } finally {
+    submitting.value = false
+  }
+}
+
+const doCreateAccount = async (payload: CreateAccountRequest) => {
+  const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
+    await submitCreateAccount(payload)
+  })
+  if (!canContinue) {
+    return
+  }
+  await submitCreateAccount(payload)
+}
+
+const handleMixedChannelConfirm = async () => {
+  const action = mixedChannelWarningAction.value
+  if (!action) {
+    clearMixedChannelDialog()
+    return
+  }
+  clearMixedChannelDialog()
+  submitting.value = true
+  try {
+    await action()
+  } finally {
+    submitting.value = false
+  }
+}
+
+const handleMixedChannelCancel = () => {
+  clearMixedChannelDialog()
+}
+
 // Methods
 const resetForm = () => {
+  antigravityMixedChannelConfirmed.value = false
+  clearMixedChannelDialog()
   step.value = 1
   form.name = ''
   form.notes = ''
@@ -2663,6 +2831,8 @@ const resetForm = () => {
 }
 
 const handleClose = () => {
+  antigravityMixedChannelConfirmed.value = false
+  clearMixedChannelDialog()
   emit('close')
 }
 
@@ -2671,6 +2841,12 @@ const handleSubmit = async () => {
   if (isOAuthFlow.value) {
     if (!form.name.trim()) {
       appStore.showError(t('admin.accounts.pleaseEnterAccountName'))
+      return
+    }
+    const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
+      step.value = 2
+    })
+    if (!canContinue) {
       return
     }
     step.value = 2
@@ -2729,22 +2905,11 @@ const handleSubmit = async () => {
   }
 
   form.credentials = credentials
-
-  submitting.value = true
-  try {
-    await adminAPI.accounts.create({
-      ...form,
-      group_ids: form.group_ids,
-      auto_pause_on_expired: autoPauseOnExpired.value
-    })
-    appStore.showSuccess(t('admin.accounts.accountCreated'))
-    emit('created')
-    handleClose()
-  } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.accounts.failedToCreate'))
-  } finally {
-    submitting.value = false
-  }
+  await doCreateAccount({
+    ...form,
+    group_ids: form.group_ids,
+    auto_pause_on_expired: autoPauseOnExpired.value
+  })
 }
 
 const goBackToBasicInfo = () => {
@@ -2807,7 +2972,7 @@ const createAccountAndFinish = async (
   if (!applyTempUnschedConfig(credentials)) {
     return
   }
-  await adminAPI.accounts.create({
+  await doCreateAccount({
     name: form.name,
     notes: form.notes,
     platform,
@@ -2822,9 +2987,6 @@ const createAccountAndFinish = async (
     expires_at: form.expires_at,
     auto_pause_on_expired: autoPauseOnExpired.value
   })
-  appStore.showSuccess(t('admin.accounts.accountCreated'))
-  emit('created')
-  handleClose()
 }
 
 // OpenAI OAuth 授权码兑换
@@ -3076,7 +3238,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           credentials.temp_unschedulable_rules = tempUnschedPayload
         }
 
-        await adminAPI.accounts.create({
+        const createPayload = withAntigravityConfirmFlag({
           name: accountName,
           notes: form.notes,
           platform: form.platform,
@@ -3091,6 +3253,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })
+        await adminAPI.accounts.create(createPayload)
 
         successCount++
       } catch (error: any) {
@@ -3098,7 +3261,7 @@ const handleCookieAuth = async (sessionKey: string) => {
         errors.push(
           t('admin.accounts.oauth.keyAuthFailed', {
             index: i + 1,
-            error: error.response?.data?.detail || t('admin.accounts.oauth.authFailed')
+            error: error?.message || t('admin.accounts.oauth.authFailed')
           })
         )
       }
@@ -3118,7 +3281,7 @@ const handleCookieAuth = async (sessionKey: string) => {
       oauth.error.value = errors.join('\n')
     }
   } catch (error: any) {
-    oauth.error.value = error.response?.data?.detail || t('admin.accounts.oauth.cookieAuthFailed')
+    oauth.error.value = error?.message || t('admin.accounts.oauth.cookieAuthFailed')
   } finally {
     oauth.loading.value = false
   }

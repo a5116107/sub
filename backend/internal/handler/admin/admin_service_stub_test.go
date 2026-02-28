@@ -15,6 +15,13 @@ type stubAdminService struct {
 	proxies     []service.Proxy
 	proxyCounts []service.ProxyWithAccountCount
 	redeems     []service.RedeemCode
+
+	checkMixedErr  error
+	lastMixedCheck struct {
+		accountID int64
+		platform  string
+		groupIDs  []int64
+	}
 }
 
 func newStubAdminService() *stubAdminService {
@@ -220,6 +227,13 @@ func (s *stubAdminService) SetAccountSchedulable(ctx context.Context, id int64, 
 
 func (s *stubAdminService) BulkUpdateAccounts(ctx context.Context, input *service.BulkUpdateAccountsInput) (*service.BulkUpdateAccountsResult, error) {
 	return &service.BulkUpdateAccountsResult{Success: 1, Failed: 0, SuccessIDs: []int64{1}}, nil
+}
+
+func (s *stubAdminService) CheckMixedChannelRisk(ctx context.Context, currentAccountID int64, currentAccountPlatform string, groupIDs []int64) error {
+	s.lastMixedCheck.accountID = currentAccountID
+	s.lastMixedCheck.platform = currentAccountPlatform
+	s.lastMixedCheck.groupIDs = groupIDs
+	return s.checkMixedErr
 }
 
 func (s *stubAdminService) ListProxies(ctx context.Context, page, pageSize int, protocol, status, search string) ([]service.Proxy, int64, error) {
